@@ -20,7 +20,9 @@ git -C "$PROJ" remote add origin git@github.com:clouvelai/Arbusteia.git
 chmod +x "$ROOT/bin/ardoise" \
   "$ROOT/install.sh" \
   "$ROOT/plugins/shared/capture.sh" \
+  "$ROOT/plugins/shared/snapshot.sh" \
   "$ROOT/plugins/claude/hooks/capture.sh" \
+  "$ROOT/plugins/claude/hooks/snapshot.sh" \
   "$ROOT/plugins/cursor/capture.sh"
 
 "$ROOT/install.sh" --no-plugin-manager >/dev/null
@@ -60,6 +62,7 @@ HOOK_STDIN="$HOME/.ardoise/hook-stdin.json"
 "$BIN" vendor test anthropic --json >"$BOX/vendor-anthropic.json"
 "$BIN" vendor test cursor --json >"$BOX/vendor-cursor.json"
 "$BIN" vendor test cursor >"$BOX/vendor-test.txt"
+"$BIN" snapshot anthropic --json >"$BOX/snapshot.json"
 
 python3 - "$BOX" "$HOME" <<'PY'
 import json, sqlite3, sys
@@ -132,6 +135,8 @@ if abs(float(status.get("cost_usd") or 0) - 0.02105) > 1e-6:
 claude = json.loads((home / ".claude" / "settings.json").read_text())
 if "Stop" not in claude.get("hooks", {}):
     raise SystemExit("claude Stop hook missing")
+if "SessionStart" not in claude.get("hooks", {}):
+    raise SystemExit("claude SessionStart snapshot hook missing")
 cursor = json.loads((home / ".cursor" / "hooks.json").read_text())
 if "stop" not in cursor.get("hooks", {}):
     raise SystemExit("cursor stop hook missing")
@@ -170,6 +175,22 @@ if "missing CURSOR_ADMIN_API_KEY" not in detail and "missing CURSOR_ADMIN_API_KE
     raise SystemExit(f"cursor vendor test missing cred line: {detail!r} {vendor_txt!r}")
 if "T0-only" not in detail and "T0-only" not in vendor_txt:
     raise SystemExit(f"cursor vendor test should say T0-only, got {detail!r} {vendor_txt!r}")
+
+# T1 snapshot is a no-op without OAuth (capabilities stay T0)
+snap = json.loads((box / "snapshot.json").read_text())
+if not snap.get("empty"):
+    raise SystemExit(f"offline snapshot should be empty, got {snap}")
+if snap.get("reason") != "oauth_unavailable":
+    raise SystemExit(f"snapshot reason={snap.get('reason')!r}, want oauth_unavailable")
+caps = set(snap.get("capabilities") or [])
+if "T0" not in caps or "T1" in caps:
+    raise SystemExit(f"capabilities={caps}, want T0 without T1 when OAuth is missing")
+n_snap = conn.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+if n_snap != 0:
+    raise SystemExit(f"empty snapshot should not write rows, got {n_snap}")
+for needle in (b"sk-ant-oat", b"access_token", b"Bearer "):
+    if needle in blob:
+        raise SystemExit(f"ledger stored credential-like {needle!r}")
 
 print("checks=ok entries=3 cost=0.02105 project=clouvelai/Arbusteia")
 PY

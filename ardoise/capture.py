@@ -24,7 +24,26 @@ def _ingest_entry(conn, entry: dict[str, Any]) -> str:
     return db.upsert_entry(conn, entry)
 
 
+def _maybe_t1_snapshot(raw: dict[str, Any]) -> None:
+    """SessionStart (and aliases) trigger an Anthropic T1 snapshot when wired to capture."""
+    name = str(
+        raw.get("hook_event_name")
+        or raw.get("hook_event")
+        or raw.get("event")
+        or ""
+    )
+    if name not in {"SessionStart", "sessionStart"}:
+        return
+    try:
+        from ardoise.snapshot import record_vendor_snapshot
+
+        record_vendor_snapshot("anthropic", from_hook=True, cwd=raw.get("cwd"))
+    except Exception:
+        return
+
+
 def ingest_event(conn, raw: dict[str, Any], *, default_source: str = "hook") -> dict[str, int]:
+    _maybe_t1_snapshot(raw)
     counts = {"inserted": 0, "updated": 0, "skipped": 0, "empty": 0}
     entry = event_to_entry(raw, default_source=default_source)
     transcript = raw.get("transcript_path") or raw.get("transcriptPath")
