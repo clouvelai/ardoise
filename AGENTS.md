@@ -21,6 +21,7 @@ tests/fresh-box.sh   # must print FRESH-BOX-OK offline
 - Config: `~/.ardoise/config.json` — optional `budgets.monthly_usd` / `budgets.person` / `budgets.project` (soft caps, warn only) and `anomalies.*` knobs
 - Dedupe: `message.id` + `requestId` (keep highest `output_tokens`)
 - Project: `git remote` `owner/repo`
+- Attribution: persist `agent` / `skill` / `effort` when a T0 transcript or hook already names them; never invent; missing stays unattributed
 - Never persist prompts or credentials
 - Soft caps and `ardoise estimate` never block the editor
 - Do not add third-party Python deps to `ardoise/`

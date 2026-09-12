@@ -20,6 +20,7 @@ from typing import Any, Callable, Iterator
 
 from ardoise import db, paths, prices
 from ardoise.adapters.hook_event import event_to_entry
+from ardoise.attribution import DIMENSIONS, extract
 from ardoise.privacy import scrub
 from ardoise.vendors.anthropic import parse_t0_line
 from ardoise.vendors.contract import (
@@ -100,6 +101,10 @@ def parse_cursor_line(obj: dict[str, Any]) -> dict[str, Any] | None:
         entry["vendor"] = "cursor"
         entry["tier"] = "T0"
         entry["person"] = _person() or ""
+        attrs = extract(obj)
+        for key in DIMENSIONS:
+            if not entry.get(key):
+                entry[key] = attrs.get(key)
     return entry
 
 

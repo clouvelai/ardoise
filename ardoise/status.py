@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from ardoise import anomaly, budget, config as config_mod, db, paths, reconcile
+from ardoise import anomaly, attribution, budget, config as config_mod, db, paths, reconcile
 
 
 def _month_bounds(month: str) -> tuple[str, str]:
@@ -28,11 +28,16 @@ def current_month(now: datetime | None = None) -> str:
     return stamp.strftime("%Y-%m")
 
 
-def _group(rows: list[dict[str, Any]], column: str) -> list[dict[str, Any]]:
+def _group(
+    rows: list[dict[str, Any]],
+    column: str,
+    *,
+    missing: str = "(none)",
+) -> list[dict[str, Any]]:
     buckets: dict[str, dict[str, Any]] = {}
     order: list[str] = []
     for row in rows:
-        key = str(row.get(column) or "(none)")
+        key = str(row.get(column) or missing)
         if key not in buckets:
             buckets[key] = {
                 column: key,
@@ -106,6 +111,9 @@ def summarize(month: str | None = None) -> dict[str, Any]:
         "by_model": _group(lines, "model"),
         "by_tier": _group(lines, "origin_tier"),
         "by_vendor": _group(lines, "vendor"),
+        "by_agent": _group(lines, "agent", missing=attribution.UNATTRIBUTED),
+        "by_skill": _group(lines, "skill", missing=attribution.UNATTRIBUTED),
+        "by_effort": _group(lines, "effort", missing=attribution.UNATTRIBUTED),
         "lines": lines,
         "section_a": section_a,
         "reconciled": [
@@ -165,6 +173,14 @@ def render_text(data: dict[str, Any]) -> str:
         lines.append(
             f"  {row['source']:<32} est=${row['cost_usd']:.4f}  n={row['entries']}  T0"
         )
+    if attribution.any_present(data):
+        lines.append("attribution (when present)")
+        for dim in attribution.DIMENSIONS:
+            for row in attribution.present(data.get(f"by_{dim}"), dim):
+                lines.append(
+                    f"  {dim:<8} {str(row[dim]):<24} "
+                    f"est=${row['cost_usd']:.4f}  n={row['entries']}"
+                )
     budgets = data.get("budgets") or {}
     if budgets.get("configured"):
         lines.append("soft caps (warn only — never blocks)")

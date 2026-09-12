@@ -61,6 +61,13 @@ workspace). T2 events join T0 hook rows on `conversation_id`; unmatched events
 are stored as project `unattributed`. Without an Admin API key, Cursor capture
 stays T0-only. The key is never written to the ledger.
 
+**Attribution** (agent / skill / effort) is copied from T0 transcript and hook
+JSON when those identifiers are already present (`agentId`, `attributionSkill`,
+`effort`, and a few stable aliases). Missing fields stay unattributed — Ardoise
+never invents them from prompts or defaults. `status` and the statement show a
+quiet breakdown only when at least one row is named. Section A vendor lines stay
+sparse.
+
 **Anthropic T2a** lights up when the org primary owner mints an Analytics API
 key at [claude.ai → Organization settings → API](https://claude.ai) (`read:analytics`)
 and exports it as `ANTHROPIC_ANALYTICS_API_KEY` (alias: `ANTHROPIC_ANALYTICS_KEY`).
@@ -108,7 +115,8 @@ Hooks may call it later; it writes nothing, needs no network, and always exits 0
 
 ## Privacy
 
-The ledger stores model, tokens, timestamps, ids, and `owner/repo`. Capture
+The ledger stores model, tokens, timestamps, ids, `owner/repo`, and optional
+agent / skill / effort identifiers when the source named them. Capture
 scrubs prompts, message bodies, tool I/O, and credentials before enqueue or
 insert.
 

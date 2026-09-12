@@ -145,6 +145,15 @@ if "stop" not in cursor.get("hooks", {}):
     raise SystemExit("cursor stop hook missing")
 
 # Phase 2 schema + first statement splits billed vs T0
+attr_cols = {row[1] for row in conn.execute("PRAGMA table_info(events)")}
+for col in ("agent", "skill", "effort"):
+    if col not in attr_cols:
+        raise SystemExit(f"events missing attribution column {col}")
+unnamed = conn.execute(
+    "SELECT COUNT(*) FROM events WHERE agent IS NOT NULL OR skill IS NOT NULL OR effort IS NOT NULL"
+).fetchone()[0]
+if unnamed != 0:
+    raise SystemExit(f"fixture rows must stay unattributed, got {unnamed} named")
 for table in ("events", "snapshots", "prices", "projects", "sync_state", "invoices"):
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE name = ?", (table,)

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from ardoise.adapters.hook_event import event_to_entry
+from ardoise.attribution import DIMENSIONS, extract
 from ardoise.privacy import scrub
 from ardoise.vendors.jsonl import iter_jsonl
 
@@ -46,6 +47,10 @@ def parse_t0_line(obj: dict[str, Any]) -> dict[str, Any] | None:
         entry["person"] = _person() or ""
         if not entry.get("cwd") and obj.get("cwd"):
             entry["cwd"] = obj.get("cwd")
+        attrs = extract(obj)
+        for key in DIMENSIONS:
+            if not entry.get(key):
+                entry[key] = attrs.get(key)
     return entry
 
 

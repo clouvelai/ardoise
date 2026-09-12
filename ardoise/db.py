@@ -3,6 +3,7 @@
 Schema v2 adds events (canonical), snapshots, prices, projects, sync_state,
 and invoices. `entries` remains a compatibility view over `events`.
 Opening the DB upgrades an existing Phase 1 file in place.
+v4 adds optional agent / skill / effort attribution columns (NULL when absent).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from ardoise import paths, prices
+from ardoise.attribution import bind
 from ardoise.vendors.contract import cycle_of, vendor_for_source
 
 SCHEMA = """
@@ -44,6 +46,9 @@ CREATE TABLE IF NOT EXISTS events (
   tier TEXT NOT NULL DEFAULT 'T0',
   session_id TEXT,
   cwd TEXT,
+  agent TEXT,
+  skill TEXT,
+  effort TEXT,
   ingested_at TEXT NOT NULL,
   UNIQUE(message_id, request_id)
 );
@@ -124,7 +129,7 @@ CREATE TABLE IF NOT EXISTS sources (
 );
 """
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 INVOICE_SOURCES = frozenset({"paste", "t1", "t2"})
 
 _ENTRY_COLS = (
@@ -194,6 +199,9 @@ def upgrade(conn: sqlite3.Connection) -> None:
             "cycle": "TEXT NOT NULL DEFAULT ''",
             "billed_cents": "INTEGER",
             "tier": "TEXT NOT NULL DEFAULT 'T0'",
+            "agent": "TEXT",
+            "skill": "TEXT",
+            "effort": "TEXT",
         },
     )
     _rebuild_invoices(conn)
@@ -328,7 +336,8 @@ def _migrate_entries_view(conn: sqlite3.Connection) -> None:
             f"""
             CREATE VIEW entries AS
             SELECT id, {", ".join(_ENTRY_COLS)},
-                   vendor, person, cycle, billed_cents, tier
+                   vendor, person, cycle, billed_cents, tier,
+                   agent, skill, effort
             FROM events
             """
         )
@@ -386,6 +395,7 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
 
     occurred = row.get("occurred_at") or _now()
     source = row.get("source") or "unknown"
+    attrs = bind(row)
     payload = {
         "vendor": row.get("vendor") or vendor_for_source(source),
         "source": source,
@@ -407,6 +417,9 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
         "tier": row.get("tier") or "T0",
         "session_id": row.get("session_id"),
         "cwd": row.get("cwd"),
+        "agent": attrs.get("agent"),
+        "skill": attrs.get("skill"),
+        "effort": attrs.get("effort"),
         "ingested_at": _now(),
     }
     existing = conn.execute(
@@ -420,12 +433,12 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
               vendor, source, person, cycle, message_id, request_id, project, model,
               occurred_at, input_tokens, output_tokens, cache_creation_tokens,
               cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens,
-              billed_cents, cost_usd, tier, session_id, cwd, ingested_at
+              billed_cents, cost_usd, tier, session_id, cwd, agent, skill, effort, ingested_at
             ) VALUES (
               :vendor, :source, :person, :cycle, :message_id, :request_id, :project, :model,
               :occurred_at, :input_tokens, :output_tokens, :cache_creation_tokens,
               :cache_read_tokens, :cache_creation_5m_tokens, :cache_creation_1h_tokens,
-              :billed_cents, :cost_usd, :tier, :session_id, :cwd, :ingested_at
+              :billed_cents, :cost_usd, :tier, :session_id, :cwd, :agent, :skill, :effort, :ingested_at
             )
             """,
             payload,
@@ -443,7 +456,10 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
             UPDATE events SET
               vendor = CASE WHEN vendor IN ('', 'unknown') THEN :vendor ELSE vendor END,
               person = CASE WHEN person = '' THEN :person ELSE person END,
-              cycle = CASE WHEN cycle = '' THEN :cycle ELSE cycle END
+              cycle = CASE WHEN cycle = '' THEN :cycle ELSE cycle END,
+              agent = COALESCE(agent, :agent),
+              skill = COALESCE(skill, :skill),
+              effort = COALESCE(effort, :effort)
             WHERE message_id = :message_id AND request_id = :request_id
             """,
             payload,
@@ -471,6 +487,9 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
           tier = :tier,
           session_id = COALESCE(:session_id, session_id),
           cwd = COALESCE(:cwd, cwd),
+          agent = COALESCE(:agent, agent),
+          skill = COALESCE(:skill, skill),
+          effort = COALESCE(:effort, effort),
           ingested_at = :ingested_at
         WHERE message_id = :message_id AND request_id = :request_id
         """,
