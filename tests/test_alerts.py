@@ -24,15 +24,31 @@ from ardoise.status import render_text, summarize  # noqa: E402
 FIXTURES = json.loads((ROOT / "tests" / "fixtures" / "alerts.json").read_text(encoding="utf-8"))
 
 
+_HOME_KEYS = (
+    "HOME",
+    "ARDOISE_HOME",
+    "ARDOISE_LEDGER",
+    "ARDOISE_QUEUE",
+    "ARDOISE_STATEMENTS",
+    "ARDOISE_BUDGETS",
+)
+
+
 class IsolatedHomeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
+        self._old_env = {key: os.environ.get(key) for key in _HOME_KEYS}
         os.environ["HOME"] = self.tmp.name
         os.environ["ARDOISE_HOME"] = str(Path(self.tmp.name) / ".ardoise")
         for key in ("ARDOISE_LEDGER", "ARDOISE_QUEUE", "ARDOISE_STATEMENTS", "ARDOISE_BUDGETS"):
             os.environ.pop(key, None)
 
     def tearDown(self) -> None:
+        for key, value in self._old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
         self.tmp.cleanup()
 
 
