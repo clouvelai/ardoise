@@ -67,6 +67,13 @@ def user_prices() -> Path:
     return ardoise_home() / "prices.json"
 
 
+def config_path() -> Path:
+    override = os.environ.get("ARDOISE_CONFIG")
+    if override:
+        return Path(override).expanduser()
+    return ardoise_home() / "config.json"
+
+
 def ensure_home() -> Path:
     root = ardoise_home()
     root.mkdir(parents=True, exist_ok=True)

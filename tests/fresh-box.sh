@@ -245,4 +245,63 @@ if n_inv != 2:
 print("invoice-paste=ok section_a=21.05 t0_estimate=0.02105")
 PY
 
+# Phase 3: estimate stub + soft-cap warn (never blocks)
+"$BIN" estimate --model claude-sonnet-4-6 --input-tokens 1000 --output-tokens 400 --json \
+  >"$BOX/estimate.json"
+python3 - "$BOX" "$HOME" <<'PY'
+import json, sys
+from pathlib import Path
+
+box = Path(sys.argv[1])
+home = Path(sys.argv[2])
+est = json.loads((box / "estimate.json").read_text())
+if abs(float(est.get("usd") or 0) - 0.009) > 1e-6:
+    raise SystemExit(f"estimate usd={est.get('usd')} want 0.009")
+if est.get("blocks") or (est.get("gate") or {}).get("blocks"):
+    raise SystemExit("estimate must never block")
+if not est.get("ok"):
+    raise SystemExit(f"estimate not ok: {est}")
+
+cfg = home / ".ardoise" / "config.json"
+cfg.write_text(
+    '{"budgets":{"monthly_usd":1,"project":{"clouvelai/Arbusteia":0.01}},'
+    '"anomalies":{"min_day_usd":0.02,"min_month_usd":0.02,"min_days":1,'
+    '"day_multiple":1.5,"project_share":0.5}}'
+)
+print("estimate=ok usd=0.009")
+PY
+
+"$BIN" status --json --month 2026-09 >"$BOX/status-phase3.json"
+"$BIN" statement 2026-09 --out-dir "$HOME/.ardoise/statements" >"$BOX/statement-phase3.json"
+"$BIN" estimate --stdin --json <<'JSON' >"$BOX/estimate-stdin.json"
+{"model":"claude-haiku-4-5","input_tokens":500,"output_tokens":100}
+JSON
+
+python3 - "$BOX" "$HOME" <<'PY'
+import json, sys
+from pathlib import Path
+
+box = Path(sys.argv[1])
+home = Path(sys.argv[2])
+status = json.loads((box / "status-phase3.json").read_text())
+if "budgets" not in status or "anomalies" not in status:
+    raise SystemExit("status missing budgets/anomalies")
+if not status["budgets"].get("over_cap"):
+    raise SystemExit(f"soft cap should flag over: {status.get('budgets')}")
+if status["budgets"].get("blocks"):
+    raise SystemExit("soft cap must not set blocks")
+month = next(c for c in status["budgets"]["checks"] if c["kind"] == "month")
+if month.get("pct") is None or not month.get("over"):
+    raise SystemExit(f"month vs-cap missing: {month}")
+md = (home / ".ardoise" / "statements" / "2026-09.md").read_text()
+if "Notes (soft)" not in md:
+    raise SystemExit("statement missing soft notes after cap")
+if "never block" not in md:
+    raise SystemExit("statement notes must say they never block")
+stdin_est = json.loads((box / "estimate-stdin.json").read_text())
+if abs(float(stdin_est.get("usd") or 0) - 0.001) > 1e-6:
+    raise SystemExit(f"stdin estimate {stdin_est.get('usd')} want 0.001")
+print("phase3=ok over_cap=1 notes=soft estimate-stdin=0.001")
+PY
+
 echo "FRESH-BOX-OK"
