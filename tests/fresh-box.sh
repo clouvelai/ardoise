@@ -56,6 +56,8 @@ HOOK_STDIN="$HOME/.ardoise/hook-stdin.json"
 "$BIN" status --json --month 2026-09 >"$BOX/status.json"
 "$BIN" statement 2026-09 --out-dir "$HOME/.ardoise/statements" >"$BOX/statement.json"
 "$BIN" export --month 2026-09 --out "$BOX/export.jsonl" >"$BOX/export-meta.json"
+"$BIN" vendor test anthropic --json >"$BOX/vendor-anthropic.json"
+"$BIN" vendor test cursor --json >"$BOX/vendor-cursor.json"
 
 python3 - "$BOX" "$HOME" <<'PY'
 import json, sqlite3, sys
@@ -132,7 +134,81 @@ cursor = json.loads((home / ".cursor" / "hooks.json").read_text())
 if "stop" not in cursor.get("hooks", {}):
     raise SystemExit("cursor stop hook missing")
 
+# Phase 2 schema + first statement splits billed vs T0
+for table in ("events", "snapshots", "prices", "projects", "sync_state", "invoices"):
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE name = ?", (table,)
+    ).fetchone()
+    if row is None:
+        raise SystemExit(f"missing ledger table {table}")
+
+md0 = (home / ".ardoise" / "statements" / "2026-09.md").read_text()
+if "A. Vendor lines" not in md0 or "B. T0 allocation" not in md0:
+    raise SystemExit("statement missing section A / T0 allocation")
+if "No invoice, T2 billed events, or T1 snapshot" not in md0:
+    raise SystemExit("pre-paste section A must not treat T0 as billed")
+inv_cols = {row[1] for row in conn.execute("PRAGMA table_info(invoices)")}
+for col in ("vendor", "cycle", "person", "usd_cents", "source", "notes", "created_at"):
+    if col not in inv_cols:
+        raise SystemExit(f"invoices missing column {col}")
+
+vendor_a = json.loads((box / "vendor-anthropic.json").read_text())
+if vendor_a.get("capabilities", {}).get("capture") != "yes":
+    raise SystemExit(f"anthropic capture cap {vendor_a.get('capabilities')}")
+if vendor_a.get("cred_resolved"):
+    raise SystemExit("anthropic cred should be unresolved offline")
+
 print("checks=ok entries=3 cost=0.02105 project=clouvelai/Arbusteia")
+PY
+
+# paste-in invoices are the solid dollar source for section A
+"$BIN" invoice paste --file "$ROOT/tests/fixtures/invoices.jsonl" --json >"$BOX/invoice-paste.json"
+"$BIN" statement 2026-09 --out-dir "$HOME/.ardoise/statements" >"$BOX/statement-billed.json"
+"$BIN" status --json --month 2026-09 >"$BOX/status-billed.json"
+
+python3 - "$BOX" "$HOME" <<'PY'
+import json, sqlite3, sys
+from pathlib import Path
+
+box = Path(sys.argv[1])
+home = Path(sys.argv[2])
+paste = json.loads((box / "invoice-paste.json").read_text())
+if int(paste.get("inserted") or 0) != 2:
+    raise SystemExit(f"invoice paste inserted={paste}")
+
+status = json.loads((box / "status-billed.json").read_text())
+if abs(float(status.get("billed_usd") or 0) - 21.05) > 1e-6:
+    raise SystemExit(f"section A billed_usd={status.get('billed_usd')} want 21.05")
+if abs(float(status.get("cost_usd") or 0) - 0.02105) > 1e-6:
+    raise SystemExit(f"T0 estimated cost_usd={status.get('cost_usd')} want 0.02105")
+if float(status.get("estimated_usd") or 0) >= float(status.get("billed_usd") or 0):
+    raise SystemExit("T0 estimate must not replace invoice billed total")
+tiers = {row.get("tier_of_truth") for row in status.get("section_a") or []}
+if tiers != {"invoice"}:
+    raise SystemExit(f"section A tiers {tiers}, want invoice")
+
+md = (home / ".ardoise" / "statements" / "2026-09.md").read_text()
+html = (home / ".ardoise" / "statements" / "2026-09.html").read_text()
+csv = (home / ".ardoise" / "statements" / "2026-09.csv").read_text()
+for blob, label in ((md, "md"), (html, "html"), (csv, "csv")):
+    if "invoice" not in blob:
+        raise SystemExit(f"{label} missing invoice tier")
+    if "Trivelta" in blob:
+        raise SystemExit(f"{label} leaked Trivelta")
+if "A. Vendor lines" not in md or "19.50" not in md or "1.55" not in md:
+    raise SystemExit("markdown section A missing invoice dollars")
+if "| invoice |" not in md:
+    raise SystemExit("markdown section A missing invoice tier label")
+if "B. T0 allocation" not in md:
+    raise SystemExit("markdown missing T0 allocation section")
+if "A_vendor" not in csv or "B_t0_allocation" not in csv:
+    raise SystemExit("csv missing section A / T0 allocation rows")
+
+conn = sqlite3.connect(home / ".ardoise" / "ledger.db")
+n_inv = conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
+if n_inv != 2:
+    raise SystemExit(f"invoices table count={n_inv}")
+print("invoice-paste=ok section_a=21.05 t0_estimate=0.02105")
 PY
 
 echo "FRESH-BOX-OK"

@@ -10,7 +10,8 @@ from pathlib import Path
 
 from ardoise import __version__, backfill as backfill_mod, capture as capture_mod
 from ardoise import export as export_mod
-from ardoise import install_hooks, paths, statement, status as status_mod
+from ardoise import install_hooks, invoice as invoice_mod, paths, statement, status as status_mod
+from ardoise.vendors import get_adapter, list_adapters, result_text
 
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 
@@ -66,6 +67,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Copy hooks into user settings (default, Phase 1)",
     )
     inst.add_argument("--json", action="store_true")
+
+    vendor = sub.add_parser("vendor", help="Vendor adapter tools")
+    vsub = vendor.add_subparsers(dest="vendor_cmd", required=True)
+    vt = vsub.add_parser("test", help="Print capabilities and whether credentials resolve")
+    vt.add_argument("name", help="Vendor name (anthropic, cursor)")
+    vt.add_argument("--json", action="store_true")
+
+    inv = sub.add_parser("invoice", help="Owner-received vendor totals for statement section A")
+    isub = inv.add_subparsers(dest="invoice_cmd", required=True)
+    ia = isub.add_parser("add", help="Paste one Stripe/vendor total (idempotent on vendor+cycle+person)")
+    ia.add_argument("--vendor", required=True, help="anthropic or cursor")
+    ia.add_argument("--cycle", required=True, help="YYYY-MM")
+    ia.add_argument("--usd-cents", type=int, dest="usd_cents", help="Integer USD cents")
+    ia.add_argument("--usd", type=float, help="USD dollars (converted to cents)")
+    ia.add_argument("--person", default="", help="Person/scope (default: empty)")
+    ia.add_argument("--notes", help="Free-text (invoice id, Stripe memo) — not a secret")
+    ia.add_argument("--source", default="paste", choices=("paste", "t1", "t2"))
+    ia.add_argument("--json", action="store_true")
+    ip = isub.add_parser("paste", help="Bulk ingest JSON / JSONL / CSV (same upsert as add)")
+    ip.add_argument("--file", help="Invoice file (otherwise stdin)")
+    ip.add_argument("--json", action="store_true")
     return parser
 
 
@@ -147,6 +169,57 @@ def main(argv: list[str] | None = None) -> int:
                 for key, value in result.items():
                     print(f"{key}: {value}")
             return 0
+
+        if args.cmd == "vendor":
+            if args.vendor_cmd == "test":
+                try:
+                    adapter = get_adapter(args.name)
+                except ValueError as exc:
+                    return _die(f"{exc}\nknown: {', '.join(list_adapters())}")
+                result = adapter.test()
+                if args.json:
+                    print(json.dumps(result.as_dict(), indent=2, ensure_ascii=True))
+                else:
+                    sys.stdout.write(result_text(result))
+                return 0
+            return _die(f"unknown vendor command: {args.vendor_cmd}")
+
+        if args.cmd == "invoice":
+            if args.invoice_cmd == "add":
+                if args.usd_cents is None and args.usd is None:
+                    return _die("invoice add needs --usd-cents or --usd")
+                result = invoice_mod.add(
+                    vendor=args.vendor,
+                    cycle=_check_month(args.cycle) or args.cycle,
+                    usd_cents=args.usd_cents,
+                    usd=args.usd,
+                    person=args.person or "",
+                    notes=args.notes,
+                    source=args.source,
+                )
+                if args.json:
+                    print(json.dumps(result, indent=2, ensure_ascii=True))
+                else:
+                    print(
+                        "invoice add {result} vendor={vendor} cycle={cycle} "
+                        "person={person!r} usd_cents={usd_cents} source={source}".format(**result)
+                    )
+                return 0
+            if args.invoice_cmd == "paste":
+                if args.file:
+                    result = invoice_mod.paste(path=Path(args.file).expanduser())
+                else:
+                    result = invoice_mod.paste(stream=sys.stdin)
+                if args.json:
+                    print(json.dumps(result, indent=2, ensure_ascii=True))
+                else:
+                    print(
+                        "invoice paste inserted={inserted} updated={updated} rows={rows}".format(
+                            **result
+                        )
+                    )
+                return 0
+            return _die(f"unknown invoice command: {args.invoice_cmd}")
     except ValueError as exc:
         return _die(str(exc))
     return _die(f"unknown command: {args.cmd}")

@@ -7,6 +7,9 @@ Local AI spend ledger. Core is **Python 3 stdlib only**.
 bin/ardoise status --json
 bin/ardoise backfill
 bin/ardoise statement YYYY-MM
+bin/ardoise vendor test anthropic
+bin/ardoise invoice add --vendor anthropic --cycle YYYY-MM --usd-cents N
+bin/ardoise invoice paste --file invoices.jsonl
 tests/fresh-box.sh   # must print FRESH-BOX-OK offline
 ```
 

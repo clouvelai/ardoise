@@ -28,16 +28,22 @@ bin/ardoise capture --stdin     # one hook event (used by plugins)
 bin/ardoise statement 2026-09   # writes MD + HTML + CSV
 bin/ardoise export              # JSONL of usage rows
 bin/ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
+bin/ardoise vendor test anthropic
+bin/ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
+bin/ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
 ```
 
 Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
+
+**Section A** is one vendor line per scope: pasted invoice, else T2, else T1 snapshot — each line prints its tier. **Section B** uses T0 token weights only to allocate that billed total across projects.
 
 ## How spend is captured
 
 | Source | Adapter | Location |
 |---|---|---|
-| Claude Code session logs | Anthropic T0 JSONL | `~/.claude/projects/**/*.jsonl` |
-| Cursor transcripts | Cursor JSONL | `~/.cursor/**/*.jsonl` (usage-shaped) |
+| Claude Code session logs | `vendors/anthropic` T0 | `~/.claude/projects/**/*.jsonl` |
+| Cursor transcripts | `vendors/cursor` T0 | `~/.cursor/**/*.jsonl` (usage-shaped) |
+| Pasted invoices | `invoice paste` | ledger `invoices` table (section A) |
 | Live sessions | Shared hooks + queue | `~/.ardoise/queue/*.json` |
 
 Streaming duplicates share `message.id` + `requestId`. Ardoise keeps the row

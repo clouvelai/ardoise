@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from ardoise import db, paths
-from ardoise.adapters.anthropic_t0 import iter_anthropic_t0
-from ardoise.adapters.cursor import iter_cursor
 from ardoise.capture import drain_queue
 from ardoise.project import infer_project
+from ardoise.vendors.anthropic import iter_anthropic_t0
+from ardoise.vendors.cursor import iter_cursor
 
 
 def _touch_project(entry: dict) -> None:
@@ -72,5 +72,8 @@ def backfill(
                 totals["files"] += value
             else:
                 totals[key] = totals.get(key, 0) + value
+
+        db.set_sync_state(conn, vendor="anthropic", kind="capture", ok=True)
+        db.set_sync_state(conn, vendor="cursor", kind="capture", ok=True)
 
     return totals

@@ -13,10 +13,10 @@ from ardoise.status import _month_bounds
 def export_rows(month: str | None = None) -> list[dict[str, Any]]:
     paths.ensure_home()
     sql = """
-        SELECT source, message_id, request_id, project, model, occurred_at,
+        SELECT source, vendor, message_id, request_id, project, model, occurred_at,
                input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
                cache_creation_5m_tokens, cache_creation_1h_tokens, cost_usd,
-               session_id
+               billed_cents, tier, person, cycle, session_id
         FROM entries
     """
     args: tuple = ()
