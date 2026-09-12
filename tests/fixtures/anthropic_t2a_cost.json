@@ -1,0 +1,36 @@
+{
+  "data": [
+    {
+      "starting_at": "2026-09-12T00:00:00Z",
+      "ending_at": "2026-09-13T00:00:00Z",
+      "results": [
+        {
+          "model": "claude-sonnet-4-6",
+          "product": "claude_code",
+          "amount": "195.000000",
+          "list_amount": "195.000000",
+          "currency": "USD",
+          "cost_type": "tokens"
+        },
+        {
+          "model": "claude-haiku-4-5",
+          "product": "claude_code",
+          "amount": "10.000000",
+          "list_amount": "10.000000",
+          "currency": "USD"
+        },
+        {
+          "model": "claude-opus-4-6",
+          "product": "chat",
+          "amount": "80.000000",
+          "list_amount": "80.000000",
+          "currency": "USD"
+        }
+      ]
+    }
+  ],
+  "data_refreshed_at": "2026-09-12T18:00:00Z",
+  "has_more": false,
+  "next_page": null,
+  "organization_id": "org_01TESTDO_NOT_STORE"
+}

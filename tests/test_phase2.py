@@ -29,6 +29,17 @@ def _isolated_home() -> tempfile.TemporaryDirectory[str]:
 
 class ContractTests(unittest.TestCase):
     def test_adapters_expose_contract(self) -> None:
+        for key in (
+            "ANTHROPIC_ANALYTICS_API_KEY",
+            "ANTHROPIC_ANALYTICS_KEY",
+            "CURSOR_ADMIN_API_KEY",
+            "CURSOR_API_KEY",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "ANTHROPIC_AUTH_TOKEN",
+            "ANTHROPIC_OAUTH_TOKEN",
+            "ANTHROPIC_ADMIN_API_KEY",
+        ):
+            os.environ.pop(key, None)
         for name in ("anthropic", "cursor"):
             adapter = get_adapter(name)
             self.assertTrue(adapter.name)
@@ -66,11 +77,21 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(snap.to_row()["tier"], "T1")
 
     def test_t1_t2_stubs_raise_without_breaking_t0(self) -> None:
+        for key in (
+            "ANTHROPIC_ANALYTICS_API_KEY",
+            "ANTHROPIC_ANALYTICS_KEY",
+            "CURSOR_ADMIN_API_KEY",
+            "CURSOR_API_KEY",
+        ):
+            os.environ.pop(key, None)
         anth = get_adapter("anthropic")
         cur = get_adapter("cursor")
         with self.assertRaises(CredentialNotConfigured) as ctx:
             anth.snapshot(cycle="2026-09")
         self.assertIn("credential not configured", str(ctx.exception))
+        with self.assertRaises(CredentialNotConfigured) as t2a_ctx:
+            next(anth.pull(cycle="2026-09"))
+        self.assertIn("T2a pull", str(t2a_ctx.exception))
         with self.assertRaises(CredentialNotConfigured):
             next(cur.pull(cycle="2026-09"))
         # T0 capture still iterates with no admin creds

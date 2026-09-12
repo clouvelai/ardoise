@@ -7,7 +7,8 @@ Local AI spend ledger. Core is **Python 3 stdlib only**.
 bin/ardoise status --json
 bin/ardoise backfill
 bin/ardoise statement YYYY-MM
-bin/ardoise vendor test anthropic
+bin/ardoise vendor test anthropic  # T2a probe; missing Analytics key skips T2a
+bin/ardoise vendor pull anthropic  # T2a Analytics when ANTHROPIC_ANALYTICS_API_KEY is set
 bin/ardoise vendor test cursor  # T2 probe; missing cred stays T0-only
 bin/ardoise snapshot anthropic   # T1 seat snapshot when OAuth cred resolves
 bin/ardoise invoice add --vendor anthropic --cycle YYYY-MM --usd-cents N

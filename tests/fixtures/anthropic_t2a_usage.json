@@ -1,0 +1,58 @@
+{
+  "data": [
+    {
+      "starting_at": "2026-09-12T00:00:00Z",
+      "ending_at": "2026-09-13T00:00:00Z",
+      "results": [
+        {
+          "id": "evt_t2a_matched",
+          "model": "claude-sonnet-4-6",
+          "product": "claude_code",
+          "uncached_input_tokens": 1000,
+          "output_tokens": 400,
+          "cache_read_input_tokens": 10000,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 2000,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "session_id": "sess_proj_1",
+          "requests": 2,
+          "actor": {
+            "type": "user_actor",
+            "deleted": false,
+            "email": "jane@example.com",
+            "name": "Jane Smith",
+            "user_id": "user_01AbCdEfGhIjKlMnOpQrSt"
+          }
+        },
+        {
+          "id": "evt_t2a_unmatched",
+          "model": "claude-haiku-4-5",
+          "product": "claude_code",
+          "uncached_input_tokens": 500,
+          "output_tokens": 100,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "conversation_id": "sess_unknown",
+          "requests": 1
+        },
+        {
+          "id": "evt_t2a_no_session",
+          "model": "claude-opus-4-6",
+          "product": "chat",
+          "uncached_input_tokens": 200,
+          "output_tokens": 50,
+          "cache_read_input_tokens": 0,
+          "requests": 1
+        }
+      ]
+    }
+  ],
+  "data_refreshed_at": "2026-09-12T18:00:00Z",
+  "has_more": false,
+  "next_page": null,
+  "organization_id": "org_01TESTDO_NOT_STORE"
+}

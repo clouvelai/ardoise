@@ -28,7 +28,8 @@ bin/ardoise capture --stdin     # one hook event (used by plugins)
 bin/ardoise statement 2026-09   # writes MD + HTML + CSV
 bin/ardoise export              # JSONL of usage rows
 bin/ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
-bin/ardoise vendor test anthropic
+bin/ardoise vendor test anthropic  # T2a probe; skip if no Analytics API key
+bin/ardoise vendor pull anthropic  # ingest Analytics usage/cost when key is set
 bin/ardoise vendor test cursor  # T2 probe; T0-only if no Admin API key
 bin/ardoise vendor pull cursor  # ingest team usage events when key is set
 bin/ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
@@ -45,6 +46,7 @@ Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
 |---|---|---|
 | Claude Code session logs | `vendors/anthropic` T0 | `~/.claude/projects/**/*.jsonl` |
 | Cursor transcripts | `vendors/cursor` T0 | `~/.cursor/**/*.jsonl` (usage-shaped) |
+| Claude Enterprise Analytics (optional T2a) | `vendors/anthropic` pull | `GET /v1/organizations/analytics/usage_report` when `ANTHROPIC_ANALYTICS_API_KEY` is set |
 | Cursor Admin API (optional T2) | `vendors/cursor` pull | `POST /teams/filtered-usage-events` when `CURSOR_ADMIN_API_KEY` is set |
 | Pasted invoices | `invoice paste` | ledger `invoices` table (section A) |
 | Live sessions | Shared hooks + queue | `~/.ardoise/queue/*.json` |
@@ -54,8 +56,17 @@ with the highest `output_tokens`.
 
 **Project** is the git remote `owner/repo` for the event `cwd` (or the current
 workspace). T2 events join T0 hook rows on `conversation_id`; unmatched events
-are stored as project `unattributed`. Without an Admin API key, capture stays
-T0-only. The key is never written to the ledger.
+are stored as project `unattributed`. Without an Admin API key, Cursor capture
+stays T0-only. The key is never written to the ledger.
+
+**Anthropic T2a** lights up when the org primary owner mints an Analytics API
+key at [claude.ai → Organization settings → API](https://claude.ai) (`read:analytics`)
+and exports it as `ANTHROPIC_ANALYTICS_API_KEY` (alias: `ANTHROPIC_ANALYTICS_KEY`).
+That key is not an Admin API key and not `ANTHROPIC_API_KEY`. Without it,
+`vendor test anthropic` / `vendor pull anthropic` print a skip line and exit 0 —
+T0 JSONL and T1 OAuth snapshots keep working. Analytics rows join T0 on
+`session_id` / `conversation_id` (or an `owner/repo` `project` field) when the
+payload exposes them; otherwise the project is `unattributed`.
 
 Prices come from [`data/prices.fallback.json`](data/prices.fallback.json).
 Override with `~/.ardoise/prices.json`.

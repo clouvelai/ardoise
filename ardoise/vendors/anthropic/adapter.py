@@ -1,4 +1,6 @@
-"""Anthropic VendorAdapter: T0 capture always; T1 snapshot when OAuth resolves."""
+"""Anthropic VendorAdapter: T0 capture always; T1 snapshot when OAuth resolves;
+T2a Analytics pull when ANTHROPIC_ANALYTICS_API_KEY is set.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from ardoise import paths
-from . import oauth, usage
+from . import oauth, t2a, usage
 from .t0 import iter_anthropic_t0
 from ardoise.vendors.contract import (
     Capabilities,
@@ -56,12 +58,19 @@ class AnthropicAdapter:
                 purpose="T1 usage snapshot",
                 optional=True,
             ),
+            CredentialField(
+                key="analytics_api_key",
+                env="ANTHROPIC_ANALYTICS_API_KEY",
+                purpose="T2a Analytics API usage/cost pull",
+                optional=True,
+                alt_envs=("ANTHROPIC_ANALYTICS_KEY",),
+            ),
         )
     )
     capabilities = Capabilities(
         capture="yes",
         snapshot="stub",
-        pull="no",
+        pull="yes",
         test="yes",
     )
 
@@ -83,6 +92,8 @@ class AnthropicAdapter:
         caps = {"T0"}
         if self._resolve() is not None:
             caps.add("T1")
+        if t2a.analytics_api_key() is not None:
+            caps.add("T2")
         return frozenset(caps)
 
     def snapshot(
@@ -152,15 +163,29 @@ class AnthropicAdapter:
         return snap
 
     def pull(self, *, person: str | None = None, cycle: str | None = None) -> Iterator[Event]:
-        raise CredentialNotConfigured(self.name, "T2 pull")
-        yield  # pragma: no cover — makes this a generator
+        key = t2a.analytics_api_key()
+        if not key:
+            raise CredentialNotConfigured(self.name, "T2a pull")
+            yield  # pragma: no cover
+        transport = t2a.make_transport(key, t2a.api_base())
+        stamp = datetime.now(timezone.utc)
+        ending_at = stamp.strftime("%Y-%m-%dT%H:%M:%SZ")
+        starting_at = (stamp - t2a.DEFAULT_LOOKBACK).strftime("%Y-%m-%dT%H:%M:%SZ")
+        yield from t2a.iter_pull_events(
+            transport=transport,
+            starting_at=starting_at,
+            ending_at=ending_at,
+            person=person,
+        )
 
     def test(self) -> VendorTestResult:
         status = resolve_status(self.credential_spec)
         resolved = any(item.present for item in status)
+        data = t2a.test_vendor()
         detail = (
             "T0 capture works without credentials. T1 snapshot uses OAuth "
-            "(env/keychain) when present; otherwise stays T0-only."
+            "(env/keychain) when present. "
+            + str(data.get("message") or "")
         )
         return VendorTestResult(
             name=self.name,
@@ -168,6 +193,6 @@ class AnthropicAdapter:
             capabilities=self.capabilities,
             credentials=status,
             cred_resolved=resolved,
-            ok=True,
-            detail=detail,
+            ok=bool(data.get("ok", True)),
+            detail=detail.strip(),
         )

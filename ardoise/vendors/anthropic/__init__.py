@@ -1,4 +1,6 @@
-"""Anthropic vendor adapter — T0 Claude Code JSONL; T1 OAuth seat snapshot."""
+"""Anthropic vendor adapter — T0 Claude Code JSONL; T1 OAuth seat snapshot;
+T2a Enterprise Analytics pull when ANTHROPIC_ANALYTICS_API_KEY is set.
+"""
 
 from ardoise.vendors.anthropic.adapter import AnthropicAdapter
 from ardoise.vendors.anthropic.t0 import (

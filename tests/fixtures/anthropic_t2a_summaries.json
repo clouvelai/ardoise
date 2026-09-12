@@ -1,0 +1,12 @@
+{
+  "summaries": [
+    {
+      "assigned_seat_count": 12,
+      "daily_active_user_count": 4,
+      "daily_adoption_rate": 33.3,
+      "starting_at": "2026-09-11T00:00:00Z",
+      "ending_at": "2026-09-12T00:00:00Z",
+      "claude_code_daily_active_user_count": 3
+    }
+  ]
+}

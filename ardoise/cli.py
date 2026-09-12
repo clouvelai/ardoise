@@ -74,8 +74,8 @@ def build_parser() -> argparse.ArgumentParser:
     vt = vsub.add_parser("test", help="Print capabilities and whether credentials resolve")
     vt.add_argument("name", help="Vendor name (anthropic, cursor)")
     vt.add_argument("--json", action="store_true")
-    vp = vsub.add_parser("pull", help="Pull T2 usage events into the ledger")
-    vp.add_argument("name", help="Vendor name (cursor)")
+    vp = vsub.add_parser("pull", help="Pull T2 / T2a usage events into the ledger")
+    vp.add_argument("name", help="Vendor name (anthropic, cursor)")
     vp.add_argument("--json", action="store_true")
 
     snap = sub.add_parser("snapshot", help="Record a vendor T1 seat snapshot")
@@ -205,15 +205,22 @@ def main(argv: list[str] | None = None) -> int:
                     adapter = get_adapter(args.name)
                 except ValueError as exc:
                     return _die(f"{exc}\nknown: {', '.join(list_adapters())}")
-                if adapter.name != "cursor":
-                    return _die(f"T2 pull is implemented for cursor only, not {adapter.name}")
-                from ardoise.vendors import cursor as cursor_mod
+                if adapter.name == "cursor":
+                    from ardoise.vendors import cursor as cursor_mod
 
-                data = cursor_mod.pull()
+                    data = cursor_mod.pull()
+                    render = cursor_mod.render_pull
+                elif adapter.name == "anthropic":
+                    from ardoise.vendors.anthropic import t2a as t2a_mod
+
+                    data = t2a_mod.pull()
+                    render = t2a_mod.render_pull
+                else:
+                    return _die(f"T2 pull is implemented for anthropic and cursor, not {adapter.name}")
                 if args.json:
                     print(json.dumps(data, indent=2, ensure_ascii=True))
                 else:
-                    sys.stdout.write(cursor_mod.render_pull(data))
+                    sys.stdout.write(render(data))
                 return 0 if data.get("ok") else 2
             return _die(f"unknown vendor command: {args.vendor_cmd}")
 
