@@ -7,3 +7,10 @@ __pycache__/
 *.db
 /statements/
 /tmp/
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.env*
+.vercel
+
