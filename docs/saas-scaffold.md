@@ -41,3 +41,10 @@ never prompts or API keys.
 
 Phase 1 does not open a network port, does not call Stripe or Supabase, and
 does not upload the SQLite file. `~/.ardoise/ledger.db` is the product.
+
+## Scaffold location
+
+Implementation (not the Phase 1 CLI): [`apps/api`](../apps/api) — FastAPI,
+Postgres migrations under `apps/api/migrations/`, local mock when
+`STRIPE_MOCK=true` or `STRIPE_SECRET_KEY` is unset. Early-access CTA on
+`apps/web` CTAs stay `#install`; OTP stub is `apps/web/lib/saas-otp.ts`.

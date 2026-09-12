@@ -15,3 +15,4 @@ tests/fresh-box.sh   # must print FRESH-BOX-OK offline
 - Project: `git remote` `owner/repo`
 - Never persist prompts or credentials
 - Do not add third-party Python deps to `ardoise/`
+- Hosted companion scaffold: `apps/api` (FastAPI + its own requirements). Keep Stripe/JWT secrets server-side.

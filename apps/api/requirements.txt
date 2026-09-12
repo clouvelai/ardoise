@@ -1,0 +1,5 @@
+# Hosted companion only. Do not add these to ardoise/ (Phase 1 is stdlib).
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32,<1
+PyJWT[crypto]>=2.9,<3
+httpx>=0.27,<1

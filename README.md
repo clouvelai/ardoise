@@ -80,3 +80,9 @@ A hosted companion, if any, should follow
 [`docs/saas-scaffold.md`](docs/saas-scaffold.md): **Supabase email OTP +
 Postgres**, and **Stripe Checkout Sessions** — the same pattern Arbusteia
 already uses. Phase 1 does not call those services.
+
+Scaffold lives in [`apps/api`](apps/api) (FastAPI). Local mock:
+
+```bash
+apps/api/scripts/smoke.sh   # SMOKE-OK health+mock-checkout
+```
