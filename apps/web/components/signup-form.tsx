@@ -2,11 +2,18 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import {
+  isBillingNotWired,
+  isPaidPlan,
+  startCheckout,
+} from "@/lib/saas-billing";
 import {
   isOtpNotWired,
   requestEmailOtp,
   verifyEmailOtp,
 } from "@/lib/saas-otp";
+import { saveSession } from "@/lib/saas-session";
 import { Mascot } from "./mark";
 
 type Step = "email" | "code" | "done";
@@ -22,6 +29,8 @@ function messageOf(error: unknown): string {
 }
 
 export function SignupForm() {
+  const searchParams = useSearchParams();
+  const requestedPlan = searchParams.get("plan");
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -58,8 +67,25 @@ export function SignupForm() {
     setPending(true);
     setError(null);
     try {
-      await verifyEmailOtp(email, code);
+      const session = await verifyEmailOtp(email, code);
+      saveSession(session);
       setStub(false);
+      if (isPaidPlan(requestedPlan)) {
+        try {
+          const checkout = await startCheckout(
+            requestedPlan,
+            session.accessToken,
+          );
+          window.location.assign(checkout.url);
+          return;
+        } catch (billing) {
+          if (!isBillingNotWired(billing)) {
+            setError(
+              billing instanceof Error ? billing.message : "Checkout failed",
+            );
+          }
+        }
+      }
       setStep("done");
     } catch (caught) {
       if (isOtpNotWired(caught)) {

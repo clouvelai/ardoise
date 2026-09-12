@@ -162,13 +162,14 @@ npm run build
 
 ## Later (not Phase 1)
 
-A hosted companion, if any, should follow
-[`docs/saas-scaffold.md`](docs/saas-scaffold.md): **Supabase email OTP +
-Postgres**, and **Stripe Checkout Sessions** — the same pattern Arbusteia
-already uses. Phase 1 does not call those services.
+A hosted companion follows [`docs/saas-scaffold.md`](docs/saas-scaffold.md):
+**account first, card later**. Supabase email OTP creates a free account
+(no card). Stripe Checkout Sessions (`mode=subscription`) run only when
+someone pays for Team ($39/mo) or Business ($149/mo). Invoice-grade claims
+stay Business+. Phase 1 CLI does not call those services.
 
 Scaffold lives in [`apps/api`](apps/api) (FastAPI). Local mock:
 
 ```bash
-apps/api/scripts/smoke.sh   # SMOKE-OK health+mock-checkout
+apps/api/scripts/smoke.sh   # SMOKE-OK health+mock-checkout+otp+billing
 ```

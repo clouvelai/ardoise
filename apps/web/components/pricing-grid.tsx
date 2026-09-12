@@ -1,7 +1,18 @@
-import Link from "next/link";
 import { ENTERPRISE_MAILTO } from "@/lib/saas-otp";
+import { PricingCta } from "./pricing-cta";
+import type { PaidPlan } from "@/lib/saas-billing";
 
-const tiers = [
+const tiers: {
+  name: string;
+  price: string;
+  period: string;
+  items: readonly string[];
+  cta: string;
+  href: string;
+  featured: boolean;
+  badge?: string;
+  plan?: PaidPlan;
+}[] = [
   {
     name: "Free",
     price: "$0",
@@ -18,8 +29,9 @@ const tiers = [
     badge: "Most teams",
     items: ["Cloud sync", "Multi-seat", "Shared reports"],
     cta: "Start for free",
-    href: "/signup",
+    href: "/signup?plan=team",
     featured: true,
+    plan: "team",
   },
   {
     name: "Business",
@@ -27,10 +39,11 @@ const tiers = [
     period: "/mo",
     items: ["Invoice-grade statements", "Audit trail"],
     cta: "Get started",
-    href: "/signup",
+    href: "/signup?plan=business",
     featured: false,
+    plan: "business",
   },
-] as const;
+];
 
 export function PricingGrid() {
   return (
@@ -66,19 +79,12 @@ export function PricingGrid() {
                 <li key={item}>{item}</li>
               ))}
             </ul>
-            <Link
-              href={tier.href}
-              className={
-                tier.featured
-                  ? "mt-8 flex w-full items-center justify-center rounded-full bg-grape py-3 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
-                  : "mt-8 flex w-full items-center justify-center rounded-full bg-lavender py-3 text-[15px] font-semibold text-grape transition hover:bg-violet-100"
-              }
-            >
+            <PricingCta plan={tier.plan} featured={tier.featured} href={tier.href}>
               {tier.cta}
               <span aria-hidden className="ml-1.5">
                 →
               </span>
-            </Link>
+            </PricingCta>
           </article>
         ))}
       </div>

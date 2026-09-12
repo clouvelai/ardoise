@@ -16,22 +16,26 @@ Arbusteia humans sign in with **Supabase Auth email OTP**:
 4. Email (or `sub`) becomes the account `external_key`. Customer rows and the
    credit ledger live in **Postgres** (Supabase primary, not a replica).
 
-A hosted Ardoise would do the same: OTP in the browser, JWT on the API,
-Postgres as the system of record. No passwords stored by the app. Lab-only
-dev bypass stays off in production.
+A hosted Ardoise does the same: OTP through `apps/api` (`POST /v1/auth/otp`
+and `/v1/auth/otp/verify`), JWT on later calls, Postgres as the system of
+record. **Account first, card later** — verify creates a free account with no
+card. No passwords stored by the app. Lab-only dev bypass stays off in
+production. Missing Supabase keys keep a mock/stub path so local smoke works.
 
 ## Billing: Stripe Checkout Sessions
 
-Arbusteia PAYG uses **Stripe Checkout Sessions** (`mode=payment`), not raw
-PaymentIntents:
+Team ($39/mo) and Business ($149/mo) use **Stripe Checkout Sessions**
+(`mode=subscription`), not Connect, not raw PaymentIntents:
 
-1. `POST /v1/checkout/sessions` with a resolved Price (`lookup_key`, pin, or
-   inline `price_data`).
-2. Persist `ops.checkout_session` (`stripe_session_id`, amount, credits).
-3. Redirect the human to the hosted Checkout URL.
-4. Fulfill on `checkout.session.completed` (webhook) — idempotent credit grant.
-5. When `STRIPE_MOCK=true` / no secret key, a local mock session stands in so
-   the rest of the stack can be tested offline.
+1. `POST /v1/billing/checkout` with `plan=team|business` after OTP.
+2. Resolve `STRIPE_PRICE_TEAM` / `STRIPE_PRICE_BUSINESS` (or inline monthly
+   `price_data`). Persist `ops.checkout_sessions`.
+3. Redirect the human to the hosted Checkout URL (`apps/web` success/cancel).
+4. Fulfill on `checkout.session.completed` (`POST /v1/billing/webhook`) —
+   sets `accounts.plan`. Invoice-grade claims stay **Business+**.
+5. When `STRIPE_MOCK=true` / no secret key, a local mock session stands in.
+
+Legacy PAYG credits remain on `POST /v1/checkout/sessions` (`mode=payment`).
 
 Do not store Stripe secrets in the Ardoise client. A future sync endpoint would
 accept **already-priced usage rows** (the same JSONL `export` shape) after OTP,
@@ -47,6 +51,6 @@ does not upload the SQLite file. `~/.ardoise/ledger.db` is the product.
 Implementation (not the Phase 1 CLI): [`apps/api`](../apps/api) — FastAPI,
 Postgres migrations under `apps/api/migrations/`, local mock when
 `STRIPE_MOCK=true` or `STRIPE_SECRET_KEY` is unset. Marketing CTAs on
-`apps/web` now hit `/signup` and `/pricing`. OTP remains API-backed via
-`apps/web/lib/saas-otp.ts` (`requestEmailOtp` / `verifyEmailOtp` against
-`API_BASE`); the form stays a polished stub until that API is live.
+`apps/web` hit `/signup` and `/pricing`. OTP is API-backed via
+`apps/web/lib/saas-otp.ts`; paid CTAs call `lib/saas-billing.ts` only when a
+session exists. If the API is down the form stays a polished stub.

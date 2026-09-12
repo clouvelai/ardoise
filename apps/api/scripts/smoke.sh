@@ -1,5 +1,5 @@
 #!/bin/sh
-# Offline mock smoke: health + Checkout Session (STRIPE_MOCK / no secret).
+# Offline mock smoke: health + Checkout + OTP verify + Team billing.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -85,6 +85,47 @@ hook = client.post(
 assert hook.status_code == 200 and hook.json()["ok"], hook.text
 me = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"})
 assert me.json()["credits"] == body["credits"], me.text
+assert me.json()["account"]["plan"] == "free"
+assert me.json()["account"]["invoice_grade"] is False
+
+otp = client.post("/v1/auth/otp", json={"email": "otp@example.com"})
+assert otp.status_code == 200 and otp.json()["mocked"]
+verified = client.post(
+    "/v1/auth/otp/verify",
+    json={"email": "otp@example.com", "token": "123456"},
+)
+assert verified.status_code == 200, verified.text
+assert verified.json()["access_token"]
+assert verified.json()["account"]["plan"] == "free"
+
+team = client.post(
+    "/v1/billing/checkout",
+    json={"plan": "team"},
+    headers={"Authorization": f"Bearer {verified.json()['access_token']}"},
+)
+assert team.status_code == 200, team.text
+assert team.json()["mode"] == "subscription" and team.json()["plan"] == "team"
+bill_hook = client.post(
+    "/v1/billing/webhook",
+    content=json.dumps(
+        {
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": team.json()["stripe_session_id"],
+                    "metadata": {"plan": "team"},
+                }
+            },
+        }
+    ),
+)
+assert bill_hook.status_code == 200 and bill_hook.json()["ok"], bill_hook.text
+paid = client.get(
+    "/v1/me",
+    headers={"Authorization": f"Bearer {verified.json()['access_token']}"},
+)
+assert paid.json()["account"]["plan"] == "team"
+assert paid.json()["account"]["invoice_grade"] is False
 
 # Bind uvicorn briefly and curl /health (matches "run locally" README).
 host, port = "127.0.0.1", int(os.environ.get("ARDOISE_API_PORT", "8787"))
@@ -106,5 +147,5 @@ assert live["ok"] and live["stripe_mock"], live
 server.should_exit = True
 thread.join(timeout=5)
 os.unlink(db)
-print("SMOKE-OK health+mock-checkout")
+print("SMOKE-OK health+mock-checkout+otp+billing")
 PY
