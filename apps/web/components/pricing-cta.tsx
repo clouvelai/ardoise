@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { isBillingNotWired, startCheckout, type PaidPlan } from "@/lib/saas-billing";
 import { getSession } from "@/lib/saas-session";
 
@@ -21,6 +22,7 @@ export function PricingCta({
   href: string;
   children: ReactNode;
 }) {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [stub, setStub] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,15 +37,19 @@ export function PricingCta({
   }
 
   async function onPay() {
+    if (!plan) {
+      return;
+    }
+    const paidPlan = plan;
     setError(null);
     const session = getSession();
     if (!session) {
-      window.location.assign(`/signup?plan=${plan}`);
+      router.push(`/signup?plan=${paidPlan}`);
       return;
     }
     setPending(true);
     try {
-      const checkout = await startCheckout(plan, session.accessToken);
+      const checkout = await startCheckout(paidPlan, session.accessToken);
       window.location.assign(checkout.url);
     } catch (caught) {
       if (isBillingNotWired(caught)) {
