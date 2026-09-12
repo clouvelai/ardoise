@@ -6,9 +6,9 @@ export function Hero() {
       <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:gap-16">
         <div className="max-w-xl">
           <h1 className="text-[2.75rem] font-bold leading-[1.05] tracking-[-0.045em] text-ink sm:text-[3.6rem] lg:text-[4.15rem]">
-            The private way
+            Know where
             <br />
-            to see <span className="text-grape">spend</span>.
+            every <span className="text-grape">token</span> went.
           </h1>
           <p className="mt-6 max-w-md text-[17px] leading-relaxed text-muted sm:text-[18px]">
             Turn Claude Code and Cursor usage into a local ledger.
@@ -16,7 +16,7 @@ export function Hero() {
           </p>
           <a
             href="#install"
-            className="mt-8 inline-flex items-center rounded-full bg-grape-deep px-8 py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(91,33,182,0.28)] transition hover:bg-grape-ink"
+            className="mt-8 inline-flex items-center rounded-full bg-grape px-8 py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
           >
             Install for free
             <span aria-hidden className="ml-1.5">

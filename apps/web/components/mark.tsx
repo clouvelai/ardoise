@@ -15,7 +15,7 @@ export function SlateMark({ className }: { className?: string }) {
       />
       <path
         d="M9.5 12.25h9"
-        stroke="#7C3AED"
+        stroke="#7C5CFF"
         strokeWidth="2"
         strokeLinecap="round"
       />
@@ -38,7 +38,7 @@ export function Mascot({ className }: { className?: string }) {
       />
       <path
         d="M28 62c2.4 8.6 12.8 13.2 22.4 8.4 6.4-3.2 9.6-9.4 8.6-15.6"
-        fill="#7C3AED"
+        fill="#7C5CFF"
       />
       <ellipse cx="36" cy="58" rx="11" ry="13" fill="#EDE9FE" />
       <circle cx="44" cy="34" r="13" fill="#5B21B6" />

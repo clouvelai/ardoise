@@ -10,7 +10,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Ardoise — The private way to see spend",
+  title: "Ardoise — Know where every token went",
   description:
     "Local AI spend ledger for Claude Code and Cursor. Prompts never leave the machine.",
   applicationName: "Ardoise",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     "token usage",
   ],
   openGraph: {
-    title: "Ardoise — The private way to see spend",
+    title: "Ardoise — Know where every token went",
     description:
       "Turn Claude Code and Cursor usage into a local ledger. Nothing leaves the machine.",
     type: "website",
