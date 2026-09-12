@@ -1,9 +1,11 @@
 # Ardoise web
 
-Marketing landing page for Ardoise (Next.js App Router + Tailwind).
+Marketing site for Ardoise — a local AI spend ledger.
 
 ```bash
 npm install
 npm run dev
 npm run build
 ```
+
+From the repo root, `npm run build` runs this app via the workspace.
