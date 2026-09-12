@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { PageShell } from "@/components/page-shell";
 import { SignupForm } from "@/components/signup-form";
 
@@ -20,7 +21,13 @@ export default function SignupPage() {
               No credit card required.
             </p>
           </div>
-          <SignupForm />
+          <Suspense
+            fallback={
+              <div className="mx-auto h-64 w-full max-w-[440px] rounded-[28px] bg-white/80 ring-1 ring-black/[0.03]" />
+            }
+          >
+            <SignupForm />
+          </Suspense>
         </div>
       </section>
     </PageShell>

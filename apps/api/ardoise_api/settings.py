@@ -37,6 +37,9 @@ class Settings:
     lab_bypass_flag: bool
     checkout_success_url: str
     checkout_cancel_url: str
+    supabase_service_role_key: str = ""
+    stripe_price_team: str = ""
+    stripe_price_business: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -71,6 +74,11 @@ class Settings:
             checkout_cancel_url=os.environ.get(
                 "CHECKOUT_CANCEL_URL", f"{web_origin}/billing/cancel"
             ),
+            supabase_service_role_key=os.environ.get(
+                "SUPABASE_SERVICE_ROLE_KEY", ""
+            ),
+            stripe_price_team=os.environ.get("STRIPE_PRICE_TEAM", ""),
+            stripe_price_business=os.environ.get("STRIPE_PRICE_BUSINESS", ""),
         )
 
     @property
@@ -100,7 +108,22 @@ class Settings:
         return f"{self.supabase_url}/auth/v1/otp"
 
     @property
+    def otp_verify_url(self) -> str:
+        if not self.supabase_url:
+            return ""
+        return f"{self.supabase_url}/auth/v1/verify"
+
+    @property
     def jwt_issuer(self) -> str:
         if not self.supabase_url:
             return ""
         return f"{self.supabase_url}/auth/v1"
+
+    @property
+    def supabase_auth_key(self) -> str:
+        """Anon key preferred; service role is server-only fallback."""
+        return self.supabase_anon_key or self.supabase_service_role_key
+
+    @property
+    def supabase_otp_configured(self) -> bool:
+        return bool(self.supabase_url and self.supabase_auth_key)

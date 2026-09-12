@@ -1,4 +1,4 @@
-"""Stripe Checkout Sessions (mode=payment) via raw HTTPS. Secrets stay here."""
+"""Stripe Checkout Sessions via raw HTTPS. Secrets stay here. Not Connect."""
 
 from __future__ import annotations
 
@@ -21,6 +21,34 @@ class StripeError(Exception):
         super().__init__(detail)
         self.detail = detail
         self.status_code = status_code
+
+
+SUBSCRIPTION_PLANS: dict[str, dict[str, Any]] = {
+    "team": {
+        "amount_cents": 3900,
+        "name": "Ardoise Team",
+        "price_attr": "stripe_price_team",
+    },
+    "business": {
+        "amount_cents": 14900,
+        "name": "Ardoise Business",
+        "price_attr": "stripe_price_business",
+    },
+}
+
+INVOICE_GRADE_PLANS = frozenset({"business", "enterprise"})
+
+
+def invoice_grade(plan: str | None) -> bool:
+    return (plan or "free").strip().lower() in INVOICE_GRADE_PLANS
+
+
+def resolve_subscription_plan(plan: str) -> dict[str, Any]:
+    key = (plan or "").strip().lower()
+    spec = SUBSCRIPTION_PLANS.get(key)
+    if spec is None:
+        raise StripeError("plan must be team or business", 400)
+    return {"plan": key, **spec}
 
 
 def _flatten(obj: Any, prefix: str, pairs: list[tuple[str, str]]) -> None:
@@ -202,6 +230,79 @@ def create_checkout_session(
         "currency": session.get("currency") or "usd",
         "mock": False,
         "mode": "payment",
+        "integration_identifier": ident,
+    }
+
+
+def create_subscription_checkout(
+    settings: Settings,
+    *,
+    account: dict[str, Any],
+    plan: str,
+    success_url: str | None = None,
+    cancel_url: str | None = None,
+) -> dict[str, Any]:
+    """Checkout Sessions mode=subscription for Team ($39) / Business ($149)."""
+    spec = resolve_subscription_plan(plan)
+    plan_key = spec["plan"]
+    amount = int(spec["amount_cents"])
+    ident = integration_identifier()
+    success = success_url or settings.checkout_success_url
+    cancel = cancel_url or settings.checkout_cancel_url
+    metadata = {
+        "account_id": account["id"],
+        "external_key": account["external_key"],
+        "plan": plan_key,
+    }
+    if settings.stripe_mock:
+        stripe_id = mock_session_id()
+        url = f"{settings.public_url}/v1/checkout/mock/{stripe_id}"
+        return {
+            "id": stripe_id,
+            "url": url,
+            "amount_cents": amount,
+            "credits": 0,
+            "currency": "usd",
+            "mock": True,
+            "mode": "subscription",
+            "plan": plan_key,
+            "integration_identifier": ident,
+        }
+
+    price_id = getattr(settings, spec["price_attr"]) or ""
+    line_item: dict[str, Any] = {"quantity": 1}
+    if price_id:
+        line_item["price"] = price_id
+    else:
+        line_item["price_data"] = {
+            "currency": "usd",
+            "unit_amount": amount,
+            "recurring": {"interval": "month"},
+            "product_data": {"name": spec["name"]},
+        }
+    payload: dict[str, Any] = {
+        "mode": "subscription",
+        "success_url": success,
+        "cancel_url": cancel,
+        "client_reference_id": account["id"],
+        "metadata": metadata,
+        "subscription_data": {"metadata": metadata},
+        "line_items": [line_item],
+        "integration_identifier": ident,
+    }
+    if account.get("email"):
+        payload["customer_email"] = account["email"]
+    # Do not pass payment_method_types — dynamic methods from the Dashboard.
+    session = stripe_request(settings, "POST", "/v1/checkout/sessions", payload)
+    return {
+        "id": session["id"],
+        "url": session["url"],
+        "amount_cents": int(session.get("amount_total") or amount),
+        "credits": 0,
+        "currency": session.get("currency") or "usd",
+        "mock": False,
+        "mode": "subscription",
+        "plan": plan_key,
         "integration_identifier": ident,
     }
 

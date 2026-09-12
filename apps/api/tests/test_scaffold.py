@@ -109,6 +109,8 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         body = res.json()
         self.assertEqual(body["account"]["external_key"], "smoke@example.com")
+        self.assertEqual(body["account"]["plan"], "free")
+        self.assertFalse(body["account"]["invoice_grade"])
         self.assertEqual(body["credits"], 0)
 
     def test_lab_bypass_off_by_default(self) -> None:
@@ -132,6 +134,43 @@ class ScaffoldTests(unittest.TestCase):
         res = client.post("/v1/auth/otp", json={"email": "human@example.com"})
         self.assertEqual(res.status_code, 200)
         self.assertTrue(res.json()["mocked"])
+
+    def test_otp_verify_mocked_mints_session(self) -> None:
+        client = self._cli()
+        res = client.post(
+            "/v1/auth/otp/verify",
+            json={"email": "human@example.com", "token": "123456"},
+        )
+        self.assertEqual(res.status_code, 200, res.text)
+        body = res.json()
+        self.assertTrue(body["mocked"])
+        self.assertTrue(body["access_token"])
+        self.assertEqual(body["account"]["plan"], "free")
+        me = client.get(
+            "/v1/me", headers={"Authorization": f"Bearer {body['access_token']}"}
+        )
+        self.assertEqual(me.status_code, 200)
+        self.assertEqual(me.json()["account"]["email"], "human@example.com")
+        self.assertFalse(me.json()["account"]["invoice_grade"])
+
+    def test_otp_verify_not_configured_without_jwt_secret(self) -> None:
+        client = self._cli(supabase_jwt_secret="")
+        res = client.post(
+            "/v1/auth/otp/verify",
+            json={"email": "human@example.com", "token": "123456"},
+        )
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertTrue(body["mocked"])
+        self.assertFalse(body.get("access_token"))
+        self.assertIn("not configured", body["detail"])
+
+    def test_otp_verify_rejects_bad_email(self) -> None:
+        client = self._cli()
+        res = client.post(
+            "/v1/auth/otp/verify", json={"email": "nope", "token": "123456"}
+        )
+        self.assertEqual(res.status_code, 400)
 
     def test_mock_checkout_and_fulfill_idempotent(self) -> None:
         client = self._cli()
@@ -207,6 +246,92 @@ class ScaffoldTests(unittest.TestCase):
         )
         self.assertEqual(ok.status_code, 200)
         self.assertTrue(ok.json()["ok"])
+
+    def test_billing_checkout_requires_auth(self) -> None:
+        client = self._cli()
+        res = client.post("/v1/billing/checkout", json={"plan": "team"})
+        self.assertEqual(res.status_code, 401)
+
+    def test_billing_checkout_rejects_free(self) -> None:
+        client = self._cli()
+        res = client.post(
+            "/v1/billing/checkout",
+            json={"plan": "free"},
+            headers={"Authorization": f"Bearer {_token()}"},
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_billing_subscription_checkout_and_fulfill(self) -> None:
+        client = self._cli()
+        headers = {"Authorization": f"Bearer {_token()}"}
+        created = client.post(
+            "/v1/billing/checkout", json={"plan": "team"}, headers=headers
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        session = created.json()
+        self.assertTrue(session["mock"])
+        self.assertEqual(session["mode"], "subscription")
+        self.assertEqual(session["plan"], "team")
+        self.assertEqual(session["amount_cents"], 3900)
+        sid = session["stripe_session_id"]
+
+        page = client.get(f"/v1/checkout/mock/{sid}")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("team", page.text)
+
+        event = {
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": sid,
+                    "customer": "cus_team",
+                    "subscription": "sub_team",
+                    "metadata": {"plan": "team"},
+                }
+            },
+        }
+        hook = client.post("/v1/billing/webhook", content=json.dumps(event))
+        self.assertEqual(hook.status_code, 200)
+        self.assertTrue(hook.json()["ok"])
+        self.assertEqual(hook.json()["plan"], "team")
+
+        me = client.get("/v1/me", headers=headers).json()
+        self.assertEqual(me["account"]["plan"], "team")
+        self.assertFalse(me["account"]["invoice_grade"])
+        self.assertEqual(me["credits"], 0)
+
+        again = client.post("/v1/billing/webhook", content=json.dumps(event))
+        self.assertEqual(again.status_code, 200)
+        self.assertTrue(again.json()["already_fulfilled"])
+
+    def test_business_plan_is_invoice_grade(self) -> None:
+        client = self._cli()
+        headers = {"Authorization": f"Bearer {_token()}"}
+        created = client.post(
+            "/v1/billing/checkout", json={"plan": "business"}, headers=headers
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["amount_cents"], 14900)
+        sid = created.json()["stripe_session_id"]
+        hook = client.post(
+            "/v1/billing/webhook",
+            content=json.dumps(
+                {
+                    "type": "checkout.session.completed",
+                    "data": {
+                        "object": {
+                            "id": sid,
+                            "customer": "cus_biz",
+                            "metadata": {"plan": "business"},
+                        }
+                    },
+                }
+            ),
+        )
+        self.assertEqual(hook.status_code, 200)
+        me = client.get("/v1/me", headers=headers).json()
+        self.assertEqual(me["account"]["plan"], "business")
+        self.assertTrue(me["account"]["invoice_grade"])
 
     def test_usage_sync_is_stub(self) -> None:
         client = self._cli()

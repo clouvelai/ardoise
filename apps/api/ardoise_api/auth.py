@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -32,12 +33,26 @@ def _store(request: Request) -> Store:
     return request.app.state.store
 
 
-def kickoff_otp(settings: Settings, email: str) -> dict[str, Any]:
-    """POST {SUPABASE_URL}/auth/v1/otp with the public anon key."""
+def _normalize_email(email: str) -> str:
     email = email.strip().lower()
     if not email or "@" not in email:
         raise AuthError("valid email required", 400)
-    if not settings.supabase_url or not settings.supabase_anon_key:
+    return email
+
+
+def _gotrue_headers(settings: Settings) -> dict[str, str]:
+    key = settings.supabase_auth_key
+    return {
+        "Content-Type": "application/json",
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+    }
+
+
+def kickoff_otp(settings: Settings, email: str) -> dict[str, Any]:
+    """POST {SUPABASE_URL}/auth/v1/otp with the public anon key."""
+    email = _normalize_email(email)
+    if not settings.supabase_otp_configured:
         return {
             "ok": True,
             "mocked": True,
@@ -53,11 +68,7 @@ def kickoff_otp(settings: Settings, email: str) -> dict[str, Any]:
         settings.otp_url,
         data=payload,
         method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "apikey": settings.supabase_anon_key,
-            "Authorization": f"Bearer {settings.supabase_anon_key}",
-        },
+        headers=_gotrue_headers(settings),
     )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
@@ -69,6 +80,131 @@ def kickoff_otp(settings: Settings, email: str) -> dict[str, Any]:
     except urllib.error.URLError as exc:
         raise AuthError(f"supabase otp unreachable: {exc}", 502) from exc
     return {"ok": True, "mocked": False, "email": email, "supabase": data}
+
+
+def mint_mock_access_token(settings: Settings, email: str) -> str:
+    now = int(time.time())
+    issuer = settings.jwt_issuer or "http://localhost/auth/v1"
+    return jwt.encode(
+        {
+            "aud": "authenticated",
+            "role": "authenticated",
+            "sub": f"mock:{email}",
+            "email": email,
+            "iss": issuer,
+            "exp": now + 3600,
+            "iat": now,
+        },
+        settings.supabase_jwt_secret,
+        algorithm="HS256",
+    )
+
+
+def verify_email_otp(
+    settings: Settings,
+    store: Store,
+    email: str,
+    token: str,
+) -> dict[str, Any]:
+    """POST {SUPABASE_URL}/auth/v1/verify — creates the account, no card."""
+    email = _normalize_email(email)
+    token = token.strip()
+    if not token:
+        raise AuthError("one-time code required", 400)
+
+    if not settings.supabase_otp_configured:
+        if not settings.supabase_jwt_secret:
+            return {
+                "ok": False,
+                "mocked": True,
+                "email": email,
+                "detail": (
+                    "SUPABASE_URL / SUPABASE_ANON_KEY unset. OTP verify is not "
+                    "configured. Set those keys, or SUPABASE_JWT_SECRET to mint "
+                    "a local mock session."
+                ),
+            }
+        access_token = mint_mock_access_token(settings, email)
+        account = store.upsert_account(
+            external_key=email, email=email, supabase_sub=f"mock:{email}"
+        )
+        return {
+            "ok": True,
+            "mocked": True,
+            "email": email,
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in": 3600,
+            "account": {
+                "id": account["id"],
+                "external_key": account["external_key"],
+                "email": account["email"],
+                "plan": account.get("plan") or "free",
+            },
+            "detail": (
+                "Mock OTP verify (Supabase keys unset). Account created without "
+                "a card — Turbo-style account first."
+            ),
+        }
+
+    payload = json.dumps(
+        {"email": email, "token": token, "type": "email"}
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        settings.otp_verify_url,
+        data=payload,
+        method="POST",
+        headers=_gotrue_headers(settings),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            body = resp.read().decode("utf-8") or "{}"
+            data = json.loads(body)
+    except urllib.error.HTTPError as exc:
+        err = exc.read().decode("utf-8", errors="replace")
+        raise AuthError(f"supabase otp verify failed: {err}", exc.code) from exc
+    except urllib.error.URLError as exc:
+        raise AuthError(f"supabase otp verify unreachable: {exc}", 502) from exc
+
+    access_token = data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        raise AuthError("supabase verify returned no access_token", 502)
+
+    user = data.get("user") if isinstance(data.get("user"), dict) else {}
+    sub = user.get("id") if isinstance(user.get("id"), str) else None
+    verified_email = email
+    raw_email = user.get("email")
+    if isinstance(raw_email, str) and raw_email.strip():
+        verified_email = raw_email.strip().lower()
+    if not sub:
+        try:
+            claims = decode_access_token(settings, access_token)
+            _, claim_email, sub = identity_from_claims(claims)
+            if claim_email:
+                verified_email = claim_email
+        except AuthError:
+            sub = None
+    if not sub:
+        raise AuthError("supabase verify returned no user id", 502)
+
+    account = store.upsert_account(
+        external_key=verified_email, email=verified_email, supabase_sub=sub
+    )
+    return {
+        "ok": True,
+        "mocked": False,
+        "email": verified_email,
+        "access_token": access_token,
+        "token_type": data.get("token_type") or "bearer",
+        "expires_in": data.get("expires_in"),
+        "refresh_token": data.get("refresh_token"),
+        "account": {
+            "id": account["id"],
+            "external_key": account["external_key"],
+            "email": account["email"],
+            "plan": account.get("plan") or "free",
+        },
+    }
 
 
 def decode_access_token(settings: Settings, token: str) -> dict[str, Any]:

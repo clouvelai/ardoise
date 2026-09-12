@@ -4,9 +4,8 @@
  *   requestEmailOtp → POST {API_BASE}/v1/auth/otp
  *   verifyEmailOtp  → POST {API_BASE}/v1/auth/otp/verify
  *
- * If the API is down or verify is not implemented yet, helpers throw
+ * If the API is down or verify is not configured, helpers throw
  * OtpNotWiredError so the UI can stay a polished “coming soon” stub.
- * Craie can flesh the verify route without changing the form.
  *
  * Stripe Checkout Sessions stay server-side (apps/api). Never put
  * STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / SUPABASE_JWT_SECRET here.

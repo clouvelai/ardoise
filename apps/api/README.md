@@ -7,9 +7,9 @@ Follows [`docs/saas-scaffold.md`](../../docs/saas-scaffold.md):
 
 | Concern | Pattern |
 |---|---|
-| Auth | Supabase **email OTP** in the browser; API verifies `Authorization: Bearer` JWT (HS256 `SUPABASE_JWT_SECRET` or JWKS). Email/`sub` → `ops.accounts.external_key`. No passwords. No supabase-js on the API. |
-| Billing | Stripe **Checkout Sessions** `mode=payment` (not Connect, not subscriptions, not raw PaymentIntents). Persist `ops.checkout_sessions`. Fulfill `checkout.session.completed` idempotently. |
-| Mock | `STRIPE_MOCK=true` **or** missing `STRIPE_SECRET_KEY` → local mock session (offline). |
+| Auth | **Account first.** Supabase **email OTP** via Gotrue HTTP (`POST /v1/auth/otp` + `/verify`). API verifies `Authorization: Bearer` JWT (HS256 `SUPABASE_JWT_SECRET` or JWKS). Email/`sub` → `ops.accounts.external_key`. No card at signup. No passwords. No supabase-js. |
+| Billing | Stripe **Checkout Sessions** `mode=subscription` for Team ($39/mo) / Business ($149/mo). `POST /v1/billing/checkout` + `/v1/billing/webhook`. Not Connect. Invoice-grade claims are **Business+**. Legacy `mode=payment` credits stay on `/v1/checkout/sessions`. |
+| Mock | Missing Supabase keys → OTP mock (verify mints a JWT when `SUPABASE_JWT_SECRET` is set). `STRIPE_MOCK=true` **or** missing `STRIPE_SECRET_KEY` → local mock Checkout. |
 | Sync | Stub only. Future `POST /v1/usage/sync` accepts already-priced JSONL (`bin/ardoise export`) after OTP. Never upload `ledger.db`. |
 
 ## Run locally with mocks
@@ -34,7 +34,7 @@ when you stand up a real project.
 
 ```bash
 apps/api/scripts/smoke.sh
-# prints SMOKE-OK health+mock-checkout
+# prints SMOKE-OK health+mock-checkout+otp+billing
 ```
 
 ### Mint a local JWT (mock OTP)
@@ -66,12 +66,15 @@ Open the mock URL and click **Pay (mock)**, or `POST /v1/stripe/webhook` with
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | `GET` | `/health` | no | `stripe_mock`, `lab_auth_bypass` |
-| `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the anon key. Mocked if unset. Browser may call Supabase directly instead. |
-| `GET` | `/v1/me` | Bearer JWT | Account + credit balance |
-| `POST` | `/v1/checkout/sessions` | Bearer JWT | Creates Checkout Session (`mode=payment`), persists row, returns hosted URL |
+| `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the anon (or server-only service role) key. Mocked if unset. |
+| `POST` | `/v1/auth/otp/verify` | no | Forwards to `{SUPABASE_URL}/auth/v1/verify`. Creates a **free** account (no card). Mock: mints HS256 JWT when `SUPABASE_JWT_SECRET` is set; otherwise returns “not configured”. |
+| `GET` | `/v1/me` | Bearer JWT | Account + `plan` + `invoice_grade` (Business+) + credit balance |
+| `POST` | `/v1/billing/checkout` | Bearer JWT | Team/Business Checkout Session (`mode=subscription`). Price IDs: `STRIPE_PRICE_TEAM` / `STRIPE_PRICE_BUSINESS`. |
+| `POST` | `/v1/billing/webhook` | Stripe signature (live) | Idempotent `checkout.session.completed` (sets plan) |
+| `POST` | `/v1/checkout/sessions` | Bearer JWT | Legacy Checkout Session (`mode=payment`) |
 | `GET` | `/v1/checkout/mock/{id}` | no | Local stand-in for Stripe Checkout |
 | `POST` | `/v1/checkout/mock/{id}/complete` | no | Mock fulfill |
-| `POST` | `/v1/stripe/webhook` | Stripe signature (live) | Idempotent `checkout.session.completed` |
+| `POST` | `/v1/stripe/webhook` | Stripe signature (live) | Same fulfill as `/v1/billing/webhook` |
 | `POST` | `/v1/usage/sync` | Bearer JWT | **501 stub** |
 
 Lab bypass (`ARDOISE_LAB_AUTH_BYPASS=true` + `X-Ardoise-Lab-User: email`) is
@@ -84,5 +87,11 @@ web app may ship `NEXT_PUBLIC_SUPABASE_URL` + anon key only.
 
 ## Web CTA
 
-Marketing landing (`apps/web`) keeps on-page `#install` CTAs. OTP wiring
-stub: [`apps/web/lib/saas-otp.ts`](../web/lib/saas-otp.ts).
+`apps/web` `/signup` is email OTP (no card). `/pricing` Free stays signup-only;
+Team/Business call `/v1/billing/checkout` when a session exists, otherwise
+`/signup?plan=`. Helpers: [`apps/web/lib/saas-otp.ts`](../web/lib/saas-otp.ts),
+[`saas-billing.ts`](../web/lib/saas-billing.ts). No Stripe secrets in the client.
+
+If you’ll charge US or EU customers, enable [Stripe Tax](https://docs.stripe.com/billing/taxes/collect-taxes)
+in the Dashboard after you have an active registration. This API does not set
+`automatic_tax`.

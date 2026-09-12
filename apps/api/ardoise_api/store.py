@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     external_key TEXT NOT NULL UNIQUE,
     email TEXT,
     supabase_sub TEXT,
+    plan TEXT NOT NULL DEFAULT 'free',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -33,6 +34,9 @@ CREATE TABLE IF NOT EXISTS checkout_sessions (
     status TEXT NOT NULL DEFAULT 'open',
     checkout_url TEXT,
     fulfilled_at TEXT,
+    mode TEXT NOT NULL DEFAULT 'payment',
+    plan TEXT,
+    stripe_subscription_id TEXT,
     created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS credit_ledger (
@@ -91,6 +95,23 @@ class Store:
     def _init(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            self._ensure_columns(conn)
+
+    @staticmethod
+    def _ensure_columns(conn: sqlite3.Connection) -> None:
+        patches = (
+            ("accounts", "plan", "TEXT NOT NULL DEFAULT 'free'"),
+            ("checkout_sessions", "mode", "TEXT NOT NULL DEFAULT 'payment'"),
+            ("checkout_sessions", "plan", "TEXT"),
+            ("checkout_sessions", "stripe_subscription_id", "TEXT"),
+        )
+        for table, name, ddl in patches:
+            cols = {
+                row[1]
+                for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if name not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
     def upsert_account(
         self,
@@ -123,8 +144,9 @@ class Store:
                 conn.execute(
                     """
                     INSERT INTO accounts
-                        (id, external_key, email, supabase_sub, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                        (id, external_key, email, supabase_sub, plan,
+                         created_at, updated_at)
+                    VALUES (?, ?, ?, ?, 'free', ?, ?)
                     """,
                     (account_id, external_key, email, supabase_sub, now, now),
                 )
@@ -159,6 +181,9 @@ class Store:
         currency: str,
         checkout_url: str,
         status: str = "open",
+        mode: str = "payment",
+        plan: str | None = None,
+        stripe_subscription_id: str | None = None,
     ) -> dict[str, Any]:
         session_id = str(uuid.uuid4())
         now = _now()
@@ -167,8 +192,9 @@ class Store:
                 """
                 INSERT INTO checkout_sessions (
                     id, account_id, stripe_session_id, amount_cents, credits,
-                    currency, status, checkout_url, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    currency, status, checkout_url, created_at, mode, plan,
+                    stripe_subscription_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session_id,
@@ -180,6 +206,9 @@ class Store:
                     status,
                     checkout_url,
                     now,
+                    mode,
+                    plan,
+                    stripe_subscription_id,
                 ),
             )
             row = conn.execute(
@@ -212,13 +241,23 @@ class Store:
                 (str(uuid.uuid4()), account_id, stripe_customer_id, now),
             )
 
+    def set_account_plan(self, account_id: str, plan: str) -> None:
+        now = _now()
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE accounts SET plan = ?, updated_at = ? WHERE id = ?",
+                (plan, now, account_id),
+            )
+
     def fulfill_checkout(
         self,
         stripe_session_id: str,
         *,
         stripe_customer_id: str | None = None,
+        stripe_subscription_id: str | None = None,
+        plan: str | None = None,
     ) -> dict[str, Any]:
-        """Idempotent credit grant. Safe to replay checkout.session.completed."""
+        """Idempotent fulfill. Safe to replay checkout.session.completed."""
         with self.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM checkout_sessions WHERE stripe_session_id = ?",
@@ -226,40 +265,55 @@ class Store:
             ).fetchone()
             if row is None:
                 return {"ok": False, "reason": "unknown_session"}
+            keys = set(row.keys())
+            session_plan = plan or (row["plan"] if "plan" in keys else None)
+            session_mode = row["mode"] if "mode" in keys else "payment"
             if row["status"] == "completed" and row["fulfilled_at"]:
                 return {
                     "ok": True,
                     "already_fulfilled": True,
                     "credits": int(row["credits"]),
+                    "plan": session_plan,
+                    "mode": session_mode,
                     "stripe_session_id": stripe_session_id,
                 }
             now = _now()
             conn.execute(
                 """
                 UPDATE checkout_sessions
-                SET status = 'completed', fulfilled_at = ?
+                SET status = 'completed',
+                    fulfilled_at = ?,
+                    plan = COALESCE(?, plan),
+                    stripe_subscription_id = COALESCE(?, stripe_subscription_id)
                 WHERE stripe_session_id = ? AND fulfilled_at IS NULL
                 """,
-                (now, stripe_session_id),
+                (now, session_plan, stripe_subscription_id, stripe_session_id),
             )
-            existing_credit = conn.execute(
-                "SELECT id FROM credit_ledger WHERE checkout_session_id = ?",
-                (row["id"],),
-            ).fetchone()
-            if existing_credit is None:
+            credits = int(row["credits"])
+            if credits > 0:
+                existing_credit = conn.execute(
+                    "SELECT id FROM credit_ledger WHERE checkout_session_id = ?",
+                    (row["id"],),
+                ).fetchone()
+                if existing_credit is None:
+                    conn.execute(
+                        """
+                        INSERT INTO credit_ledger
+                            (id, account_id, amount, reason, checkout_session_id, created_at)
+                        VALUES (?, ?, ?, 'checkout.session.completed', ?, ?)
+                        """,
+                        (
+                            str(uuid.uuid4()),
+                            row["account_id"],
+                            credits,
+                            row["id"],
+                            now,
+                        ),
+                    )
+            if session_plan in {"team", "business"} and row["account_id"]:
                 conn.execute(
-                    """
-                    INSERT INTO credit_ledger
-                        (id, account_id, amount, reason, checkout_session_id, created_at)
-                    VALUES (?, ?, ?, 'checkout.session.completed', ?, ?)
-                    """,
-                    (
-                        str(uuid.uuid4()),
-                        row["account_id"],
-                        int(row["credits"]),
-                        row["id"],
-                        now,
-                    ),
+                    "UPDATE accounts SET plan = ?, updated_at = ? WHERE id = ?",
+                    (session_plan, now, row["account_id"]),
                 )
             if stripe_customer_id and row["account_id"]:
                 conn.execute(
@@ -275,5 +329,7 @@ class Store:
             "ok": True,
             "already_fulfilled": False,
             "credits": int(row["credits"]),
+            "plan": session_plan,
+            "mode": session_mode,
             "stripe_session_id": stripe_session_id,
         }
