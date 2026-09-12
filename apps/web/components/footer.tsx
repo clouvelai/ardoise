@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function Footer() {
   return (
     <footer className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 text-[13px] text-muted sm:flex-row sm:px-8">
@@ -11,12 +13,15 @@ export function Footer() {
         >
           GitHub
         </a>
-        <a href="#privacy" className="transition hover:text-ink">
+        <Link href="/pricing" className="transition hover:text-ink">
+          Pricing
+        </Link>
+        <Link href="/#privacy" className="transition hover:text-ink">
           Privacy
-        </a>
-        <a href="#install" className="transition hover:text-ink">
+        </Link>
+        <Link href="/#install" className="transition hover:text-ink">
           Install
-        </a>
+        </Link>
       </div>
     </footer>
   );

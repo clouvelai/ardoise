@@ -46,5 +46,7 @@ does not upload the SQLite file. `~/.ardoise/ledger.db` is the product.
 
 Implementation (not the Phase 1 CLI): [`apps/api`](../apps/api) — FastAPI,
 Postgres migrations under `apps/api/migrations/`, local mock when
-`STRIPE_MOCK=true` or `STRIPE_SECRET_KEY` is unset. Early-access CTA on
-`apps/web` CTAs stay `#install`; OTP stub is `apps/web/lib/saas-otp.ts`.
+`STRIPE_MOCK=true` or `STRIPE_SECRET_KEY` is unset. Marketing CTAs on
+`apps/web` now hit `/signup` and `/pricing`. OTP remains API-backed via
+`apps/web/lib/saas-otp.ts` (`requestEmailOtp` / `verifyEmailOtp` against
+`API_BASE`); the form stays a polished stub until that API is live.
