@@ -1,0 +1,18 @@
+{
+  "teamMembers": [
+    {
+      "id": "user_PDSPmvukpYgZEDXsoNirw3CFhy",
+      "name": "Alex",
+      "email": "developer@example.com",
+      "role": "member",
+      "isRemoved": false
+    },
+    {
+      "id": "user_kljUvI0ASZORvSEXf9hV0ydcso",
+      "name": "Sam",
+      "email": "admin@example.com",
+      "role": "owner",
+      "isRemoved": false
+    }
+  ]
+}

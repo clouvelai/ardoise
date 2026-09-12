@@ -9,6 +9,7 @@ trap 'rm -rf "$BOX"' EXIT
 export HOME="$BOX/home"
 export ARDOISE_HOME="$HOME/.ardoise"
 unset ARDOISE_LEDGER ARDOISE_QUEUE ARDOISE_STATEMENTS ARDOISE_CLAUDE_ROOT ARDOISE_CURSOR_ROOT
+unset CURSOR_ADMIN_API_KEY CURSOR_API_KEY CURSOR_ADMIN_API_BASE
 mkdir -p "$HOME"
 
 PROJ="$BOX/proj"
@@ -58,6 +59,7 @@ HOOK_STDIN="$HOME/.ardoise/hook-stdin.json"
 "$BIN" export --month 2026-09 --out "$BOX/export.jsonl" >"$BOX/export-meta.json"
 "$BIN" vendor test anthropic --json >"$BOX/vendor-anthropic.json"
 "$BIN" vendor test cursor --json >"$BOX/vendor-cursor.json"
+"$BIN" vendor test cursor >"$BOX/vendor-test.txt"
 
 python3 - "$BOX" "$HOME" <<'PY'
 import json, sqlite3, sys
@@ -157,6 +159,17 @@ if vendor_a.get("capabilities", {}).get("capture") != "yes":
     raise SystemExit(f"anthropic capture cap {vendor_a.get('capabilities')}")
 if vendor_a.get("cred_resolved"):
     raise SystemExit("anthropic cred should be unresolved offline")
+vendor_c = json.loads((box / "vendor-cursor.json").read_text())
+if vendor_c.get("cred_resolved"):
+    raise SystemExit("cursor cred should be unresolved offline")
+if vendor_c.get("capabilities", {}).get("capture") != "yes":
+    raise SystemExit(f"cursor capture cap {vendor_c.get('capabilities')}")
+detail = str(vendor_c.get("detail") or "")
+vendor_txt = (box / "vendor-test.txt").read_text()
+if "missing CURSOR_ADMIN_API_KEY" not in detail and "missing CURSOR_ADMIN_API_KEY" not in vendor_txt:
+    raise SystemExit(f"cursor vendor test missing cred line: {detail!r} {vendor_txt!r}")
+if "T0-only" not in detail and "T0-only" not in vendor_txt:
+    raise SystemExit(f"cursor vendor test should say T0-only, got {detail!r} {vendor_txt!r}")
 
 print("checks=ok entries=3 cost=0.02105 project=clouvelai/Arbusteia")
 PY

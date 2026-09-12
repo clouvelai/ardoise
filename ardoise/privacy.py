@@ -105,7 +105,12 @@ def usage_only_event(event: dict[str, Any]) -> dict[str, Any]:
         "source": event.get("source") or event.get("hook_event_name") or event.get("hook_event"),
         "type": event.get("type"),
         "cwd": event.get("cwd"),
-        "session_id": event.get("sessionId") or event.get("session_id") or event.get("conversation_id"),
+        "session_id": (
+            event.get("sessionId")
+            or event.get("session_id")
+            or event.get("conversation_id")
+            or event.get("conversationId")
+        ),
         "transcript_path": event.get("transcript_path") or event.get("transcriptPath"),
         "timestamp": event.get("timestamp") or event.get("ts") or event.get("occurred_at"),
         "uuid": event.get("uuid"),

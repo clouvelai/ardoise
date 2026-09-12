@@ -8,6 +8,7 @@ bin/ardoise status --json
 bin/ardoise backfill
 bin/ardoise statement YYYY-MM
 bin/ardoise vendor test anthropic
+bin/ardoise vendor test cursor  # T2 probe; missing cred stays T0-only
 bin/ardoise invoice add --vendor anthropic --cycle YYYY-MM --usd-cents N
 bin/ardoise invoice paste --file invoices.jsonl
 tests/fresh-box.sh   # must print FRESH-BOX-OK offline
