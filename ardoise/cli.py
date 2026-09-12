@@ -73,6 +73,9 @@ def build_parser() -> argparse.ArgumentParser:
     vt = vsub.add_parser("test", help="Print capabilities and whether credentials resolve")
     vt.add_argument("name", help="Vendor name (anthropic, cursor)")
     vt.add_argument("--json", action="store_true")
+    vp = vsub.add_parser("pull", help="Pull T2 usage events into the ledger")
+    vp.add_argument("name", help="Vendor name (cursor)")
+    vp.add_argument("--json", action="store_true")
 
     inv = sub.add_parser("invoice", help="Owner-received vendor totals for statement section A")
     isub = inv.add_subparsers(dest="invoice_cmd", required=True)
@@ -182,6 +185,21 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     sys.stdout.write(result_text(result))
                 return 0
+            if args.vendor_cmd == "pull":
+                try:
+                    adapter = get_adapter(args.name)
+                except ValueError as exc:
+                    return _die(f"{exc}\nknown: {', '.join(list_adapters())}")
+                if adapter.name != "cursor":
+                    return _die(f"T2 pull is implemented for cursor only, not {adapter.name}")
+                from ardoise.vendors import cursor as cursor_mod
+
+                data = cursor_mod.pull()
+                if args.json:
+                    print(json.dumps(data, indent=2, ensure_ascii=True))
+                else:
+                    sys.stdout.write(cursor_mod.render_pull(data))
+                return 0 if data.get("ok") else 2
             return _die(f"unknown vendor command: {args.vendor_cmd}")
 
         if args.cmd == "invoice":

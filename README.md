@@ -29,6 +29,8 @@ bin/ardoise statement 2026-09   # writes MD + HTML + CSV
 bin/ardoise export              # JSONL of usage rows
 bin/ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
 bin/ardoise vendor test anthropic
+bin/ardoise vendor test cursor  # T2 probe; T0-only if no Admin API key
+bin/ardoise vendor pull cursor  # ingest team usage events when key is set
 bin/ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
 bin/ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
 ```
@@ -43,6 +45,7 @@ Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
 |---|---|---|
 | Claude Code session logs | `vendors/anthropic` T0 | `~/.claude/projects/**/*.jsonl` |
 | Cursor transcripts | `vendors/cursor` T0 | `~/.cursor/**/*.jsonl` (usage-shaped) |
+| Cursor Admin API (optional T2) | `vendors/cursor` pull | `POST /teams/filtered-usage-events` when `CURSOR_ADMIN_API_KEY` is set |
 | Pasted invoices | `invoice paste` | ledger `invoices` table (section A) |
 | Live sessions | Shared hooks + queue | `~/.ardoise/queue/*.json` |
 
@@ -50,7 +53,9 @@ Streaming duplicates share `message.id` + `requestId`. Ardoise keeps the row
 with the highest `output_tokens`.
 
 **Project** is the git remote `owner/repo` for the event `cwd` (or the current
-workspace).
+workspace). T2 events join T0 hook rows on `conversation_id`; unmatched events
+are stored as project `unattributed`. Without an Admin API key, capture stays
+T0-only. The key is never written to the ledger.
 
 Prices come from [`data/prices.fallback.json`](data/prices.fallback.json).
 Override with `~/.ardoise/prices.json`.

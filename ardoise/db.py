@@ -646,6 +646,36 @@ def latest_snapshot(
     return dict(row) if row else None
 
 
+def get_sync_state(
+    conn: sqlite3.Connection,
+    *,
+    vendor: str,
+    kind: str,
+    person: str | None = None,
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT vendor, person, kind, cursor, last_success, last_error, updated_at
+        FROM sync_state
+        WHERE vendor = ? AND person = ? AND kind = ?
+        """,
+        (vendor, person or "", kind),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def get_sync_watermark(
+    conn: sqlite3.Connection,
+    vendor: str,
+    stream: str,
+    person: str | None = None,
+) -> str | None:
+    row = get_sync_state(conn, vendor=vendor, kind=stream, person=person)
+    if not row or row.get("cursor") is None:
+        return None
+    return str(row["cursor"])
+
+
 def set_sync_state(
     conn: sqlite3.Connection,
     *,

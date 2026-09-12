@@ -1,0 +1,68 @@
+{
+  "totalUsageEventsCount": 3,
+  "pagination": {
+    "numPages": 1,
+    "currentPage": 1,
+    "pageSize": 25,
+    "hasNextPage": false,
+    "hasPreviousPage": false
+  },
+  "usageEvents": [
+    {
+      "id": "evt_t2_matched",
+      "timestamp": "1757667600000",
+      "userEmail": "developer@example.com",
+      "conversationId": "conv_proj_1",
+      "model": "claude-4.5-sonnet",
+      "kind": "Usage-based",
+      "maxMode": true,
+      "requestsCosts": 5,
+      "isTokenBasedCall": true,
+      "isChargeable": true,
+      "isHeadless": false,
+      "tokenUsage": {
+        "inputTokens": 126,
+        "outputTokens": 450,
+        "cacheWriteTokens": 6112,
+        "cacheReadTokens": 11964,
+        "totalCents": 20.18232
+      },
+      "chargedCents": 21.36232,
+      "cursorTokenFee": 1.18
+    },
+    {
+      "id": "evt_t2_unmatched",
+      "timestamp": "1757667700000",
+      "userEmail": "developer@example.com",
+      "conversationId": "conv_unknown",
+      "model": "composer-2.5",
+      "kind": "Included in Business",
+      "isTokenBasedCall": true,
+      "isChargeable": true,
+      "isHeadless": false,
+      "tokenUsage": {
+        "inputTokens": 200,
+        "outputTokens": 50,
+        "cacheWriteTokens": 0,
+        "cacheReadTokens": 0,
+        "totalCents": 1.0
+      },
+      "chargedCents": 1.0
+    },
+    {
+      "id": "evt_t2_no_conv",
+      "timestamp": "1757667800000",
+      "userEmail": "admin@example.com",
+      "model": "claude-4-sonnet-thinking",
+      "kind": "Included in Business",
+      "isTokenBasedCall": false,
+      "isChargeable": false,
+      "isHeadless": false,
+      "chargedCents": 8
+    }
+  ],
+  "period": {
+    "startDate": 1757062800000,
+    "endDate": 1757667800000
+  }
+}
