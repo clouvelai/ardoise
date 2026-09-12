@@ -10,3 +10,6 @@ __pycache__/
 node_modules/
 .next/
 out/
+.env
+apps/api/.venv/
+apps/api/.data/
