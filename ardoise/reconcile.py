@@ -1,7 +1,7 @@
-"""Billed truth (invoice / T1 / T2) vs T0 allocation.
+"""Vendor spend preference: invoice → T2 → T1 snapshot → T0 estimated.
 
-T0 list-price estimates never become statement section A billed totals.
-They only allocate/attribute a billed amount across projects.
+T0 list-price estimates are weights for section B only when an invoice / T1 / T2
+total exists. They may appear on section A vendor lines as the last-resort tier.
 """
 
 from __future__ import annotations
@@ -223,8 +223,9 @@ def billed_truth(
     person_key = person or ""
     invoices = db.list_invoices(conn, cycle=cycle, vendor=vendor, person=person_key)
     if invoices:
-        cents = sum(int(row.get("billed_cents") or 0) for row in invoices)
-        ids = [str(row.get("invoice_id") or "") for row in invoices if row.get("invoice_id")]
+        cents = sum(int(row.get("usd_cents") or row.get("billed_cents") or 0) for row in invoices)
+        note = next((str(row.get("notes") or "") for row in invoices if row.get("notes")), "")
+        src = next((str(row.get("source") or "paste") for row in invoices), "paste")
         return BilledRow(
             vendor=vendor,
             person=person_key,
@@ -232,8 +233,8 @@ def billed_truth(
             billed_cents=cents,
             billed_usd=round(cents / 100.0, 6),
             tier="invoice",
-            source=",".join(ids) if ids else "invoice",
-            invoice_id=ids[0] if len(ids) == 1 else None,
+            source=note or src or "paste",
+            invoice_id=note or None,
         )
 
     t2 = _events(conn, vendor=vendor, person=person_key, cycle=cycle, tier="T2")
@@ -342,19 +343,37 @@ def reconcile_month(conn: sqlite3.Connection, month: str) -> list[ReconciledCycl
 
 
 def section_a(conn: sqlite3.Connection, month: str) -> list[dict[str, Any]]:
-    """Invoice / T1 / T2 billed rows only. T0 never appears."""
+    """One vendor line per scope. Prefer invoice, else T2, else T1, else T0 estimated."""
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     for rec in reconcile_month(conn, month):
-        if rec.billed is None:
-            continue
-        key = (rec.billed.vendor, rec.billed.person, rec.billed.cycle)
+        key = (rec.vendor, rec.person, rec.cycle)
         if key in seen:
             continue
         seen.add(key)
-        item = rec.billed.as_dict()
-        item["tier_of_truth"] = rec.billed.tier
-        rows.append(item)
+        if rec.billed is not None:
+            item = rec.billed.as_dict()
+            item["usd_cents"] = rec.billed.billed_cents
+            item["tier_of_truth"] = rec.billed.tier
+            item["invoice_grade"] = True
+            rows.append(item)
+            continue
+        cents = int(round(float(rec.cost_usd) * 100))
+        rows.append(
+            {
+                "vendor": rec.vendor,
+                "person": rec.person,
+                "cycle": rec.cycle,
+                "billed_cents": cents,
+                "usd_cents": cents,
+                "billed_usd": round(float(rec.cost_usd), 6),
+                "tier": "T0",
+                "tier_of_truth": "T0",
+                "source": "T0 estimated",
+                "invoice_id": None,
+                "invoice_grade": False,
+            }
+        )
     rows.sort(key=lambda row: (row.get("vendor") or "", row.get("person") or "", row.get("cycle") or ""))
     return rows
 

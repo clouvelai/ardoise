@@ -105,17 +105,15 @@ CREATE TABLE IF NOT EXISTS sync_state (
 CREATE TABLE IF NOT EXISTS invoices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   vendor TEXT NOT NULL,
-  person TEXT NOT NULL DEFAULT '',
   cycle TEXT NOT NULL,
-  invoice_id TEXT NOT NULL DEFAULT '',
-  billed_cents INTEGER,
-  currency TEXT NOT NULL DEFAULT 'USD',
-  status TEXT,
-  issued_at TEXT,
-  source TEXT NOT NULL DEFAULT 'paste',
+  person TEXT NOT NULL DEFAULT '',
+  usd_cents INTEGER NOT NULL,
+  source TEXT NOT NULL DEFAULT 'paste'
+    CHECK (source IN ('paste', 't1', 't2')),
   notes TEXT,
-  ingested_at TEXT NOT NULL,
-  UNIQUE(vendor, person, cycle, invoice_id)
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(vendor, cycle, person)
 );
 
 CREATE TABLE IF NOT EXISTS sources (
@@ -126,7 +124,8 @@ CREATE TABLE IF NOT EXISTS sources (
 );
 """
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
+INVOICE_SOURCES = frozenset({"paste", "t1", "t2"})
 
 _ENTRY_COLS = (
     "source",
@@ -197,14 +196,7 @@ def upgrade(conn: sqlite3.Connection) -> None:
             "tier": "TEXT NOT NULL DEFAULT 'T0'",
         },
     )
-    _ensure_columns(
-        conn,
-        "invoices",
-        {
-            "source": "TEXT NOT NULL DEFAULT 'paste'",
-            "notes": "TEXT",
-        },
-    )
+    _rebuild_invoices(conn)
     _migrate_entries_view(conn)
     seed_prices(conn)
 
@@ -227,6 +219,77 @@ def _ensure_columns(conn: sqlite3.Connection, table: str, specs: dict[str, str])
     for name, decl in specs.items():
         if name not in have:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
+def _rebuild_invoices(conn: sqlite3.Connection) -> None:
+    """v3 invoices: (vendor, cycle, person) + usd_cents + source paste|t1|t2."""
+    kind = _object_type(conn, "invoices")
+    if kind != "table":
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS invoices (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              vendor TEXT NOT NULL,
+              cycle TEXT NOT NULL,
+              person TEXT NOT NULL DEFAULT '',
+              usd_cents INTEGER NOT NULL,
+              source TEXT NOT NULL DEFAULT 'paste'
+                CHECK (source IN ('paste', 't1', 't2')),
+              notes TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              UNIQUE(vendor, cycle, person)
+            );
+            """
+        )
+        return
+    cols = _columns(conn, "invoices")
+    if "usd_cents" in cols and "invoice_id" not in cols:
+        return
+    conn.execute("ALTER TABLE invoices RENAME TO invoices_legacy")
+    conn.executescript(
+        """
+        CREATE TABLE invoices (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          vendor TEXT NOT NULL,
+          cycle TEXT NOT NULL,
+          person TEXT NOT NULL DEFAULT '',
+          usd_cents INTEGER NOT NULL,
+          source TEXT NOT NULL DEFAULT 'paste'
+            CHECK (source IN ('paste', 't1', 't2')),
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE(vendor, cycle, person)
+        );
+        """
+    )
+    legacy = _columns(conn, "invoices_legacy")
+    cents = "usd_cents" if "usd_cents" in legacy else "billed_cents"
+    created = "created_at" if "created_at" in legacy else "ingested_at"
+    notes = "notes" if "notes" in legacy else "NULL"
+    source = "source" if "source" in legacy else "'paste'"
+    conn.execute(
+        f"""
+        INSERT INTO invoices (vendor, cycle, person, usd_cents, source, notes, created_at, updated_at)
+        SELECT
+          vendor,
+          cycle,
+          person,
+          CAST(SUM(COALESCE({cents}, 0)) AS INTEGER),
+          CASE LOWER(COALESCE({source}, 'paste'))
+            WHEN 't1' THEN 't1'
+            WHEN 't2' THEN 't2'
+            ELSE 'paste'
+          END,
+          MAX({notes}),
+          MIN(COALESCE({created}, '')),
+          MAX(COALESCE({created}, ''))
+        FROM invoices_legacy
+        GROUP BY vendor, cycle, person
+        """
+    )
+    conn.execute("DROP TABLE invoices_legacy")
 
 
 def _migrate_entries_view(conn: sqlite3.Connection) -> None:
@@ -375,6 +438,16 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
         and payload["input_tokens"] > int(existing["input_tokens"])
     )
     if not richer:
+        conn.execute(
+            """
+            UPDATE events SET
+              vendor = CASE WHEN vendor IN ('', 'unknown') THEN :vendor ELSE vendor END,
+              person = CASE WHEN person = '' THEN :person ELSE person END,
+              cycle = CASE WHEN cycle = '' THEN :cycle ELSE cycle END
+            WHERE message_id = :message_id AND request_id = :request_id
+            """,
+            payload,
+        )
         return "skipped"
 
     conn.execute(
@@ -463,28 +536,49 @@ def upsert_snapshot(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
     return "upserted"
 
 
-def upsert_invoice(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
-    """Insert or replace a pasted invoice. Credentials are rejected."""
-    _reject_secrets(row)
-    billed = row.get("billed_cents")
+def _invoice_cents(row: dict[str, Any]) -> int:
+    raw = row.get("usd_cents")
+    if raw in (None, ""):
+        raw = row.get("billed_cents")
     try:
-        billed_i = int(billed) if billed is not None and billed != "" else None
+        if raw is None or raw == "":
+            raise ValueError("missing")
+        return int(raw)
     except (TypeError, ValueError):
-        raise ValueError("invoice billed_cents must be an integer") from None
-    if billed_i is None:
-        raise ValueError("invoice requires billed_cents")
+        raise ValueError("invoice requires usd_cents (integer cents)") from None
+
+
+def _invoice_source(raw: Any) -> str:
+    source = str(raw or "paste").strip().lower()
+    if source not in INVOICE_SOURCES:
+        raise ValueError("invoice source must be paste, t1, or t2")
+    return source
+
+
+def _public_invoice(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    item = dict(row)
+    cents = item.get("usd_cents")
+    if cents is None:
+        cents = item.get("billed_cents") or 0
+    item["usd_cents"] = int(cents)
+    item["billed_cents"] = int(cents)
+    item["person"] = item.get("person") or ""
+    return item
+
+
+def upsert_invoice(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
+    """Idempotent on (vendor, cycle, person). Credentials are rejected."""
+    _reject_secrets(row)
+    now = _now()
     payload = {
         "vendor": str(row.get("vendor") or "").strip().lower(),
-        "person": row.get("person") or "",
         "cycle": str(row.get("cycle") or "").strip(),
-        "invoice_id": str(row.get("invoice_id") or "").strip(),
-        "billed_cents": billed_i,
-        "currency": str(row.get("currency") or "USD"),
-        "status": row.get("status"),
-        "issued_at": row.get("issued_at"),
-        "source": row.get("source") or "paste",
+        "person": str(row.get("person") or row.get("scope") or "").strip(),
+        "usd_cents": _invoice_cents(row),
+        "source": _invoice_source(row.get("source")),
         "notes": row.get("notes"),
-        "ingested_at": _now(),
+        "created_at": now,
+        "updated_at": now,
     }
     if not payload["vendor"]:
         raise ValueError("invoice requires vendor")
@@ -492,28 +586,23 @@ def upsert_invoice(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
         raise ValueError("invoice requires cycle YYYY-MM")
     existing = conn.execute(
         """
-        SELECT billed_cents FROM invoices
-        WHERE vendor = :vendor AND person = :person AND cycle = :cycle AND invoice_id = :invoice_id
+        SELECT usd_cents FROM invoices
+        WHERE vendor = :vendor AND cycle = :cycle AND person = :person
         """,
         payload,
     ).fetchone()
     conn.execute(
         """
         INSERT INTO invoices (
-          vendor, person, cycle, invoice_id, billed_cents, currency, status,
-          issued_at, source, notes, ingested_at
+          vendor, cycle, person, usd_cents, source, notes, created_at, updated_at
         ) VALUES (
-          :vendor, :person, :cycle, :invoice_id, :billed_cents, :currency, :status,
-          :issued_at, :source, :notes, :ingested_at
+          :vendor, :cycle, :person, :usd_cents, :source, :notes, :created_at, :updated_at
         )
-        ON CONFLICT(vendor, person, cycle, invoice_id) DO UPDATE SET
-          billed_cents = excluded.billed_cents,
-          currency = excluded.currency,
-          status = excluded.status,
-          issued_at = excluded.issued_at,
+        ON CONFLICT(vendor, cycle, person) DO UPDATE SET
+          usd_cents = excluded.usd_cents,
           source = excluded.source,
           notes = excluded.notes,
-          ingested_at = excluded.ingested_at
+          updated_at = excluded.updated_at
         """,
         payload,
     )
@@ -538,8 +627,8 @@ def list_invoices(
     if person is not None:
         sql += " AND person = ?"
         args.append(person)
-    sql += " ORDER BY vendor, person, cycle, invoice_id, id"
-    return [dict(r) for r in conn.execute(sql, args).fetchall()]
+    sql += " ORDER BY vendor, person, cycle, id"
+    return [_public_invoice(r) for r in conn.execute(sql, args).fetchall()]
 
 
 def latest_snapshot(

@@ -64,9 +64,15 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
 
     source = default_source
     hook = str(event.get("hook_event_name") or raw.get("source") or "")
-    if hook.startswith("cursor") or default_source == "cursor":
+    model = str(event.get("model") or raw.get("model") or "").lower()
+    if hook.startswith("cursor") or default_source == "cursor" or "composer" in model:
         source = "cursor"
-    elif default_source == "anthropic_t0" or str(raw.get("type") or "") in {"assistant", "progress"}:
+    elif (
+        default_source == "anthropic_t0"
+        or str(raw.get("type") or "") in {"assistant", "progress"}
+        or "claude" in model
+        or "anthropic" in model
+    ):
         source = "anthropic_t0"
     elif hook:
         source = "hook"

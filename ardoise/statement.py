@@ -1,7 +1,8 @@
 """Month statement as Markdown, HTML, and CSV.
 
-Section A is billed truth (invoice / T1 / T2) with explicit tiers of truth.
-T0 list-price estimates only allocate/attribute; they are never section A billed totals.
+Section A: one vendor line each, preferring invoice → T2 → T1 → T0 estimated.
+Each line prints its tier of truth. Section B uses T0 as weights only when
+reconciling to an invoice / T1 / T2 total.
 """
 
 from __future__ import annotations
@@ -15,6 +16,19 @@ from ardoise import paths
 from ardoise.status import current_month, summarize
 
 
+def _tier(row: dict[str, Any]) -> str:
+    return str(row.get("tier_of_truth") or row.get("tier") or "T0")
+
+
+def _amount(row: dict[str, Any]) -> float:
+    if row.get("billed_usd") is not None:
+        return float(row["billed_usd"])
+    cents = row.get("usd_cents") or row.get("billed_cents")
+    if cents not in (None, ""):
+        return int(cents) / 100.0
+    return 0.0
+
+
 def _md(summary: dict[str, Any]) -> str:
     month = summary["month"]
     section_a = summary.get("section_a") or []
@@ -23,43 +37,44 @@ def _md(summary: dict[str, Any]) -> str:
     lines = [
         f"# Ardoise statement {month}",
         "",
-        "## A. Billed truth (invoice / T1 / T2)",
+        "## A. Vendor lines (invoice / T2 / T1 / T0)",
         "",
-        "These dollars come from pasted invoices, T1 vendor snapshots, or T2 billed events.",
-        "T0 token × list-price estimates are **not** billed truth.",
+        "Prefer pasted invoice, else T2 billed events, else T1 snapshot, else T0 estimated.",
+        "Each line prints its **tier of truth**. T0 is list-price estimate, not invoice-grade.",
         "",
     ]
     if section_a:
+        invoice_grade = [row for row in section_a if row.get("invoice_grade")]
+        if invoice_grade:
+            lines.append(f"**Invoice-grade total (invoice / T1 / T2): ${billed_usd:.2f}**")
+        else:
+            lines.append("**Invoice-grade total: none** — vendor lines below are T0 estimated.")
         lines += [
-            f"**Billed total: ${billed_usd:.2f}**",
             "",
-            "| Vendor | Person | Cycle | Billed USD | Tier of truth | Source |",
+            "| Vendor | Scope | Cycle | USD | Tier | Source |",
             "|---|---|---|---:|---|---|",
         ]
         for row in section_a:
             lines.append(
-                "| {vendor} | {person} | {cycle} | {billed_usd:.2f} | {tier} | {source} |".format(
+                "| {vendor} | {person} | {cycle} | {usd:.4f} | {tier} | {source} |".format(
                     vendor=row.get("vendor") or "",
                     person=row.get("person") or "",
                     cycle=row.get("cycle") or "",
-                    billed_usd=float(row.get("billed_usd") or 0),
-                    tier=row.get("tier_of_truth") or row.get("tier") or "",
+                    usd=_amount(row),
+                    tier=_tier(row),
                     source=row.get("source") or "",
                 )
             )
     else:
-        lines += [
-            "No invoice, T1 snapshot, or T2 billed events for this cycle.",
-            "Section A billed total is empty — T0 estimates below are allocation only.",
-            "",
-        ]
+        lines += ["No vendor activity for this cycle.", ""]
 
     lines += [
         "",
-        "## B. T0 allocation (not billed)",
+        "## B. T0 allocation",
         "",
-        "Local token × list price. Used only to attribute billed dollars across projects.",
-        f"T0 estimated total: **${estimated:.4f}** (not invoice-grade).",
+        "T0 token weights attribute an invoice / T1 / T2 total across projects.",
+        "When a vendor line is T0 estimated, there is no billed total to allocate.",
+        f"T0 estimated total: **${estimated:.4f}**.",
         "",
         "### By project",
         "",
@@ -119,24 +134,27 @@ def _html_page(summary: dict[str, Any]) -> str:
                 f"<td>{cell(r.get('vendor'))}</td>"
                 f"<td>{cell(r.get('person'))}</td>"
                 f"<td>{cell(r.get('cycle'))}</td>"
-                f"<td>{float(r.get('billed_usd') or 0):.2f}</td>"
-                f"<td>{cell(r.get('tier_of_truth') or r.get('tier'))}</td>"
+                f"<td>{_amount(r):.4f}</td>"
+                f"<td>{cell(_tier(r))}</td>"
                 f"<td>{cell(r.get('source'))}</td>"
                 "</tr>"
             )
             for r in section_a
         )
+        grade = any(r.get("invoice_grade") for r in section_a)
+        headline = (
+            f"<p>Invoice-grade total <strong>${billed_usd:.2f}</strong> (invoice / T1 / T2)</p>"
+            if grade
+            else "<p>Invoice-grade total: none. Vendor lines below are T0 estimated.</p>"
+        )
         billed_block = (
-            f"<p>Billed total <strong>${billed_usd:.2f}</strong></p>"
-            "<table><thead><tr><th>Vendor</th><th>Person</th><th>Cycle</th>"
-            "<th>Billed USD</th><th>Tier of truth</th><th>Source</th></tr></thead>"
-            f"<tbody>{billed_rows}</tbody></table>"
+            headline
+            + "<table><thead><tr><th>Vendor</th><th>Scope</th><th>Cycle</th>"
+            + "<th>USD</th><th>Tier</th><th>Source</th></tr></thead>"
+            + f"<tbody>{billed_rows}</tbody></table>"
         )
     else:
-        billed_block = (
-            "<p>No invoice, T1 snapshot, or T2 billed events for this cycle. "
-            "T0 estimates below are allocation only — not billed truth.</p>"
-        )
+        billed_block = "<p>No vendor activity for this cycle.</p>"
 
     project_rows = "".join(
         (
@@ -182,13 +200,14 @@ th {{ text-align: left; }}
 </head>
 <body>
 <h1>Ardoise statement {cell(summary['month'])}</h1>
-<h2>A. Billed truth (invoice / T1 / T2)</h2>
-<p class="note">These dollars come from pasted invoices, T1 vendor snapshots, or T2 billed events.
-T0 token × list-price estimates are not billed truth.</p>
+<h2>A. Vendor lines (invoice / T2 / T1 / T0)</h2>
+<p class="note">Prefer pasted invoice, else T2 billed events, else T1 snapshot, else T0 estimated.
+Each line prints its tier of truth. T0 is list-price estimate, not invoice-grade.</p>
 {billed_block}
-<h2>B. T0 allocation (not billed)</h2>
-<p class="note">Local token × list price. Used only to attribute billed dollars across projects.
-T0 estimated total <strong>${estimated:.4f}</strong> (not invoice-grade).</p>
+<h2>B. T0 allocation</h2>
+<p class="note">T0 token weights attribute an invoice / T1 / T2 total across projects.
+When a vendor line is T0 estimated, there is no billed total to allocate.
+T0 estimated total <strong>${estimated:.4f}</strong>.</p>
 <h3>By project</h3>
 <table><thead><tr><th>Project</th><th>Entries</th><th>T0 estimate USD</th><th>Allocated billed USD</th><th>Tier</th></tr></thead>
 <tbody>{project_rows}</tbody></table>
@@ -208,15 +227,15 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
     for row in summary.get("section_a") or []:
         rows.append(
             {
-                "section": "A_billed",
-                "tier": row.get("tier_of_truth") or row.get("tier"),
+                "section": "A_vendor",
+                "tier": _tier(row),
                 "vendor": row.get("vendor"),
                 "person": row.get("person"),
                 "cycle": row.get("cycle"),
                 "source": row.get("source"),
-                "invoice_id": row.get("invoice_id"),
-                "billed_cents": row.get("billed_cents"),
-                "billed_usd": row.get("billed_usd"),
+                "usd_cents": row.get("usd_cents") or row.get("billed_cents"),
+                "billed_usd": _amount(row),
+                "invoice_grade": row.get("invoice_grade"),
                 "project": "",
                 "model": "",
                 "occurred_at": "",
@@ -224,22 +243,22 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "request_id": "",
                 "input_tokens": "",
                 "output_tokens": "",
-                "estimated_usd": "",
+                "estimated_usd": "" if row.get("invoice_grade") else _amount(row),
                 "allocated_billed_usd": "",
             }
         )
     for row in summary.get("lines") or []:
         rows.append(
             {
-                "section": "T0_allocation",
+                "section": "B_t0_allocation",
                 "tier": "T0",
                 "vendor": row.get("vendor"),
                 "person": row.get("person"),
                 "cycle": row.get("cycle"),
                 "source": row.get("source"),
-                "invoice_id": "",
-                "billed_cents": row.get("billed_cents"),
+                "usd_cents": row.get("billed_cents"),
                 "billed_usd": "",
+                "invoice_grade": "",
                 "project": row.get("project"),
                 "model": row.get("model"),
                 "occurred_at": row.get("occurred_at"),
@@ -271,9 +290,9 @@ def write_statement(month: str | None = None, *, out_dir: Path | None = None) ->
         "person",
         "cycle",
         "source",
-        "invoice_id",
-        "billed_cents",
+        "usd_cents",
         "billed_usd",
+        "invoice_grade",
         "project",
         "model",
         "occurred_at",

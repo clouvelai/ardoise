@@ -74,16 +74,19 @@ def build_parser() -> argparse.ArgumentParser:
     vt.add_argument("name", help="Vendor name (anthropic, cursor)")
     vt.add_argument("--json", action="store_true")
 
-    inv = sub.add_parser("invoice", help="Paste-in invoices (statement section A billed truth)")
+    inv = sub.add_parser("invoice", help="Owner-received vendor totals for statement section A")
     isub = inv.add_subparsers(dest="invoice_cmd", required=True)
-    ip = isub.add_parser("paste", help="Ingest pasted invoice rows (JSON / JSONL / CSV)")
+    ia = isub.add_parser("add", help="Paste one Stripe/vendor total (idempotent on vendor+cycle+person)")
+    ia.add_argument("--vendor", required=True, help="anthropic or cursor")
+    ia.add_argument("--cycle", required=True, help="YYYY-MM")
+    ia.add_argument("--usd-cents", type=int, dest="usd_cents", help="Integer USD cents")
+    ia.add_argument("--usd", type=float, help="USD dollars (converted to cents)")
+    ia.add_argument("--person", default="", help="Person/scope (default: empty)")
+    ia.add_argument("--notes", help="Free-text (invoice id, Stripe memo) — not a secret")
+    ia.add_argument("--source", default="paste", choices=("paste", "t1", "t2"))
+    ia.add_argument("--json", action="store_true")
+    ip = isub.add_parser("paste", help="Bulk ingest JSON / JSONL / CSV (same upsert as add)")
     ip.add_argument("--file", help="Invoice file (otherwise stdin)")
-    ip.add_argument("--vendor", help="Single-row paste: vendor")
-    ip.add_argument("--cycle", help="Single-row paste: YYYY-MM")
-    ip.add_argument("--billed-cents", type=int, help="Single-row paste: integer cents")
-    ip.add_argument("--billed-usd", type=float, help="Single-row paste: dollars")
-    ip.add_argument("--id", dest="invoice_id", help="Single-row paste: invoice id")
-    ip.add_argument("--person", help="Single-row paste: person")
     ip.add_argument("--json", action="store_true")
     return parser
 
@@ -182,25 +185,28 @@ def main(argv: list[str] | None = None) -> int:
             return _die(f"unknown vendor command: {args.vendor_cmd}")
 
         if args.cmd == "invoice":
-            if args.invoice_cmd == "paste":
-                single = any(
-                    getattr(args, key, None) is not None
-                    for key in ("vendor", "cycle", "billed_cents", "billed_usd", "invoice_id")
+            if args.invoice_cmd == "add":
+                if args.usd_cents is None and args.usd is None:
+                    return _die("invoice add needs --usd-cents or --usd")
+                result = invoice_mod.add(
+                    vendor=args.vendor,
+                    cycle=_check_month(args.cycle) or args.cycle,
+                    usd_cents=args.usd_cents,
+                    usd=args.usd,
+                    person=args.person or "",
+                    notes=args.notes,
+                    source=args.source,
                 )
-                if single:
-                    if not args.vendor or not args.cycle:
-                        return _die("single-row paste needs --vendor and --cycle")
-                    result = invoice_mod.paste(
-                        row={
-                            "vendor": args.vendor,
-                            "cycle": args.cycle,
-                            "billed_cents": args.billed_cents,
-                            "billed_usd": args.billed_usd,
-                            "invoice_id": args.invoice_id,
-                            "person": args.person or "",
-                        }
+                if args.json:
+                    print(json.dumps(result, indent=2, ensure_ascii=True))
+                else:
+                    print(
+                        "invoice add {result} vendor={vendor} cycle={cycle} "
+                        "person={person!r} usd_cents={usd_cents} source={source}".format(**result)
                     )
-                elif args.file:
+                return 0
+            if args.invoice_cmd == "paste":
+                if args.file:
                     result = invoice_mod.paste(path=Path(args.file).expanduser())
                 else:
                     result = invoice_mod.paste(stream=sys.stdin)

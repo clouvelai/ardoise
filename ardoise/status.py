@@ -80,7 +80,10 @@ def summarize(month: str | None = None) -> dict[str, Any]:
         cycles = [item.as_dict() for item in reconcile.reconcile_month(conn, month)]
 
     estimated = round(sum(float(row.get("estimated_usd") or row.get("cost_usd") or 0) for row in lines), 6)
-    billed_usd = round(sum(float(row.get("billed_usd") or 0) for row in section_a), 6)
+    billed_usd = round(
+        sum(float(row.get("billed_usd") or 0) for row in section_a if row.get("invoice_grade")),
+        6,
+    )
     return {
         "ok": True,
         "ledger": str(paths.ledger_path()),
@@ -112,10 +115,10 @@ def summarize(month: str | None = None) -> dict[str, Any]:
 def render_text(data: dict[str, Any]) -> str:
     billed = data.get("billed_usd")
     section_a = data.get("section_a") or []
-    if section_a:
+    if any(row.get("invoice_grade") for row in section_a):
         billed_line = f"billed    ${float(billed or 0):.2f}  (invoice / T1 / T2)"
     else:
-        billed_line = "billed    (none)  — paste invoices or T1/T2; T0 is not billed"
+        billed_line = "billed    (none)  — invoice add or T1/T2; T0 vendor lines are estimated"
     lines = [
         f"Ardoise  {data['month']}",
         f"ledger   {data['ledger']}",
@@ -125,15 +128,15 @@ def render_text(data: dict[str, Any]) -> str:
         f"tokens   in={data['input_tokens']} out={data['output_tokens']} "
         f"cache_read={data['cache_read_tokens']} cache_write={data['cache_creation_tokens']}",
         "",
-        "section A — billed truth",
+        "section A — vendor lines",
     ]
     if not section_a:
-        lines.append("  (no invoice / T1 / T2)")
+        lines.append("  (empty)")
     for row in section_a:
-        lines.append(
-            f"  {row.get('vendor'):<16} ${float(row.get('billed_usd') or 0):.2f}  "
-            f"{row.get('tier_of_truth') or row.get('tier')}  {row.get('source')}"
-        )
+        usd = float(row.get("billed_usd") or 0)
+        tier = row.get("tier_of_truth") or row.get("tier") or "T0"
+        fmt = f"${usd:.2f}" if row.get("invoice_grade") else f"${usd:.4f}"
+        lines.append(f"  {str(row.get('vendor') or ''):<16} {fmt}  {tier}  {row.get('source')}")
     lines.append("by project (T0 allocation)")
     if not data["by_project"]:
         lines.append("  (empty)")

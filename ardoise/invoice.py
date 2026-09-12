@@ -1,9 +1,11 @@
-"""Paste invoice rows into the ledger. Solid dollar source for statement section A."""
+"""Owner-received invoice totals (paste). Solid dollars for statement section A.
+
+No live Stripe/vendor API. `invoice add` is idempotent on (vendor, cycle, person).
+"""
 
 from __future__ import annotations
 
 import csv
-import hashlib
 import io
 import json
 import re
@@ -19,6 +21,7 @@ _VENDOR_ALIASES = {
     "claude-code": "anthropic",
     "anthropic_t0": "anthropic",
 }
+_SOURCES = frozenset({"paste", "t1", "t2"})
 
 
 def _vendor(raw: Any) -> str:
@@ -29,19 +32,20 @@ def _vendor(raw: Any) -> str:
     return vendor_for_source(name) if name not in {"anthropic", "cursor"} else name
 
 
-def _cents(row: dict[str, Any]) -> int:
-    if row.get("billed_cents") not in (None, ""):
-        try:
-            return int(row["billed_cents"])
-        except (TypeError, ValueError) as exc:
-            raise ValueError("billed_cents must be an integer") from exc
-    for key in ("billed_usd", "amount_usd", "total_usd", "usd", "amount"):
+def _usd_cents(row: dict[str, Any]) -> int:
+    for key in ("usd_cents", "billed_cents"):
+        if row.get(key) not in (None, ""):
+            try:
+                return int(row[key])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{key} must be an integer") from exc
+    for key in ("usd", "billed_usd", "amount_usd", "total_usd", "amount"):
         if row.get(key) not in (None, ""):
             try:
                 return int(round(float(row[key]) * 100))
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"{key} must be a number") from exc
-    raise ValueError("invoice row needs billed_cents or billed_usd")
+    raise ValueError("invoice needs usd_cents or usd")
 
 
 def _cycle(raw: Any) -> str:
@@ -55,51 +59,54 @@ def _cycle(raw: Any) -> str:
     raise ValueError(f"invoice cycle must be YYYY-MM, got {raw!r}")
 
 
-def _synthetic_id(row: dict[str, Any], cents: int) -> str:
-    seed = "|".join(
-        [
-            str(row.get("vendor") or ""),
-            str(row.get("person") or ""),
-            str(row.get("cycle") or ""),
-            str(cents),
-            str(row.get("issued_at") or ""),
-        ]
-    )
-    return "paste-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+def _source(raw: Any) -> str:
+    source = str(raw or "paste").strip().lower()
+    if source not in _SOURCES:
+        raise ValueError("invoice source must be paste, t1, or t2")
+    return source
+
+
+def _notes(row: dict[str, Any]) -> str | None:
+    parts = []
+    for key in ("notes", "note", "invoice_id", "invoice_ref"):
+        val = row.get(key)
+        if val not in (None, ""):
+            parts.append(str(val))
+    if not parts:
+        return None
+    # Prefer an explicit notes field; otherwise keep a pasted invoice id.
+    if row.get("notes") not in (None, ""):
+        return str(row["notes"])
+    return parts[0]
 
 
 def normalize_row(raw: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError("invoice row must be an object")
-    lowered = {str(k).strip().lower(): v for k, v in raw.items()}
-    # accept Invoice ID style headers
+    lowered = {str(k).strip().lower().replace("-", "_"): v for k, v in raw.items()}
     aliases = {
         "invoiceid": "invoice_id",
         "invoice": "invoice_id",
         "id": "invoice_id",
         "person_id": "person",
+        "scope": "person",
         "month": "cycle",
         "period": "cycle",
-        "issued": "issued_at",
+        "usd_cents": "usd_cents",
+        "billed_cents": "billed_cents",
     }
     for src, dest in aliases.items():
         if dest not in lowered and src in lowered:
             lowered[dest] = lowered[src]
-    cents = _cents(lowered)
-    invoice_id = str(lowered.get("invoice_id") or "").strip()
-    if not invoice_id:
-        invoice_id = _synthetic_id(lowered, cents)
+    if "person" not in lowered and lowered.get("scope") not in (None, ""):
+        lowered["person"] = lowered["scope"]
     return {
         "vendor": _vendor(lowered.get("vendor")),
         "person": str(lowered.get("person") or "").strip(),
         "cycle": _cycle(lowered.get("cycle")),
-        "invoice_id": invoice_id,
-        "billed_cents": cents,
-        "currency": str(lowered.get("currency") or "USD"),
-        "status": lowered.get("status"),
-        "issued_at": lowered.get("issued_at"),
-        "source": lowered.get("source") or "paste",
-        "notes": lowered.get("notes"),
+        "usd_cents": _usd_cents(lowered),
+        "source": _source(lowered.get("source")),
+        "notes": _notes(lowered),
     }
 
 
@@ -150,6 +157,43 @@ def parse_invoices(text: str) -> list[dict[str, Any]]:
     return [normalize_row(row) for row in raw_rows]
 
 
+def add(
+    *,
+    vendor: str,
+    cycle: str,
+    usd_cents: int | None = None,
+    usd: float | None = None,
+    person: str = "",
+    notes: str | None = None,
+    source: str = "paste",
+) -> dict[str, Any]:
+    """Paste one owner-received vendor/Stripe total. Idempotent on (vendor, cycle, person)."""
+    row = normalize_row(
+        {
+            "vendor": vendor,
+            "cycle": cycle,
+            "person": person,
+            "usd_cents": usd_cents,
+            "usd": usd,
+            "notes": notes,
+            "source": source,
+        }
+    )
+    with db.session() as conn:
+        kind = db.upsert_invoice(conn, row)
+    return {
+        "result": kind,
+        "inserted": 1 if kind == "inserted" else 0,
+        "updated": 1 if kind == "updated" else 0,
+        "rows": 1,
+        "vendor": row["vendor"],
+        "cycle": row["cycle"],
+        "person": row["person"],
+        "usd_cents": row["usd_cents"],
+        "source": row["source"],
+    }
+
+
 def paste(
     text: str | None = None,
     *,
@@ -167,7 +211,7 @@ def paste(
     elif stream is not None:
         rows.extend(parse_invoices(stream.read()))
     else:
-        raise ValueError("invoice paste needs --file, stdin, or vendor/cycle/amount")
+        raise ValueError("invoice paste needs --file, stdin, or invoice add flags")
 
     counts = {"inserted": 0, "updated": 0, "rows": len(rows)}
     with db.session() as conn:

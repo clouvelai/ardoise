@@ -140,6 +140,9 @@ class InvoiceAndReconcileTests(unittest.TestCase):
             for table in db.required_tables():
                 self.assertIn(table, names)
             self.assertIn("entries", names)
+            cols = {str(row[1]) for row in conn.execute("PRAGMA table_info(invoices)")}
+            for col in ("vendor", "cycle", "person", "usd_cents", "source", "notes", "created_at"):
+                self.assertIn(col, cols)
 
     def test_invoice_paste_and_section_a(self) -> None:
         with db.session() as conn:
@@ -168,23 +171,40 @@ class InvoiceAndReconcileTests(unittest.TestCase):
             self.assertIn("invoice", blob)
             self.assertIn("T0", blob)
             self.assertNotIn("Trivelta", blob)
-        self.assertIn("A. Billed truth", md)
-        self.assertIn("T0 allocation (not billed)", md)
+        self.assertIn("A. Vendor lines", md)
+        self.assertIn("B. T0 allocation", md)
         self.assertIn("19.50", md)
-        self.assertIn("A_billed", csv_text)
-        self.assertIn("T0_allocation", csv_text)
+        self.assertRegex(md, r"\|\s*anthropic\s*\|.*\|\s*invoice\s*\|")
+        self.assertIn("A_vendor", csv_text)
+        self.assertIn("B_t0_allocation", csv_text)
 
-    def test_t0_is_not_section_a_without_invoice(self) -> None:
+    def test_invoice_add_idempotent_on_vendor_cycle_person(self) -> None:
+        first = invoice.add(vendor="anthropic", cycle="2026-09", usd_cents=1000, notes="stripe inv_1")
+        self.assertEqual(first["result"], "inserted")
+        again = invoice.add(vendor="anthropic", cycle="2026-09", usd_cents=1950, notes="stripe inv_1")
+        self.assertEqual(again["result"], "updated")
+        self.assertEqual(again["usd_cents"], 1950)
+        with db.session() as conn:
+            rows = db.list_invoices(conn, cycle="2026-09", vendor="anthropic")
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["usd_cents"], 1950)
+            self.assertEqual(rows[0]["source"], "paste")
+            self.assertTrue(rows[0]["created_at"])
+
+    def test_section_a_t0_fallback_prints_tier(self) -> None:
         with db.session() as conn:
             self._seed_t0(conn)
         data = summarize("2026-09")
-        self.assertEqual(data["section_a"], [])
+        self.assertTrue(data["section_a"])
+        self.assertEqual({row["tier_of_truth"] for row in data["section_a"]}, {"T0"})
         self.assertEqual(data["billed_usd"], 0)
         self.assertGreater(data["cost_usd"], 0)
         written = write_statement("2026-09")
         md = Path(written["md"]).read_text(encoding="utf-8")
-        self.assertIn("No invoice, T1 snapshot, or T2 billed events", md)
-        self.assertIn("T0 allocation (not billed)", md)
+        self.assertIn("A. Vendor lines", md)
+        self.assertRegex(md, r"\|\s*anthropic\s*\|.*\|\s*T0\s*\|")
+        self.assertIn("T0 estimated", md)
+        self.assertIn("B. T0 allocation", md)
 
     def test_prefer_invoice_over_t1_and_t2(self) -> None:
         with db.session() as conn:

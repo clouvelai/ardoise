@@ -29,12 +29,13 @@ bin/ardoise statement 2026-09   # writes MD + HTML + CSV
 bin/ardoise export              # JSONL of usage rows
 bin/ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
 bin/ardoise vendor test anthropic
-bin/ardoise invoice paste --file invoices.jsonl   # section A billed truth
+bin/ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
+bin/ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
 ```
 
 Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
 
-**Section A** is billed truth: pasted invoices, else T1 snapshots, else T2 billed events — labeled by tier of truth. **T0** (local tokens × list price) only allocates those dollars across projects. T0 is never treated as an invoice-grade total.
+**Section A** is one vendor line per scope: pasted invoice, else T2, else T1 snapshot, else T0 estimated — each line prints its tier. Invoice-grade totals come from `invoice add` (owner-received Stripe/vendor cents). **Section B** uses T0 token weights only to allocate an invoice / T1 / T2 total across projects.
 
 ## How spend is captured
 

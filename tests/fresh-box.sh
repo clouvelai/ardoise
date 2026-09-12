@@ -143,10 +143,16 @@ for table in ("events", "snapshots", "prices", "projects", "sync_state", "invoic
         raise SystemExit(f"missing ledger table {table}")
 
 md0 = (home / ".ardoise" / "statements" / "2026-09.md").read_text()
-if "A. Billed truth" not in md0 or "T0 allocation (not billed)" not in md0:
+if "A. Vendor lines" not in md0 or "B. T0 allocation" not in md0:
     raise SystemExit("statement missing section A / T0 allocation")
-if "No invoice, T1 snapshot, or T2 billed events" not in md0:
-    raise SystemExit("pre-paste statement A must not treat T0 as billed")
+if "T0" not in md0:
+    raise SystemExit("pre-paste section A must print T0 estimated tier")
+if "invoice-grade total: none" not in md0.lower() and "T0 estimated" not in md0:
+    raise SystemExit("pre-paste section A must label T0 as estimated, not invoice")
+inv_cols = {row[1] for row in conn.execute("PRAGMA table_info(invoices)")}
+for col in ("vendor", "cycle", "person", "usd_cents", "source", "notes", "created_at"):
+    if col not in inv_cols:
+        raise SystemExit(f"invoices missing column {col}")
 
 vendor_a = json.loads((box / "vendor-anthropic.json").read_text())
 if vendor_a.get("capabilities", {}).get("capture") != "yes":
@@ -191,11 +197,13 @@ for blob, label in ((md, "md"), (html, "html"), (csv, "csv")):
         raise SystemExit(f"{label} missing invoice tier")
     if "Trivelta" in blob:
         raise SystemExit(f"{label} leaked Trivelta")
-if "A. Billed truth" not in md or "19.50" not in md or "1.55" not in md:
+if "A. Vendor lines" not in md or "19.50" not in md or "1.55" not in md:
     raise SystemExit("markdown section A missing invoice dollars")
-if "T0 allocation (not billed)" not in md:
+if "| invoice |" not in md:
+    raise SystemExit("markdown section A missing invoice tier label")
+if "B. T0 allocation" not in md:
     raise SystemExit("markdown missing T0 allocation section")
-if "A_billed" not in csv or "T0_allocation" not in csv:
+if "A_vendor" not in csv or "B_t0_allocation" not in csv:
     raise SystemExit("csv missing section A / T0 allocation rows")
 
 conn = sqlite3.connect(home / ".ardoise" / "ledger.db")
