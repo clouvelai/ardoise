@@ -6,6 +6,7 @@ import hashlib
 import os
 from typing import Any
 
+from ardoise.attribution import extract
 from ardoise.privacy import _int, usage_only_event
 from ardoise.project import infer_project
 from ardoise.vendors.contract import cycle_of, vendor_for_source
@@ -82,6 +83,9 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
         occurred = None
 
     person = (os.environ.get("ARDOISE_PERSON") or "").strip()
+    attrs = extract(event)
+    if attrs.get("agent") is None and attrs.get("skill") is None and attrs.get("effort") is None:
+        attrs = extract(raw)
     return {
         "vendor": vendor_for_source(source),
         "source": source,
@@ -103,4 +107,7 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
         "session_id": event.get("session_id"),
         "cwd": str(cwd) if cwd else None,
         "transcript_path": event.get("transcript_path"),
+        "agent": attrs.get("agent"),
+        "skill": attrs.get("skill"),
+        "effort": attrs.get("effort"),
     }

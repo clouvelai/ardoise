@@ -1,0 +1,19 @@
+{
+  "hook_event_name": "stop",
+  "cwd": "/WORKSPACE",
+  "prompt": "HOOK_SECRET_DO_NOT_STORE",
+  "model": "claude-sonnet-4-6",
+  "requestId": "req_hook_attr",
+  "agentId": "Explore",
+  "attributionSkill": "transcript-analysis",
+  "effort": "high",
+  "message": {
+    "id": "msg_hook_attr",
+    "usage": {
+      "input_tokens": 1000,
+      "output_tokens": 400,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+    }
+  }
+}

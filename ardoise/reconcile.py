@@ -52,6 +52,9 @@ class ReconciledLine:
     estimated_usd: float = 0.0
     allocated_billed_usd: float | None = None
     role: str = "t0_allocation"
+    agent: str | None = None
+    skill: str | None = None
+    effort: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -150,6 +153,9 @@ def _line(
             None if allocated_billed_usd is None else round(float(allocated_billed_usd), 8)
         ),
         role=role,
+        agent=row.get("agent") or None,
+        skill=row.get("skill") or None,
+        effort=row.get("effort") or None,
     )
 
 

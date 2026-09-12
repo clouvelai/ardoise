@@ -12,7 +12,7 @@ import html
 from pathlib import Path
 from typing import Any
 
-from ardoise import paths
+from ardoise import attribution, paths
 from ardoise.status import current_month, summarize
 
 _LEGEND = "T2 billed events · T1 seat usage · T0 local estimate · Invoice paste-in"
@@ -59,6 +59,82 @@ def _when(value: Any) -> str:
     if len(text) >= 19 and text[10] == "T":
         return f"{text[:10]} {text[11:16]}"
     return text
+
+
+def _md_attribution(summary: dict[str, Any]) -> list[str]:
+    if not attribution.any_present(summary):
+        return []
+    lines = [
+        "Present only when a transcript or hook named the dimension. Missing fields stay unattributed.",
+        "",
+    ]
+    titles = {"agent": "Agent", "skill": "Skill", "effort": "Effort"}
+    for dim in attribution.DIMENSIONS:
+        rows = attribution.present(summary.get(f"by_{dim}"), dim)
+        if not rows:
+            continue
+        lines += [
+            f"### By {titles[dim].lower()}",
+            "",
+            f"| {titles[dim]} | Entries | T0 estimate USD | Allocated billed USD |",
+            "|---|---:|---:|---:|",
+        ]
+        for row in rows:
+            lines.append(
+                "| {name} | {entries} | {est:.4f} | {alloc} |".format(
+                    name=row[dim],
+                    entries=row["entries"],
+                    est=float(row["cost_usd"]),
+                    alloc=_alloc_cell(row.get("allocated_billed_usd")),
+                )
+            )
+        lines.append("")
+    return lines
+
+
+def _html_attribution(summary: dict[str, Any], cell) -> str:
+    if not attribution.any_present(summary):
+        return ""
+    titles = {"agent": "Agent", "skill": "Skill", "effort": "Effort"}
+    blocks: list[str] = []
+    for dim in attribution.DIMENSIONS:
+        rows = attribution.present(summary.get(f"by_{dim}"), dim)
+        if not rows:
+            continue
+        body = "".join(
+            (
+                "<tr>"
+                f"<td>{cell(r[dim])}</td>"
+                f'<td class="num">{r["entries"]}</td>'
+                f'<td class="num">{float(r["cost_usd"]):.4f}</td>'
+                f'<td class="num">{_alloc_cell(r.get("allocated_billed_usd"))}</td>'
+                "</tr>"
+            )
+            for r in rows
+        )
+        blocks.append(
+            f"<h3>By {titles[dim].lower()}</h3>"
+            '<div class="alloc">'
+            "<table>"
+            "<thead><tr>"
+            f"<th>{titles[dim]}</th>"
+            '<th class="num">Entries</th>'
+            '<th class="num">T0 estimate</th>'
+            '<th class="num">Allocated billed</th>'
+            "</tr></thead>"
+            f"<tbody>{body}</tbody>"
+            "</table></div>"
+        )
+    if not blocks:
+        return ""
+    return (
+        '<section class="quiet attr">'
+        "<h2>Attribution</h2>"
+        '<p class="lede">Present only when a transcript or hook named the dimension. '
+        "Missing fields stay unattributed.</p>"
+        f"{''.join(blocks)}"
+        "</section>"
+    )
 
 
 def _source_note(row: dict[str, Any]) -> str:
@@ -174,6 +250,13 @@ def _md(summary: dict[str, Any]) -> str:
                 tier=_tier_md(row.get("origin_tier") or row.get("tier") or "T0"),
             )
         )
+    attr_bits = _md_attribution(summary)
+    if attr_bits:
+        lines += [
+            "",
+            "## Attribution",
+            "",
+        ] + attr_bits
     notes = [str(item) for item in (summary.get("notes") or []) if item]
     if notes:
         lines += [
@@ -281,6 +364,7 @@ def _html_page(summary: dict[str, Any]) -> str:
         )
     else:
         notes_block = ""
+    attr_block = _html_attribution(summary, cell)
 
     project_rows = "".join(
         (
@@ -539,6 +623,7 @@ tbody tr:last-child td {{ border-bottom: none; }}
       </table>
     </div>
   </section>
+  {attr_block}
   {notes_block}
   <p class="foot">Generated locally. Prompts and credentials are not stored.</p>
 </main>
@@ -570,6 +655,9 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "output_tokens": "",
                 "estimated_usd": "" if row.get("invoice_grade") else _amount(row),
                 "allocated_billed_usd": "",
+                "agent": "",
+                "skill": "",
+                "effort": "",
             }
         )
     for note in summary.get("notes") or []:
@@ -595,6 +683,9 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "output_tokens": "",
                 "estimated_usd": "",
                 "allocated_billed_usd": "",
+                "agent": "",
+                "skill": "",
+                "effort": "",
             }
         )
     for row in summary.get("lines") or []:
@@ -618,6 +709,9 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "output_tokens": row.get("output_tokens"),
                 "estimated_usd": row.get("estimated_usd") or row.get("cost_usd"),
                 "allocated_billed_usd": row.get("allocated_billed_usd"),
+                "agent": row.get("agent") or "",
+                "skill": row.get("skill") or "",
+                "effort": row.get("effort") or "",
             }
         )
     return rows
@@ -652,6 +746,9 @@ def write_statement(month: str | None = None, *, out_dir: Path | None = None) ->
         "output_tokens",
         "estimated_usd",
         "allocated_billed_usd",
+        "agent",
+        "skill",
+        "effort",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")

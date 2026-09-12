@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ardoise.attribution import extract
+
 # Exact keys dropped from any captured JSON (case-insensitive).
 _DROP_KEYS = frozenset(
     {
@@ -101,6 +103,7 @@ def usage_only_event(event: dict[str, Any]) -> dict[str, Any]:
         or event.get("generation_id")
         or event.get("generationId")
     )
+    attrs = extract(event)
     return {
         "source": event.get("source") or event.get("hook_event_name") or event.get("hook_event"),
         "type": event.get("type"),
@@ -131,6 +134,9 @@ def usage_only_event(event: dict[str, Any]) -> dict[str, Any]:
         if isinstance(event.get("workspace_roots"), list)
         else None,
         "hook_event_name": event.get("hook_event_name") or event.get("hook_event"),
+        "agent": attrs.get("agent"),
+        "skill": attrs.get("skill"),
+        "effort": attrs.get("effort"),
     }
 
 

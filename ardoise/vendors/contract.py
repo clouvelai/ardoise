@@ -70,6 +70,9 @@ class Event:
     session_id: str | None = None
     cwd: str | None = None
     cost_usd: float | None = None
+    agent: str | None = None
+    skill: str | None = None
+    effort: str | None = None
 
     def to_row(self) -> dict[str, Any]:
         tokens = self.tokens
@@ -94,6 +97,9 @@ class Event:
             "session_id": self.session_id,
             "cwd": self.cwd,
             "cost_usd": self.cost_usd,
+            "agent": self.agent,
+            "skill": self.skill,
+            "effort": self.effort,
         }
 
 
@@ -244,6 +250,9 @@ def entry_to_event(entry: dict[str, Any]) -> Event:
         session_id=entry.get("session_id"),
         cwd=entry.get("cwd"),
         cost_usd=entry.get("cost_usd"),
+        agent=entry.get("agent"),
+        skill=entry.get("skill"),
+        effort=entry.get("effort"),
     )
 
 
