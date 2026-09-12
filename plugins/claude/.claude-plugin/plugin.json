@@ -1,0 +1,6 @@
+{
+  "name": "ardoise",
+  "description": "Local AI spend ledger capture (usage only; no prompts).",
+  "version": "0.1.0",
+  "hooks": "./hooks/hooks.json"
+}

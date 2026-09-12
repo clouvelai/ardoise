@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      { "command": "plugins/cursor/capture.sh" }
+    ],
+    "sessionEnd": [
+      { "command": "plugins/cursor/capture.sh" }
+    ],
+    "afterAgentResponse": [
+      { "command": "plugins/cursor/capture.sh" }
+    ]
+  }
+}

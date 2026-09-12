@@ -1,0 +1,1 @@
+{"type":"assistant","cwd":"/WORKSPACE","timestamp":"2026-09-12T11:00:00.000Z","requestId":"req_cursor_1","message":{"id":"msg_cursor_1","role":"assistant","model":"composer-2.5","usage":{"input_tokens":200,"output_tokens":50}}}

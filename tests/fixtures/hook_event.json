@@ -1,0 +1,16 @@
+{
+  "hook_event_name": "stop",
+  "cwd": "/WORKSPACE",
+  "prompt": "HOOK_SECRET_DO_NOT_STORE",
+  "model": "claude-sonnet-4-6",
+  "requestId": "req_01AAA",
+  "message": {
+    "id": "msg_01AAA",
+    "usage": {
+      "input_tokens": 1000,
+      "output_tokens": 400,
+      "cache_creation_input_tokens": 2000,
+      "cache_read_input_tokens": 10000
+    }
+  }
+}
