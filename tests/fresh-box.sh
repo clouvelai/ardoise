@@ -10,6 +10,7 @@ export HOME="$BOX/home"
 export ARDOISE_HOME="$HOME/.ardoise"
 unset ARDOISE_LEDGER ARDOISE_QUEUE ARDOISE_STATEMENTS ARDOISE_CLAUDE_ROOT ARDOISE_CURSOR_ROOT
 unset CURSOR_ADMIN_API_KEY CURSOR_API_KEY CURSOR_ADMIN_API_BASE
+unset ANTHROPIC_ANALYTICS_API_KEY ANTHROPIC_ANALYTICS_KEY ANTHROPIC_ANALYTICS_API_BASE
 mkdir -p "$HOME"
 
 PROJ="$BOX/proj"
@@ -60,6 +61,8 @@ HOOK_STDIN="$HOME/.ardoise/hook-stdin.json"
 "$BIN" statement 2026-09 --out-dir "$HOME/.ardoise/statements" >"$BOX/statement.json"
 "$BIN" export --month 2026-09 --out "$BOX/export.jsonl" >"$BOX/export-meta.json"
 "$BIN" vendor test anthropic --json >"$BOX/vendor-anthropic.json"
+"$BIN" vendor test anthropic >"$BOX/vendor-anthropic.txt"
+"$BIN" vendor pull anthropic >"$BOX/vendor-pull-anthropic.txt"
 "$BIN" vendor test cursor --json >"$BOX/vendor-cursor.json"
 "$BIN" vendor test cursor >"$BOX/vendor-test.txt"
 "$BIN" snapshot anthropic --json >"$BOX/snapshot.json"
@@ -164,6 +167,17 @@ if vendor_a.get("capabilities", {}).get("capture") != "yes":
     raise SystemExit(f"anthropic capture cap {vendor_a.get('capabilities')}")
 if vendor_a.get("cred_resolved"):
     raise SystemExit("anthropic cred should be unresolved offline")
+if vendor_a.get("capabilities", {}).get("pull") != "yes":
+    raise SystemExit(f"anthropic pull cap {vendor_a.get('capabilities')}")
+anth_detail = str(vendor_a.get("detail") or "")
+anth_txt = (box / "vendor-anthropic.txt").read_text()
+anth_pull = (box / "vendor-pull-anthropic.txt").read_text()
+if "ANTHROPIC_ANALYTICS_API_KEY" not in anth_detail and "ANTHROPIC_ANALYTICS_API_KEY" not in anth_txt:
+    raise SystemExit(f"anthropic vendor test missing Analytics key line: {anth_detail!r} {anth_txt!r}")
+if "T2a skipped" not in anth_detail and "T2a skipped" not in anth_txt:
+    raise SystemExit(f"anthropic vendor test should skip T2a, got {anth_detail!r} {anth_txt!r}")
+if "ANTHROPIC_ANALYTICS_API_KEY" not in anth_pull or "T2a skipped" not in anth_pull:
+    raise SystemExit(f"anthropic vendor pull should skip without key, got {anth_pull!r}")
 vendor_c = json.loads((box / "vendor-cursor.json").read_text())
 if vendor_c.get("cred_resolved"):
     raise SystemExit("cursor cred should be unresolved offline")
