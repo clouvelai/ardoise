@@ -10,6 +10,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -150,7 +151,8 @@ class BudgetTests(IsolatedHome):
         with db.session() as conn:
             self._entry(conn, mid="m1", day="2026-09-02", cost=9.0)
         self._write_config({"budgets": {"monthly_usd": 1}})
-        rc = cli_main(["status", "--json", "--month", "2026-09"])
+        with redirect_stdout(io.StringIO()):
+            rc = cli_main(["status", "--json", "--month", "2026-09"])
         self.assertEqual(rc, 0)
 
     def test_prefers_billed_truth_for_month_cap(self) -> None:
@@ -232,31 +234,35 @@ class EstimateTests(IsolatedHome):
         self.assertAlmostEqual(data["usd"], 0.009, places=6)
 
     def test_cli_json_and_stdin(self) -> None:
-        rc = cli_main(
-            [
-                "estimate",
-                "--model",
-                "claude-sonnet-4-6",
-                "--input-tokens",
-                "1000",
-                "--output-tokens",
-                "400",
-                "--json",
-            ]
-        )
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cli_main(
+                [
+                    "estimate",
+                    "--model",
+                    "claude-sonnet-4-6",
+                    "--input-tokens",
+                    "1000",
+                    "--output-tokens",
+                    "400",
+                    "--json",
+                ]
+            )
         self.assertEqual(rc, 0)
+        self.assertAlmostEqual(json.loads(buf.getvalue())["usd"], 0.009, places=6)
         payload = json.dumps(
             {"model": "claude-haiku-4-5", "input_tokens": 500, "output_tokens": 100}
         )
-        with patch("sys.stdin", io.StringIO(payload)):
+        with patch("sys.stdin", io.StringIO(payload)), redirect_stdout(io.StringIO()) as out:
             rc = cli_main(["estimate", "--stdin", "--json"])
         self.assertEqual(rc, 0)
+        self.assertAlmostEqual(json.loads(out.getvalue())["usd"], 0.001, places=6)
 
     def test_bad_stdin_still_exits_zero(self) -> None:
         data = from_stdin(io.StringIO("not-json"))
         self.assertFalse(data["ok"])
         self.assertFalse(data["blocks"])
-        with patch("sys.stdin", io.StringIO("")):
+        with patch("sys.stdin", io.StringIO("")), redirect_stdout(io.StringIO()):
             self.assertEqual(cli_main(["estimate", "--stdin", "--json"]), 0)
 
     def test_gate_stub_never_blocks_when_over_cap(self) -> None:
@@ -270,8 +276,13 @@ class EstimateTests(IsolatedHome):
         self.assertTrue(data["gate"]["would_exceed_soft_cap"])
 
     def test_status_estimate_flag(self) -> None:
-        rc = cli_main(["status", "--json", "--month", "2026-09", "--estimate"])
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cli_main(["status", "--json", "--month", "2026-09", "--estimate"])
         self.assertEqual(rc, 0)
+        payload = json.loads(buf.getvalue())
+        self.assertIn("estimate", payload)
+        self.assertFalse(payload["estimate"]["blocks"])
 
 
 class StatementNotesTests(IsolatedHome):
