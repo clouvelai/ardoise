@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from ardoise import db, paths, reconcile
+from ardoise import anomaly, budget, config as config_mod, db, paths, reconcile
 
 
 def _month_bounds(month: str) -> tuple[str, str]:
@@ -73,18 +73,20 @@ def _group(rows: list[dict[str, Any]], column: str) -> list[dict[str, Any]]:
 def summarize(month: str | None = None) -> dict[str, Any]:
     month = month or current_month()
     paths.ensure_home()
+    cfg = config_mod.load()
     with db.session() as conn:
         total_rows = db.count_entries(conn)
         lines = reconcile.flatten_month(conn, month)
         section_a = reconcile.section_a(conn, month)
         cycles = [item.as_dict() for item in reconcile.reconcile_month(conn, month)]
+        anomalies = anomaly.scan(conn, month=month, lines=lines, config=cfg)
 
     estimated = round(sum(float(row.get("estimated_usd") or row.get("cost_usd") or 0) for row in lines), 6)
     billed_usd = round(
         sum(float(row.get("billed_usd") or 0) for row in section_a if row.get("invoice_grade")),
         6,
     )
-    return {
+    data = {
         "ok": True,
         "ledger": str(paths.ledger_path()),
         "home": str(paths.ardoise_home()),
@@ -99,6 +101,7 @@ def summarize(month: str | None = None) -> dict[str, Any]:
         "cache_read_tokens": sum(int(row.get("cache_read_tokens") or 0) for row in lines),
         "cache_creation_tokens": sum(int(row.get("cache_creation_tokens") or 0) for row in lines),
         "by_project": _group(lines, "project"),
+        "by_person": _group(lines, "person"),
         "by_source": _group(lines, "source"),
         "by_model": _group(lines, "model"),
         "by_tier": _group(lines, "origin_tier"),
@@ -109,7 +112,16 @@ def summarize(month: str | None = None) -> dict[str, Any]:
             {k: v for k, v in item.items() if k != "lines"}
             for item in cycles
         ],
+        "anomalies": anomalies,
     }
+    data["budgets"] = budget.evaluate(data, cfg)
+    notes: list[str] = []
+    if cfg.get("load_error"):
+        notes.append(str(cfg["load_error"]))
+    notes.extend(budget.notes_from(data["budgets"]))
+    notes.extend(str(item.get("note") or "") for item in anomalies if item.get("note"))
+    data["notes"] = [item for item in notes if item]
+    return data
 
 
 def render_text(data: dict[str, Any]) -> str:
@@ -153,4 +165,22 @@ def render_text(data: dict[str, Any]) -> str:
         lines.append(
             f"  {row['source']:<32} est=${row['cost_usd']:.4f}  n={row['entries']}  T0"
         )
+    budgets = data.get("budgets") or {}
+    if budgets.get("configured"):
+        lines.append("soft caps (warn only — never blocks)")
+        for row in budgets.get("checks") or []:
+            flag = "  OVER" if row.get("over") else ""
+            scope = str(row.get("scope") or "(default)")
+            pct = row.get("pct")
+            pct_txt = f"{pct:.0f}%" if pct is not None else "—"
+            lines.append(
+                f"  {str(row.get('kind') or ''):<8} {scope:<24} "
+                f"${float(row.get('spent_usd') or 0):.2f} / "
+                f"${float(row.get('cap_usd') or 0):.2f}  {pct_txt}{flag}"
+            )
+    notes = data.get("notes") or []
+    if notes:
+        lines.append("notes (soft)")
+        for note in notes:
+            lines.append(f"  {note}")
     return "\n".join(lines) + "\n"

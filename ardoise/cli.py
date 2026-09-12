@@ -1,4 +1,4 @@
-"""bin/ardoise — status, statement, export, backfill, capture, snapshot."""
+"""bin/ardoise — status, statement, export, backfill, capture, estimate, snapshot."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from ardoise import __version__, backfill as backfill_mod, capture as capture_mod
-from ardoise import export as export_mod
+from ardoise import estimate as estimate_mod, export as export_mod
 from ardoise import install_hooks, invoice as invoice_mod, paths, snapshot as snapshot_mod
 from ardoise import statement, status as status_mod
 from ardoise.vendors import get_adapter, list_adapters, result_text
@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
     st = sub.add_parser("status", help="Show ledger totals")
     st.add_argument("--json", action="store_true", help="Print JSON")
     st.add_argument("--month", help="YYYY-MM (default: current UTC month)")
+    st.add_argument(
+        "--estimate",
+        action="store_true",
+        help="Also print a $0 estimate stub (use `ardoise estimate` for a real ask)",
+    )
 
     sm = sub.add_parser("statement", help="Write MD+HTML+CSV for a month")
     sm.add_argument("month", help="YYYY-MM")
@@ -92,6 +97,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Bypass the 3-minute T1 throttle",
     )
 
+    est = sub.add_parser(
+        "estimate",
+        help="Price a hypothetical token/model ask (stub; never blocks)",
+    )
+    est.add_argument("--model", default="", help="Model name (price table + prefix match)")
+    est.add_argument("--input-tokens", "--input", type=int, default=0, dest="input_tokens")
+    est.add_argument("--output-tokens", "--output", type=int, default=0, dest="output_tokens")
+    est.add_argument("--cache-read", type=int, default=0, dest="cache_read_tokens")
+    est.add_argument("--cache-write", type=int, default=0, dest="cache_creation_tokens")
+    est.add_argument("--month", help="YYYY-MM for optional soft-cap remaining (default: current UTC)")
+    est.add_argument("--json", action="store_true", help="Print JSON (hook-friendly)")
+    est.add_argument("--stdin", action="store_true", help="Read one JSON ask from stdin")
+
     inv = sub.add_parser("invoice", help="Owner-received vendor totals for statement section A")
     isub = inv.add_subparsers(dest="invoice_cmd", required=True)
     ia = isub.add_parser("add", help="Paste one Stripe/vendor total (idempotent on vendor+cycle+person)")
@@ -120,16 +138,40 @@ def _check_month(value: str | None) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    paths.ensure_home()
+    if args.cmd != "estimate":
+        paths.ensure_home()
     try:
         if args.cmd == "status":
             month = _check_month(args.month)
             data = status_mod.summarize(month)
+            if args.estimate:
+                data["estimate"] = estimate_mod.price_ask(month=month)
             if args.json:
                 print(json.dumps(data, indent=2, ensure_ascii=True))
             else:
                 sys.stdout.write(status_mod.render_text(data))
+                if args.estimate:
+                    sys.stdout.write(estimate_mod.render_text(data["estimate"]))
             return 0
+
+        if args.cmd == "estimate":
+            month = _check_month(getattr(args, "month", None))
+            if args.stdin:
+                data = estimate_mod.from_stdin(sys.stdin, month=month)
+            else:
+                data = estimate_mod.price_ask(
+                    model=args.model or None,
+                    input_tokens=int(args.input_tokens or 0),
+                    output_tokens=int(args.output_tokens or 0),
+                    cache_read_tokens=int(args.cache_read_tokens or 0),
+                    cache_creation_tokens=int(args.cache_creation_tokens or 0),
+                    month=month,
+                )
+            if args.json:
+                print(json.dumps(data, indent=2, ensure_ascii=True))
+            else:
+                sys.stdout.write(estimate_mod.render_text(data))
+            return 0  # fire-and-forget: never fail the caller
 
         if args.cmd == "statement":
             month = _check_month(args.month)

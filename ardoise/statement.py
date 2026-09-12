@@ -174,6 +174,19 @@ def _md(summary: dict[str, Any]) -> str:
                 tier=_tier_md(row.get("origin_tier") or row.get("tier") or "T0"),
             )
         )
+    notes = [str(item) for item in (summary.get("notes") or []) if item]
+    if notes:
+        lines += [
+            "",
+            "## Notes (soft)",
+            "",
+            "Informational only. Soft caps and anomaly flags never block the editor.",
+            "",
+        ]
+        for note in notes:
+            lines.append(f"- {note}")
+        lines.append("")
+
     lines += [
         "",
         "_Generated locally by Ardoise. Prompts and credentials are not stored._",
@@ -255,6 +268,19 @@ def _html_page(summary: dict[str, Any]) -> str:
             "<p>T0 estimates in section B are allocation weights only.</p>"
             "</div>"
         )
+
+    notes = [str(item) for item in (summary.get("notes") or []) if item]
+    if notes:
+        items = "".join(f"<li>{html.escape(note)}</li>" for note in notes)
+        notes_block = (
+            '<section class="notes">'
+            "<h2>Notes (soft)</h2>"
+            "<p>Informational only. Soft caps and anomaly flags never block the editor.</p>"
+            f"<ul>{items}</ul>"
+            "</section>"
+        )
+    else:
+        notes_block = ""
 
     project_rows = "".join(
         (
@@ -433,6 +459,16 @@ th {{
 td.num, th.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
 tbody tr:last-child td {{ border-bottom: none; }}
 .lines {{ margin-top: 0.15rem; }}
+.notes {{
+  margin-top: 1.6rem;
+  padding: 1rem 1.15rem 1.1rem;
+  border: 1px solid rgba(180, 120, 40, 0.22);
+  background: #fff8ee;
+  border-radius: 14px;
+}}
+.notes h2 {{ margin: 0 0 0.35rem; font-size: 0.95rem; }}
+.notes p {{ margin: 0 0 0.55rem; color: var(--muted); font-size: 0.86rem; }}
+.notes ul {{ margin: 0; padding-left: 1.15rem; color: #8a5a12; }}
 .foot {{ margin-top: 2.8rem; color: var(--muted); font-size: 0.78rem; }}
 @media print {{
   html, body {{ background: #fff; }}
@@ -503,6 +539,7 @@ tbody tr:last-child td {{ border-bottom: none; }}
       </table>
     </div>
   </section>
+  {notes_block}
   <p class="foot">Generated locally. Prompts and credentials are not stored.</p>
 </main>
 </body>
@@ -532,6 +569,31 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "input_tokens": "",
                 "output_tokens": "",
                 "estimated_usd": "" if row.get("invoice_grade") else _amount(row),
+                "allocated_billed_usd": "",
+            }
+        )
+    for note in summary.get("notes") or []:
+        if not note:
+            continue
+        rows.append(
+            {
+                "section": "notes",
+                "tier": "soft",
+                "vendor": "",
+                "person": "",
+                "cycle": summary.get("month"),
+                "source": note,
+                "usd_cents": "",
+                "billed_usd": "",
+                "invoice_grade": "",
+                "project": "",
+                "model": "",
+                "occurred_at": "",
+                "message_id": "",
+                "request_id": "",
+                "input_tokens": "",
+                "output_tokens": "",
+                "estimated_usd": "",
                 "allocated_billed_usd": "",
             }
         )

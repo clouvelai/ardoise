@@ -33,6 +33,8 @@ bin/ardoise vendor test cursor  # T2 probe; T0-only if no Admin API key
 bin/ardoise vendor pull cursor  # ingest team usage events when key is set
 bin/ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
 bin/ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
+bin/ardoise estimate --model claude-sonnet-4-6 --input-tokens 1000 --output-tokens 400
+bin/ardoise estimate --stdin --json               # hook-friendly ask on stdin
 ```
 
 Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
@@ -59,6 +61,39 @@ T0-only. The key is never written to the ledger.
 
 Prices come from [`data/prices.fallback.json`](data/prices.fallback.json).
 Override with `~/.ardoise/prices.json`.
+
+## Soft caps, anomalies, estimate (Phase 3)
+
+Optional `~/.ardoise/config.json` (override path with `ARDOISE_CONFIG`):
+
+```json
+{
+  "budgets": {
+    "monthly_usd": 100,
+    "person": { "default": 80, "alice": 40 },
+    "project": { "clouvelai/ardoise": 25 }
+  },
+  "anomalies": {
+    "day_multiple": 3,
+    "trailing_days": 14,
+    "min_days": 3,
+    "min_day_usd": 1,
+    "project_share": 0.75,
+    "min_month_usd": 1
+  }
+}
+```
+
+`ardoise status` and `--json` show vs-cap % for each configured scope and flag
+when spend is over the soft cap. Overages are **warn only** — capture hooks and
+the editor are never blocked.
+
+Anomaly notes are local heuristics (a day well above the trailing median, or
+one project taking most of the month). They appear on status/statement as soft
+notes, not an alerts pipeline.
+
+`ardoise estimate` prices a hypothetical token/model ask from the price table.
+Hooks may call it later; it writes nothing, needs no network, and always exits 0.
 
 ## Privacy
 
