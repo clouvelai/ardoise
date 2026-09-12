@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ENTERPRISE_MAILTO } from "@/lib/saas-otp";
 
 const tiers = [
@@ -65,7 +66,7 @@ export function PricingGrid() {
                 <li key={item}>{item}</li>
               ))}
             </ul>
-            <a
+            <Link
               href={tier.href}
               className={
                 tier.featured
@@ -77,7 +78,7 @@ export function PricingGrid() {
               <span aria-hidden className="ml-1.5">
                 →
               </span>
-            </a>
+            </Link>
           </article>
         ))}
       </div>

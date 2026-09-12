@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import {
   isOtpNotWired,
   requestEmailOtp,
@@ -158,7 +159,7 @@ export function SignupForm() {
             <p className="mt-2 text-[15px] text-muted">
               Local ledger stays on your machine.
             </p>
-            <a
+            <Link
               href="/#install"
               className="mt-6 inline-flex items-center rounded-full bg-lavender px-6 py-3 text-[15px] font-semibold text-grape transition hover:bg-violet-100"
             >
@@ -166,7 +167,7 @@ export function SignupForm() {
               <span aria-hidden className="ml-1.5">
                 →
               </span>
-            </a>
+            </Link>
           </div>
         ) : null}
 
