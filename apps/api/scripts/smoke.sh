@@ -5,12 +5,15 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
-if [ ! -d .venv ]; then
-  python3 -m venv .venv
+if python3 -m venv .venv >/dev/null 2>&1 && [ -x .venv/bin/python3 ]; then
+  # shellcheck disable=SC1091
+  . .venv/bin/activate
+  pip install -q -r requirements.txt
+else
+  rm -rf .venv
+  python3 -m pip install --user --break-system-packages -q -r requirements.txt
 fi
-# shellcheck disable=SC1091
-. .venv/bin/activate
-pip install -q -r requirements.txt
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 export STRIPE_MOCK=true
 unset STRIPE_SECRET_KEY || true
