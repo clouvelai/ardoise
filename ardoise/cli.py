@@ -1,4 +1,4 @@
-"""bin/ardoise — status, statement, export, backfill, capture, snapshot."""
+"""bin/ardoise — status, statement, export, backfill, capture, snapshot, budget."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from ardoise import __version__, backfill as backfill_mod, capture as capture_mod
-from ardoise import export as export_mod
+from ardoise import budget as budget_mod, export as export_mod
 from ardoise import install_hooks, invoice as invoice_mod, paths, snapshot as snapshot_mod
 from ardoise import statement, status as status_mod
 from ardoise.vendors import get_adapter, list_adapters, result_text
@@ -106,6 +106,16 @@ def build_parser() -> argparse.ArgumentParser:
     ip = isub.add_parser("paste", help="Bulk ingest JSON / JSONL / CSV (same upsert as add)")
     ip.add_argument("--file", help="Invoice file (otherwise stdin)")
     ip.add_argument("--json", action="store_true")
+
+    bud = sub.add_parser("budget", help="Soft spend caps (warn only, never block)")
+    bsub = bud.add_subparsers(dest="budget_cmd", required=True)
+    bs = bsub.add_parser("set", help="Upsert a day or month cap (usd or tokens)")
+    bs.add_argument("--period", required=True, help="day or month")
+    bs.add_argument("--usd", type=float, help="USD cap")
+    bs.add_argument("--tokens", type=int, dest="tokens", help="input+output token cap")
+    bs.add_argument("--json", action="store_true")
+    bl = bsub.add_parser("list", help="Show configured caps")
+    bl.add_argument("--json", action="store_true")
     return parser
 
 
@@ -272,6 +282,39 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 return 0
             return _die(f"unknown invoice command: {args.invoice_cmd}")
+
+        if args.cmd == "budget":
+            if args.budget_cmd == "set":
+                if (args.usd is None) == (args.tokens is None):
+                    return _die("budget set needs exactly one of --usd or --tokens")
+                metric = "usd" if args.usd is not None else "tokens"
+                limit = args.usd if args.usd is not None else args.tokens
+                result = budget_mod.upsert(period=args.period, metric=metric, limit=float(limit))
+                if args.json:
+                    print(json.dumps(result, indent=2, ensure_ascii=True))
+                else:
+                    print(
+                        "budget {result} {id} limit={limit}".format(
+                            result=result["result"],
+                            id=result["id"],
+                            limit=result["limit"],
+                        )
+                    )
+                return 0
+            if args.budget_cmd == "list":
+                rows = budget_mod.load()
+                if args.json:
+                    print(json.dumps({"budgets": rows, "path": str(paths.budgets_path())}, indent=2))
+                elif not rows:
+                    print(f"(no budgets — {paths.budgets_path()})")
+                else:
+                    print(f"{'period':<8} {'metric':<8} limit")
+                    for row in rows:
+                        limit = row["limit"]
+                        shown = f"{int(limit)}" if row["metric"] == "tokens" else f"{limit:.2f}"
+                        print(f"{row['period']:<8} {row['metric']:<8} {shown}")
+                return 0
+            return _die(f"unknown budget command: {args.budget_cmd}")
     except ValueError as exc:
         return _die(str(exc))
     return _die(f"unknown command: {args.cmd}")

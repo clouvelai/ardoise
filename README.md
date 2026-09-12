@@ -33,11 +33,16 @@ bin/ardoise vendor test cursor  # T2 probe; T0-only if no Admin API key
 bin/ardoise vendor pull cursor  # ingest team usage events when key is set
 bin/ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
 bin/ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
+bin/ardoise budget set --period month --usd 50    # soft cap (warn only)
+bin/ardoise budget set --period day --tokens 1000000
+bin/ardoise budget list
 ```
 
 Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
 
 **Section A** is one vendor line per scope: pasted invoice, else T2, else T1 snapshot — each line prints its tier. **Section B** uses T0 token weights only to allocate that billed total across projects.
+
+**Soft budgets** live in `~/.ardoise/budgets.json` (`budget set` / `budget list`). Caps and anomaly flags (`day_spike`, `session_outlier`) appear on `status` and as a short statement Alerts strip. They never block the CLI. Rules: [`docs/budgets.md`](docs/budgets.md).
 
 ## How spend is captured
 

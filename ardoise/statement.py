@@ -82,6 +82,44 @@ def _source_note(row: dict[str, Any]) -> str:
     return ""
 
 
+def _alert_items(summary: dict[str, Any]) -> list[str]:
+    items: list[str] = []
+    for row in summary.get("budgets") or []:
+        metric = str(row.get("metric") or "usd")
+        period = str(row.get("period") or "month")
+        state = str(row.get("state") or "ok")
+        limit = float(row.get("limit") or 0)
+        used = float(row.get("used") or 0)
+        remaining = float(row.get("remaining") or 0)
+        if metric == "tokens":
+            body = f"{period} tokens {int(round(used))}/{int(round(limit))} remaining {int(round(remaining))} ({state})"
+        else:
+            body = f"{period} usd ${used:.2f}/${limit:.2f} remaining ${remaining:.2f} ({state})"
+        items.append(body)
+    for flag in summary.get("flags") or []:
+        kind = str(flag.get("kind") or "")
+        if kind.startswith("budget_"):
+            continue
+        items.append(str(flag.get("message") or kind or "flag"))
+    return items
+
+
+def _md_alerts(summary: dict[str, Any]) -> list[str]:
+    items = _alert_items(summary)
+    if not items:
+        return []
+    lines = [
+        "## Alerts",
+        "",
+        "Soft budgets and anomaly flags. They never block the CLI.",
+        "",
+    ]
+    for item in items:
+        lines.append(f"- {item}")
+    lines.append("")
+    return lines
+
+
 def _md(summary: dict[str, Any]) -> str:
     month = summary["month"]
     section_a = summary.get("section_a") or []
@@ -92,6 +130,9 @@ def _md(summary: dict[str, Any]) -> str:
         "",
         _LEGEND,
         "",
+    ]
+    lines += _md_alerts(summary)
+    lines += [
         "## A. Vendor lines (invoice / T2 / T1)",
         "",
         "Prefer pasted invoice, else T2 billed events, else T1 snapshot.",
@@ -269,6 +310,20 @@ def _html_page(summary: dict[str, Any]) -> str:
         for r in summary.get("by_project") or []
     ) or '<tr><td colspan="5">(none)</td></tr>'
 
+    alert_items = _alert_items(summary)
+    has_flags = bool(summary.get("flags"))
+    if alert_items:
+        alert_lis = "".join(f"<li>{cell(item)}</li>" for item in alert_items)
+        warn_cls = " warn" if has_flags else ""
+        alerts_block = (
+            f'<section class="alerts{warn_cls}" aria-label="Alerts">'
+            "<h2>Alerts</h2>"
+            f"<ul>{alert_lis}</ul>"
+            "</section>"
+        )
+    else:
+        alerts_block = ""
+
     line_rows = "".join(
         (
             "<tr>"
@@ -433,6 +488,27 @@ th {{
 td.num, th.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
 tbody tr:last-child td {{ border-bottom: none; }}
 .lines {{ margin-top: 0.15rem; }}
+.alerts {{
+  margin: 1.45rem 0 0;
+  padding: 0.85rem 1.05rem;
+  border-radius: 14px;
+  background: rgba(255, 252, 254, 0.62);
+  border: 1px solid var(--hair);
+}}
+.alerts.warn {{
+  border-color: rgba(124, 92, 255, 0.22);
+}}
+.alerts h2 {{ margin-bottom: 0.45rem; }}
+.alerts ul {{
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}}
+.alerts li {{
+  color: var(--muted);
+  font-size: 0.86rem;
+  padding: 0.12rem 0;
+}}
 .foot {{ margin-top: 2.8rem; color: var(--muted); font-size: 0.78rem; }}
 @media print {{
   html, body {{ background: #fff; }}
@@ -460,6 +536,7 @@ tbody tr:last-child td {{ border-bottom: none; }}
       <li>{_badge("invoice")} paste-in</li>
     </ul>
   </header>
+  {alerts_block}
   <section>
     <h2>A. Vendor lines</h2>
     <p class="lede">Prefer pasted invoice, else T2 billed events, else T1 snapshot. T0 token × list price is not billed truth.</p>

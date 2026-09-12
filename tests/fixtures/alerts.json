@@ -1,0 +1,21 @@
+{
+  "day_spike": [
+    {"occurred_at": "2026-08-01T12:00:00Z", "cost_usd": 1.0, "session_id": "s1", "message_id": "m1", "request_id": "r1", "input_tokens": 100, "output_tokens": 20},
+    {"occurred_at": "2026-08-02T12:00:00Z", "cost_usd": 1.0, "session_id": "s2", "message_id": "m2", "request_id": "r2", "input_tokens": 100, "output_tokens": 20},
+    {"occurred_at": "2026-08-03T12:00:00Z", "cost_usd": 1.0, "session_id": "s3", "message_id": "m3", "request_id": "r3", "input_tokens": 100, "output_tokens": 20},
+    {"occurred_at": "2026-08-04T12:00:00Z", "cost_usd": 1.0, "session_id": "s4", "message_id": "m4", "request_id": "r4", "input_tokens": 100, "output_tokens": 20},
+    {"occurred_at": "2026-08-08T12:00:00Z", "cost_usd": 4.0, "session_id": "s8", "message_id": "m8", "request_id": "r8", "input_tokens": 400, "output_tokens": 80}
+  ],
+  "session_outlier": [
+    {"occurred_at": "2026-08-10T10:00:00Z", "cost_usd": 1.0, "session_id": "alpha", "message_id": "ma", "request_id": "ra"},
+    {"occurred_at": "2026-08-10T11:00:00Z", "cost_usd": 1.0, "session_id": "bravo", "message_id": "mb", "request_id": "rb"},
+    {"occurred_at": "2026-08-10T12:00:00Z", "cost_usd": 1.0, "session_id": "charlie", "message_id": "mc", "request_id": "rc"},
+    {"occurred_at": "2026-08-10T13:00:00Z", "cost_usd": 4.0, "session_id": "delta", "message_id": "md", "request_id": "rd"}
+  ],
+  "quiet": [
+    {"occurred_at": "2026-08-01T12:00:00Z", "cost_usd": 1.0, "session_id": "q1", "message_id": "q1", "request_id": "q1"},
+    {"occurred_at": "2026-08-02T12:00:00Z", "cost_usd": 1.1, "session_id": "q2", "message_id": "q2", "request_id": "q2"},
+    {"occurred_at": "2026-08-03T12:00:00Z", "cost_usd": 0.9, "session_id": "q3", "message_id": "q3", "request_id": "q3"},
+    {"occurred_at": "2026-08-04T12:00:00Z", "cost_usd": 1.0, "session_id": "q4", "message_id": "q4", "request_id": "q4"}
+  ]
+}

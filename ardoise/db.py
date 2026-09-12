@@ -777,5 +777,24 @@ def count_entries(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0])
 
 
+def list_events(
+    conn: sqlite3.Connection,
+    *,
+    start: str | None = None,
+    end: str | None = None,
+) -> list[dict[str, Any]]:
+    """Events in [start, end) by occurred_at. Used by alerts lookback."""
+    sql = "SELECT * FROM events WHERE 1=1"
+    args: list[Any] = []
+    if start:
+        sql += " AND occurred_at >= ?"
+        args.append(start)
+    if end:
+        sql += " AND occurred_at < ?"
+        args.append(end)
+    sql += " ORDER BY occurred_at, id"
+    return [dict(row) for row in conn.execute(sql, args).fetchall()]
+
+
 def required_tables() -> tuple[str, ...]:
     return ("events", "snapshots", "prices", "projects", "sync_state", "invoices")

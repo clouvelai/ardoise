@@ -12,6 +12,8 @@ bin/ardoise vendor test cursor  # T2 probe; missing cred stays T0-only
 bin/ardoise snapshot anthropic   # T1 seat snapshot when OAuth cred resolves
 bin/ardoise invoice add --vendor anthropic --cycle YYYY-MM --usd-cents N
 bin/ardoise invoice paste --file invoices.jsonl
+bin/ardoise budget set --period month --usd 50
+bin/ardoise budget list
 tests/fresh-box.sh   # must print FRESH-BOX-OK offline
 ```
 

@@ -9,18 +9,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from ardoise import db, paths, reconcile
+from ardoise import alerts, budget as budget_mod, db, paths, reconcile
 
-
-def _month_bounds(month: str) -> tuple[str, str]:
-    year, mon = month.split("-", 1)
-    y, m = int(year), int(mon)
-    start = f"{y:04d}-{m:02d}-01T00:00:00Z"
-    if m == 12:
-        end = f"{y + 1:04d}-01-01T00:00:00Z"
-    else:
-        end = f"{y:04d}-{m + 1:02d}-01T00:00:00Z"
-    return start, end
+_month_bounds = alerts.month_bounds
 
 
 def current_month(now: datetime | None = None) -> str:
@@ -70,19 +61,32 @@ def _group(rows: list[dict[str, Any]], column: str) -> list[dict[str, Any]]:
     return out
 
 
-def summarize(month: str | None = None) -> dict[str, Any]:
-    month = month or current_month()
+def summarize(month: str | None = None, *, now: datetime | None = None) -> dict[str, Any]:
+    month = month or current_month(now)
     paths.ensure_home()
+    lookback = alerts.lookback_start(month)
+    _, month_end = alerts.month_bounds(month)
     with db.session() as conn:
         total_rows = db.count_entries(conn)
         lines = reconcile.flatten_month(conn, month)
         section_a = reconcile.section_a(conn, month)
         cycles = [item.as_dict() for item in reconcile.reconcile_month(conn, month)]
+        alert_lines = db.list_events(conn, start=lookback, end=month_end)
 
     estimated = round(sum(float(row.get("estimated_usd") or row.get("cost_usd") or 0) for row in lines), 6)
     billed_usd = round(
         sum(float(row.get("billed_usd") or 0) for row in section_a if row.get("invoice_grade")),
         6,
+    )
+    invoice_grade = any(row.get("invoice_grade") for row in section_a)
+    ready = alerts.daily_ready(
+        month=month,
+        lines=alert_lines or lines,
+        budgets=budget_mod.load(),
+        billed_usd=billed_usd,
+        estimated_usd=estimated,
+        invoice_grade=invoice_grade,
+        as_of=now,
     )
     return {
         "ok": True,
@@ -109,7 +113,26 @@ def summarize(month: str | None = None) -> dict[str, Any]:
             {k: v for k, v in item.items() if k != "lines"}
             for item in cycles
         ],
+        "budgets": ready["budgets"],
+        "flags": ready["flags"],
+        "daily_ready": ready,
     }
+
+
+def _budget_line(row: dict[str, Any]) -> str:
+    metric = str(row.get("metric") or "usd")
+    period = str(row.get("period") or "month")
+    limit = float(row.get("limit") or 0)
+    used = float(row.get("used") or 0)
+    remaining = float(row.get("remaining") or 0)
+    state = str(row.get("state") or "ok")
+    basis = str(row.get("basis") or "")
+    if metric == "tokens":
+        amounts = f"limit={int(round(limit))} used={int(round(used))} remaining={int(round(remaining))}"
+    else:
+        amounts = f"limit=${limit:.2f} used=${used:.2f} remaining=${remaining:.2f}"
+    extra = f"  {basis}" if basis and metric == "usd" else ""
+    return f"budget   {period} {metric}  {amounts}  {state}{extra}"
 
 
 def render_text(data: dict[str, Any]) -> str:
@@ -127,6 +150,13 @@ def render_text(data: dict[str, Any]) -> str:
         f"estimated ${data['cost_usd']:.4f}  (T0 allocate only — not billed)",
         f"tokens   in={data['input_tokens']} out={data['output_tokens']} "
         f"cache_read={data['cache_read_tokens']} cache_write={data['cache_creation_tokens']}",
+    ]
+    for row in data.get("budgets") or []:
+        lines.append(_budget_line(row))
+    flags = data.get("flags") or []
+    if flags:
+        lines.append("alerts   " + "; ".join(str(item.get("message") or item.get("kind")) for item in flags))
+    lines += [
         "",
         "section A — vendor lines",
     ]

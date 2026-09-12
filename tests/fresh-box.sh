@@ -8,7 +8,7 @@ trap 'rm -rf "$BOX"' EXIT
 
 export HOME="$BOX/home"
 export ARDOISE_HOME="$HOME/.ardoise"
-unset ARDOISE_LEDGER ARDOISE_QUEUE ARDOISE_STATEMENTS ARDOISE_CLAUDE_ROOT ARDOISE_CURSOR_ROOT
+unset ARDOISE_LEDGER ARDOISE_QUEUE ARDOISE_STATEMENTS ARDOISE_CLAUDE_ROOT ARDOISE_CURSOR_ROOT ARDOISE_BUDGETS
 unset CURSOR_ADMIN_API_KEY CURSOR_API_KEY CURSOR_ADMIN_API_BASE
 mkdir -p "$HOME"
 
@@ -243,6 +243,91 @@ n_inv = conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
 if n_inv != 2:
     raise SystemExit(f"invoices table count={n_inv}")
 print("invoice-paste=ok section_a=21.05 t0_estimate=0.02105")
+PY
+
+# Phase 3: soft month cap against the pasted invoice, plus a fixture day spike
+"$BIN" budget set --period month --usd 0.01 --json >"$BOX/budget-set.json"
+"$BIN" budget list --json >"$BOX/budget-list.json"
+"$BIN" status --json --month 2026-09 >"$BOX/status-budget.json"
+"$BIN" statement 2026-09 --out-dir "$HOME/.ardoise/statements" >"$BOX/statement-budget.json"
+
+python3 - "$BOX" "$HOME" "$ROOT" <<'PY'
+import json, sqlite3, sys
+from pathlib import Path
+
+box = Path(sys.argv[1])
+home = Path(sys.argv[2])
+root = Path(sys.argv[3])
+sys.path.insert(0, str(root))
+from ardoise import db
+
+listed = json.loads((box / "budget-list.json").read_text())
+if not listed.get("budgets"):
+    raise SystemExit("budget list empty")
+if listed["budgets"][0]["id"] != "month:usd":
+    raise SystemExit(f"budget id {listed['budgets'][0]}")
+
+status = json.loads((box / "status-budget.json").read_text())
+if not status.get("budgets") or status["budgets"][0].get("state") != "over":
+    raise SystemExit(f"expected month usd over, got {status.get('budgets')}")
+kinds = {item.get("kind") for item in status.get("flags") or []}
+if "budget_over" not in kinds:
+    raise SystemExit(f"status flags {kinds}, want budget_over")
+ready = status.get("daily_ready") or {}
+if ready.get("schema") != "ardoise.daily_ready.v1":
+    raise SystemExit(f"daily_ready schema {ready.get('schema')}")
+
+md = (home / ".ardoise" / "statements" / "2026-09.md").read_text()
+html = (home / ".ardoise" / "statements" / "2026-09.html").read_text()
+if "## Alerts" not in md or "A. Vendor lines" not in md:
+    raise SystemExit("statement missing Alerts strip or section A")
+if md.index("## Alerts") > md.index("## A. Vendor lines"):
+    raise SystemExit("Alerts must sit above section A")
+if "19.50" not in md[md.index("## A. Vendor lines"):]:
+    raise SystemExit("section A lost invoice dollars after Alerts")
+if 'aria-label="Alerts"' not in html:
+    raise SystemExit("html missing Alerts strip")
+
+fixture = json.loads((root / "tests" / "fixtures" / "alerts.json").read_text())
+with db.session() as conn:
+    for row in fixture["day_spike"]:
+        db.upsert_entry(
+            conn,
+            {
+                "vendor": "anthropic",
+                "source": "anthropic_t0",
+                "message_id": row["message_id"],
+                "request_id": row["request_id"],
+                "project": "clouvelai/Arbusteia",
+                "model": "claude-haiku-4-5",
+                "occurred_at": row["occurred_at"],
+                "input_tokens": int(row.get("input_tokens") or 0),
+                "output_tokens": int(row.get("output_tokens") or 0),
+                "cost_usd": row["cost_usd"],
+                "session_id": row["session_id"],
+                "tier": "T0",
+            },
+        )
+print("budget-over=ok")
+PY
+
+"$BIN" status --json --month 2026-08 >"$BOX/status-anomaly.json"
+"$BIN" statement 2026-08 --out-dir "$HOME/.ardoise/statements" >"$BOX/statement-anomaly.json"
+
+python3 - "$BOX" "$HOME" <<'PY'
+import json, sys
+from pathlib import Path
+
+box = Path(sys.argv[1])
+home = Path(sys.argv[2])
+status = json.loads((box / "status-anomaly.json").read_text())
+kinds = {item.get("kind") for item in status.get("flags") or []}
+if "day_spike" not in kinds:
+    raise SystemExit(f"2026-08 flags {kinds}, want day_spike")
+md = (home / ".ardoise" / "statements" / "2026-08.md").read_text()
+if "2026-08-08" not in md or "## Alerts" not in md:
+    raise SystemExit("August statement missing day_spike alert")
+print("anomaly=ok day_spike=2026-08-08")
 PY
 
 echo "FRESH-BOX-OK"

@@ -67,6 +67,14 @@ def user_prices() -> Path:
     return ardoise_home() / "prices.json"
 
 
+def budgets_path() -> Path:
+    """Soft budget caps. User config, not ledger rows. See docs/budgets.md."""
+    override = os.environ.get("ARDOISE_BUDGETS")
+    if override:
+        return Path(override).expanduser()
+    return ardoise_home() / "budgets.json"
+
+
 def ensure_home() -> Path:
     root = ardoise_home()
     root.mkdir(parents=True, exist_ok=True)
