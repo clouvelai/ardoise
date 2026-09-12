@@ -12,7 +12,7 @@ import html
 from pathlib import Path
 from typing import Any
 
-from ardoise import attribution, paths
+from ardoise import attribution, paths, roster
 from ardoise.status import current_month, summarize
 
 _LEGEND = "T2 billed events · T1 seat usage · T0 local estimate · Invoice paste-in"
@@ -158,14 +158,26 @@ def _source_note(row: dict[str, Any]) -> str:
     return ""
 
 
+def _filter_label(summary: dict[str, Any]) -> str | None:
+    filt = summary.get("filter")
+    if not filt:
+        return None
+    return roster.display(filt.get("canonical") or filt.get("query"))
+
+
 def _md(summary: dict[str, Any]) -> str:
     month = summary["month"]
     section_a = summary.get("section_a") or []
     billed_usd = float(summary.get("billed_usd") or 0)
     estimated = float(summary.get("estimated_usd") or summary.get("cost_usd") or 0)
+    seat = _filter_label(summary)
     lines = [
         f"# Ardoise statement {month}",
         "",
+    ]
+    if seat:
+        lines += [f"Seat **{seat}** · view only — ledger unchanged.", ""]
+    lines += [
         _LEGEND,
         "",
         "## A. Vendor lines (invoice / T2 / T1)",
@@ -300,6 +312,12 @@ def _html_page(summary: dict[str, Any]) -> str:
     estimated = float(summary.get("estimated_usd") or summary.get("cost_usd") or 0)
     entries = int(summary.get("month_entries") or 0)
     grade = any(row.get("invoice_grade") for row in section_a)
+    seat = _filter_label(summary)
+    seat_chip = (
+        f'<p class="seat"><span class="badge seat">{html.escape(seat)}</span> view only</p>'
+        if seat
+        else ""
+    )
 
     if section_a:
         if grade:
@@ -401,7 +419,7 @@ def _html_page(summary: dict[str, Any]) -> str:
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Ardoise {month}</title>
+<title>Ardoise {month}{f" · {html.escape(seat)}" if seat else ""}</title>
 <style>
 :root {{
   --ink: #17141f;
@@ -453,6 +471,8 @@ h1 {{
   letter-spacing: 0;
 }}
 .hero-sub {{ margin: 0.35rem 0 0; color: var(--muted); font-size: 0.92rem; }}
+.seat {{ margin: 0.35rem 0 0; color: var(--muted); font-size: 0.82rem; }}
+.badge.seat {{ background: #f6f4f8; color: #5c5666; border-color: rgba(23, 20, 31, 0.1); }}
 .legend {{
   display: flex;
   flex-wrap: wrap;
@@ -572,6 +592,7 @@ tbody tr:last-child td {{ border-bottom: none; }}
   <header>
     <p class="brand">Ardoise</p>
     <h1>Statement {month}</h1>
+    {seat_chip}
     {hero}
     <ul class="legend" aria-label="Tiers of truth">
       <li>{_badge("T2")} billed events</li>
@@ -634,6 +655,33 @@ tbody tr:last-child td {{ border-bottom: none; }}
 
 def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    seat = _filter_label(summary)
+    if seat:
+        rows.append(
+            {
+                "section": "notes",
+                "tier": "soft",
+                "vendor": "",
+                "person": (summary.get("filter") or {}).get("person") or "",
+                "cycle": summary.get("month"),
+                "source": f"seat filter {seat} (view only)",
+                "usd_cents": "",
+                "billed_usd": "",
+                "invoice_grade": "",
+                "project": "",
+                "model": "",
+                "occurred_at": "",
+                "message_id": "",
+                "request_id": "",
+                "input_tokens": "",
+                "output_tokens": "",
+                "estimated_usd": "",
+                "allocated_billed_usd": "",
+                "agent": "",
+                "skill": "",
+                "effort": "",
+            }
+        )
     for row in summary.get("section_a") or []:
         rows.append(
             {
@@ -717,14 +765,20 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def write_statement(month: str | None = None, *, out_dir: Path | None = None) -> dict[str, str]:
+def write_statement(
+    month: str | None = None,
+    *,
+    out_dir: Path | None = None,
+    person: str | None = None,
+) -> dict[str, str]:
     month = month or current_month()
-    summary = summarize(month)
+    summary = summarize(month, person=person)
     dest = out_dir or paths.statements_dir()
     dest.mkdir(parents=True, exist_ok=True)
-    md_path = dest / f"{month}.md"
-    html_path = dest / f"{month}.html"
-    csv_path = dest / f"{month}.csv"
+    stem = roster.filename_for(month, summary.get("filter"))
+    md_path = dest / f"{stem}.md"
+    html_path = dest / f"{stem}.html"
+    csv_path = dest / f"{stem}.csv"
     md_path.write_text(_md(summary), encoding="utf-8")
     html_path.write_text(_html_page(summary), encoding="utf-8")
     fieldnames = [
@@ -755,4 +809,8 @@ def write_statement(month: str | None = None, *, out_dir: Path | None = None) ->
         writer.writeheader()
         for row in _csv_rows(summary):
             writer.writerow({k: row.get(k) for k in fieldnames})
-    return {"md": str(md_path), "html": str(html_path), "csv": str(csv_path), "month": month}
+    written = {"md": str(md_path), "html": str(html_path), "csv": str(csv_path), "month": month}
+    if summary.get("filter"):
+        written["person"] = str((summary.get("filter") or {}).get("canonical") or "")
+        written["stem"] = stem
+    return written

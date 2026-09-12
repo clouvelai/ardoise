@@ -1,0 +1,3 @@
+{"vendor":"anthropic","cycle":"2026-09","person":"alice","usd_cents":4000,"invoice_id":"inv_alice","source":"paste"}
+{"vendor":"cursor","cycle":"2026-09","person":"bob","usd_cents":1500,"invoice_id":"inv_bob","source":"paste"}
+{"vendor":"anthropic","cycle":"2026-09","person":"","usd_cents":999,"invoice_id":"inv_org","source":"paste"}

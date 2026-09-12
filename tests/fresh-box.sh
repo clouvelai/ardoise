@@ -327,4 +327,67 @@ if abs(float(stdin_est.get("usd") or 0) - 0.001) > 1e-6:
 print("phase3=ok over_cap=1 notes=soft estimate-stdin=0.001")
 PY
 
+# Phase 3 roster filter: view-only seat slice (does not mutate the ledger)
+"$BIN" invoice add --vendor anthropic --cycle 2026-09 --usd-cents 400 --person alice --json \
+  >"$BOX/invoice-alice.json"
+"$BIN" status --json --month 2026-09 --person alice >"$BOX/status-alice.json"
+"$BIN" statement 2026-09 --person alice --out-dir "$HOME/.ardoise/statements" \
+  >"$BOX/statement-alice.json"
+"$BIN" status --json --month 2026-09 --seat nobody >"$BOX/status-nobody.json"
+"$BIN" statement 2026-09 --person alice --out-dir "$HOME/.ardoise/statements" \
+  >"$BOX/statement-alice-rerun.json"
+
+python3 - "$BOX" "$HOME" <<'PY'
+import json, sqlite3, sys
+from pathlib import Path
+
+box = Path(sys.argv[1])
+home = Path(sys.argv[2])
+added = json.loads((box / "invoice-alice.json").read_text())
+if added.get("result") != "inserted" or added.get("person") != "alice":
+    raise SystemExit(f"alice invoice add {added}")
+
+alice = json.loads((box / "status-alice.json").read_text())
+if abs(float(alice.get("billed_usd") or 0) - 4.0) > 1e-6:
+    raise SystemExit(f"alice billed_usd={alice.get('billed_usd')} want 4.0")
+if any(row.get("person") not in {"alice"} for row in alice.get("section_a") or []):
+    raise SystemExit(f"alice filter leaked other seats: {alice.get('section_a')}")
+if alice.get("filter", {}).get("view_only") is not True:
+    raise SystemExit("alice filter must be view_only")
+if int(alice.get("entries") or 0) != 3:
+    raise SystemExit(f"filter mutated ledger entries={alice.get('entries')}")
+
+nobody = json.loads((box / "status-nobody.json").read_text())
+if nobody.get("section_a") or nobody.get("lines"):
+    raise SystemExit("unknown seat should be an empty view")
+if not any("view only" in str(note) for note in nobody.get("notes") or []):
+    raise SystemExit("unknown seat should note view-only empty match")
+
+written = json.loads((box / "statement-alice.json").read_text())
+rerun = json.loads((box / "statement-alice-rerun.json").read_text())
+if written.get("md") != rerun.get("md"):
+    raise SystemExit("filtered statement path changed on rerun")
+for key in ("md", "html", "csv"):
+    path = Path(written[key])
+    if not path.is_file() or "2026-09--alice" not in path.name:
+        raise SystemExit(f"missing filtered statement {path}")
+    text = path.read_text()
+    if "alice" not in text or "view only" not in text.lower().replace("-", " "):
+        raise SystemExit(f"{path.name} missing alice/view-only marker")
+    if "19.50" in text or "1.55" in text:
+        raise SystemExit(f"{path.name} leaked unfiltered invoice dollars")
+    if "<table" in text and text.lower().count("<table") > 2:
+        raise SystemExit(f"{path.name} grew a dense roster table")
+
+org = home / ".ardoise" / "statements" / "2026-09.md"
+if not org.is_file():
+    raise SystemExit("org statement was clobbered by seat filter")
+conn = sqlite3.connect(home / ".ardoise" / "ledger.db")
+if conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0] != 3:
+    raise SystemExit("roster filter wrote events")
+if conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0] != 3:
+    raise SystemExit("unexpected invoice count after alice add")
+print("roster-filter=ok alice=4.00 view_only=1")
+PY
+
 echo "FRESH-BOX-OK"
