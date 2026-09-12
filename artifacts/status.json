@@ -1,0 +1,68 @@
+{
+  "ok": true,
+  "ledger": "/tmp/ardoise-landing-proof.gAByHj/home/.ardoise/ledger.db",
+  "home": "/tmp/ardoise-landing-proof.gAByHj/home/.ardoise",
+  "entries": 3,
+  "month": "2026-09",
+  "month_entries": 3,
+  "cost_usd": 0.02105,
+  "input_tokens": 1700,
+  "output_tokens": 550,
+  "cache_read_tokens": 10000,
+  "cache_creation_tokens": 2000,
+  "by_project": [
+    {
+      "project": "clouvelai/Arbusteia",
+      "entries": 3,
+      "cost_usd": 0.02105,
+      "input_tokens": 1700,
+      "output_tokens": 550
+    }
+  ],
+  "by_source": [
+    {
+      "source": "hook",
+      "entries": 1,
+      "cost_usd": 0.0195,
+      "input_tokens": 1000,
+      "output_tokens": 400
+    },
+    {
+      "source": "anthropic_t0",
+      "entries": 1,
+      "cost_usd": 0.001,
+      "input_tokens": 500,
+      "output_tokens": 100
+    },
+    {
+      "source": "cursor",
+      "entries": 1,
+      "cost_usd": 0.00055,
+      "input_tokens": 200,
+      "output_tokens": 50
+    }
+  ],
+  "by_model": [
+    {
+      "model": "claude-sonnet-4-6",
+      "entries": 1,
+      "cost_usd": 0.0195,
+      "input_tokens": 1000,
+      "output_tokens": 400
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "entries": 1,
+      "cost_usd": 0.001,
+      "input_tokens": 500,
+      "output_tokens": 100
+    },
+    {
+      "model": "composer-2.5",
+      "entries": 1,
+      "cost_usd": 0.00055,
+      "input_tokens": 200,
+      "output_tokens": 50
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+Ardoise  2026-09
+ledger   /tmp/ardoise-landing-proof.gAByHj/home/.ardoise/ledger.db
+entries  3 this month / 3 total
+spend    $0.0210
+tokens   in=1700 out=550 cache_read=10000 cache_write=2000
+
+by project
+  clouvelai/Arbusteia              $0.0210  n=3
+by source
+  hook                             $0.0195  n=1
+  anthropic_t0                     $0.0010  n=1
+  cursor                           $0.0006  n=1

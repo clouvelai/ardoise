@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Ardoise status — 2026-09 fixture proof</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #111827;
+    --chrome: #1f2937;
+    --text: #e5e7eb;
+    --dim: #9ca3af;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --cyan: #67e8f9;
+    --border: #374151;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #071018;
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  .wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    box-sizing: border-box;
+  }
+  .term {
+    width: min(820px, 100%);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--chrome);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .r { background: #f87171; }
+  .y { background: #fbbf24; }
+  .g { background: #34d399; }
+  .title {
+    margin-left: 8px;
+    color: var(--dim);
+    font-size: 13px;
+  }
+  pre {
+    margin: 0;
+    padding: 20px 22px 24px;
+    font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .prompt { color: var(--green); }
+  .cmd { color: var(--cyan); }
+  .key { color: var(--dim); }
+  .money { color: var(--amber); font-weight: 600; }
+  .proj { color: #93c5fd; }
+  .caption {
+    max-width: 820px;
+    margin: 14px auto 0;
+    color: var(--dim);
+    font-size: 13px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <div class="term" id="hero">
+        <div class="bar">
+          <span class="dot r"></span>
+          <span class="dot y"></span>
+          <span class="dot g"></span>
+          <span class="title">bin/ardoise status — fixture month 2026-09</span>
+        </div>
+        <pre><span class="prompt">$</span> <span class="cmd">bin/ardoise status</span>
+<span class="key">Ardoise</span>  2026-09
+<span class="key">ledger</span>   /tmp/ardoise-landing-proof.gAByHj/home/.ardoise/ledger.db
+<span class="key">entries</span>  3 this month / 3 total
+<span class="key">spend</span>    <span class="money">$0.0210</span>
+<span class="key">tokens</span>   in=1700 out=550 cache_read=10000 cache_write=2000
+
+<span class="key">by project</span>
+  <span class="proj">clouvelai/Arbusteia</span>              <span class="money">$0.0210</span>  n=3
+<span class="key">by source</span>
+  hook                             $0.0195  n=1
+  anthropic_t0                     $0.0010  n=1
+  cursor                           $0.0006  n=1
+
+<span class="prompt">$</span> <span class="cmd">echo FRESH-BOX-OK</span>
+FRESH-BOX-OK</pre>
+      </div>
+      <p class="caption">Offline fixture proof from <code>tests/fresh-box.sh</code> · 1 project · $0.02105 · 0.377s</p>
+    </div>
+  </div>
+</body>
+</html>

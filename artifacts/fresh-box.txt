@@ -1,0 +1,11 @@
+command: tests/fresh-box.sh
+ARDOISE_HOME: isolated temp dir (script default)
+result: FRESH-BOX-OK
+elapsed_sec: 0.377
+exit: 0
+git_head: a5bc55df21508d1a803554e6b1c573f1623b8194
+captured_at_utc: 2026-09-12T01:27:25Z
+status_month: 2026-09
+projects: 1 (clouvelai/Arbusteia)
+month_entries: 3
+cost_usd: 0.02105
