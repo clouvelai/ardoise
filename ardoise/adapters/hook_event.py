@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from typing import Any
 
 from ardoise.privacy import _int, usage_only_event
 from ardoise.project import infer_project
+from ardoise.vendors.contract import cycle_of, vendor_for_source
 
 
 def _cache_splits(usage: dict[str, Any]) -> tuple[int, int, int]:
@@ -73,8 +75,14 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
     if not occurred:
         occurred = None
 
+    person = (os.environ.get("ARDOISE_PERSON") or "").strip()
     return {
+        "vendor": vendor_for_source(source),
         "source": source,
+        "person": person,
+        "cycle": cycle_of(occurred),
+        "tier": "T0",
+        "billed_cents": None,
         "message_id": str(message_id),
         "request_id": str(request_id),
         "project": project,

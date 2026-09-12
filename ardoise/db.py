@@ -1,4 +1,9 @@
-"""SQLite ledger at ~/.ardoise/ledger.db."""
+"""SQLite ledger at ~/.ardoise/ledger.db.
+
+Schema v2 adds events (canonical), snapshots, prices, projects, sync_state,
+and invoices. `entries` remains a compatibility view over `events`.
+Opening the DB upgrades an existing Phase 1 file in place.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from ardoise import paths, prices
+from ardoise.vendors.contract import cycle_of, vendor_for_source
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -16,9 +22,12 @@ CREATE TABLE IF NOT EXISTS meta (
   value TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS entries (
+CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vendor TEXT NOT NULL DEFAULT 'unknown',
   source TEXT NOT NULL,
+  person TEXT NOT NULL DEFAULT '',
+  cycle TEXT NOT NULL DEFAULT '',
   message_id TEXT NOT NULL,
   request_id TEXT NOT NULL,
   project TEXT,
@@ -30,17 +39,84 @@ CREATE TABLE IF NOT EXISTS entries (
   cache_read_tokens INTEGER NOT NULL DEFAULT 0,
   cache_creation_5m_tokens INTEGER NOT NULL DEFAULT 0,
   cache_creation_1h_tokens INTEGER NOT NULL DEFAULT 0,
+  billed_cents INTEGER,
   cost_usd REAL NOT NULL DEFAULT 0,
+  tier TEXT NOT NULL DEFAULT 'T0',
   session_id TEXT,
   cwd TEXT,
   ingested_at TEXT NOT NULL,
   UNIQUE(message_id, request_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_entries_occurred ON entries(occurred_at);
-CREATE INDEX IF NOT EXISTS idx_entries_project ON entries(project);
-CREATE INDEX IF NOT EXISTS idx_entries_source ON entries(source);
-CREATE INDEX IF NOT EXISTS idx_entries_month ON entries(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_events_occurred ON events(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_events_project ON events(project);
+CREATE INDEX IF NOT EXISTS idx_events_source ON events(source);
+CREATE INDEX IF NOT EXISTS idx_events_vendor ON events(vendor);
+CREATE INDEX IF NOT EXISTS idx_events_tier ON events(tier);
+CREATE INDEX IF NOT EXISTS idx_events_cycle ON events(vendor, person, cycle);
+
+CREATE TABLE IF NOT EXISTS snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vendor TEXT NOT NULL,
+  person TEXT NOT NULL DEFAULT '',
+  cycle TEXT NOT NULL,
+  as_of TEXT NOT NULL,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+  billed_cents INTEGER,
+  cost_usd REAL,
+  tier TEXT NOT NULL DEFAULT 'T1',
+  ingested_at TEXT NOT NULL,
+  UNIQUE(vendor, person, cycle, as_of)
+);
+
+CREATE TABLE IF NOT EXISTS prices (
+  model TEXT PRIMARY KEY,
+  input REAL NOT NULL,
+  output REAL NOT NULL,
+  cache_read REAL NOT NULL,
+  cache_write_5m REAL NOT NULL,
+  cache_write_1h REAL NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  unit TEXT NOT NULL DEFAULT 'per_million_tokens',
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+  slug TEXT PRIMARY KEY,
+  remote_url TEXT,
+  first_seen TEXT NOT NULL,
+  last_seen TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sync_state (
+  vendor TEXT NOT NULL,
+  person TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL,
+  cursor TEXT,
+  last_success TEXT,
+  last_error TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (vendor, person, kind)
+);
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vendor TEXT NOT NULL,
+  person TEXT NOT NULL DEFAULT '',
+  cycle TEXT NOT NULL,
+  invoice_id TEXT NOT NULL DEFAULT '',
+  billed_cents INTEGER,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  status TEXT,
+  issued_at TEXT,
+  source TEXT NOT NULL DEFAULT 'paste',
+  notes TEXT,
+  ingested_at TEXT NOT NULL,
+  UNIQUE(vendor, person, cycle, invoice_id)
+);
 
 CREATE TABLE IF NOT EXISTS sources (
   path TEXT PRIMARY KEY,
@@ -50,7 +126,45 @@ CREATE TABLE IF NOT EXISTS sources (
 );
 """
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
+
+_ENTRY_COLS = (
+    "source",
+    "message_id",
+    "request_id",
+    "project",
+    "model",
+    "occurred_at",
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_tokens",
+    "cache_read_tokens",
+    "cache_creation_5m_tokens",
+    "cache_creation_1h_tokens",
+    "cost_usd",
+    "session_id",
+    "cwd",
+    "ingested_at",
+)
+
+_LEDGER_SECRET_KEYS = frozenset(
+    {
+        "credential",
+        "credentials",
+        "api_key",
+        "apikey",
+        "access_token",
+        "refresh_token",
+        "authorization",
+        "password",
+        "secret",
+        "token",
+        "admin_api_key",
+        "cursor_api_key",
+        "anthropic_admin_api_key",
+        "anthropic_api_key",
+    }
+)
 
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
@@ -62,11 +176,99 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(SCHEMA)
+    upgrade(conn)
     conn.execute(
         "INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)",
         (SCHEMA_VERSION,),
     )
     return conn
+
+
+def upgrade(conn: sqlite3.Connection) -> None:
+    """Idempotent schema upgrade for Phase 1 ledgers and partial v2 files."""
+    _ensure_columns(
+        conn,
+        "events",
+        {
+            "vendor": "TEXT NOT NULL DEFAULT 'unknown'",
+            "person": "TEXT NOT NULL DEFAULT ''",
+            "cycle": "TEXT NOT NULL DEFAULT ''",
+            "billed_cents": "INTEGER",
+            "tier": "TEXT NOT NULL DEFAULT 'T0'",
+        },
+    )
+    _ensure_columns(
+        conn,
+        "invoices",
+        {
+            "source": "TEXT NOT NULL DEFAULT 'paste'",
+            "notes": "TEXT",
+        },
+    )
+    _migrate_entries_view(conn)
+    seed_prices(conn)
+
+
+def _object_type(conn: sqlite3.Connection, name: str) -> str | None:
+    row = conn.execute(
+        "SELECT type FROM sqlite_master WHERE name = ?", (name,)
+    ).fetchone()
+    return str(row[0]) if row else None
+
+
+def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _ensure_columns(conn: sqlite3.Connection, table: str, specs: dict[str, str]) -> None:
+    if _object_type(conn, table) != "table":
+        return
+    have = _columns(conn, table)
+    for name, decl in specs.items():
+        if name not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
+def _migrate_entries_view(conn: sqlite3.Connection) -> None:
+    kind = _object_type(conn, "entries")
+    if kind == "table":
+        conn.execute(
+            f"""
+            INSERT OR IGNORE INTO events (
+              {", ".join(_ENTRY_COLS)}, vendor, person, cycle, billed_cents, tier
+            )
+            SELECT
+              {", ".join(_ENTRY_COLS)},
+              CASE
+                WHEN lower(COALESCE(source, '')) LIKE '%cursor%' THEN 'cursor'
+                WHEN lower(COALESCE(source, '')) LIKE '%anthropic%'
+                  OR lower(COALESCE(source, '')) LIKE '%claude%' THEN 'anthropic'
+                ELSE 'unknown'
+              END,
+              '',
+              CASE
+                WHEN length(COALESCE(occurred_at, '')) >= 7 THEN substr(occurred_at, 1, 7)
+                ELSE ''
+              END,
+              NULL,
+              'T0'
+            FROM entries
+            """
+        )
+        conn.execute("DROP TABLE entries")
+        kind = None
+    if kind == "view":
+        conn.execute("DROP VIEW entries")
+        kind = None
+    if kind is None:
+        conn.execute(
+            f"""
+            CREATE VIEW entries AS
+            SELECT id, {", ".join(_ENTRY_COLS)},
+                   vendor, person, cycle, billed_cents, tier
+            FROM events
+            """
+        )
 
 
 @contextmanager
@@ -86,12 +288,27 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _reject_secrets(row: dict[str, Any]) -> None:
+    for key in row:
+        if str(key).strip().lower() in _LEDGER_SECRET_KEYS:
+            raise ValueError("credentials are never written to the ledger")
+
+
 def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
     """
     Insert or keep the richer duplicate (higher output_tokens, then input_tokens).
     Returns inserted | updated | skipped.
     """
+    _reject_secrets(row)
     cost = row.get("cost_usd")
+    billed = row.get("billed_cents")
+    billed_i: int | None
+    try:
+        billed_i = int(billed) if billed is not None and billed != "" else None
+    except (TypeError, ValueError):
+        billed_i = None
+    if cost is None and billed_i is not None:
+        cost = billed_i / 100.0
     if cost is None:
         cost = prices.price_usd(
             model=row.get("model"),
@@ -104,45 +321,53 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
         )
         row = {**row, "cost_usd": cost}
 
+    occurred = row.get("occurred_at") or _now()
+    source = row.get("source") or "unknown"
     payload = {
-        "source": row.get("source") or "unknown",
+        "vendor": row.get("vendor") or vendor_for_source(source),
+        "source": source,
+        "person": row.get("person") or "",
+        "cycle": row.get("cycle") or cycle_of(occurred),
         "message_id": str(row["message_id"]),
         "request_id": str(row["request_id"]),
         "project": row.get("project"),
         "model": row.get("model"),
-        "occurred_at": row.get("occurred_at") or _now(),
+        "occurred_at": occurred,
         "input_tokens": int(row.get("input_tokens") or 0),
         "output_tokens": int(row.get("output_tokens") or 0),
         "cache_creation_tokens": int(row.get("cache_creation_tokens") or 0),
         "cache_read_tokens": int(row.get("cache_read_tokens") or 0),
         "cache_creation_5m_tokens": int(row.get("cache_creation_5m_tokens") or 0),
         "cache_creation_1h_tokens": int(row.get("cache_creation_1h_tokens") or 0),
-        "cost_usd": float(row["cost_usd"]),
+        "billed_cents": billed_i,
+        "cost_usd": float(cost),
+        "tier": row.get("tier") or "T0",
         "session_id": row.get("session_id"),
         "cwd": row.get("cwd"),
         "ingested_at": _now(),
     }
     existing = conn.execute(
-        "SELECT output_tokens, input_tokens FROM entries WHERE message_id = ? AND request_id = ?",
+        "SELECT output_tokens, input_tokens FROM events WHERE message_id = ? AND request_id = ?",
         (payload["message_id"], payload["request_id"]),
     ).fetchone()
     if existing is None:
         conn.execute(
             """
-            INSERT INTO entries (
-              source, message_id, request_id, project, model, occurred_at,
-              input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-              cache_creation_5m_tokens, cache_creation_1h_tokens, cost_usd,
-              session_id, cwd, ingested_at
+            INSERT INTO events (
+              vendor, source, person, cycle, message_id, request_id, project, model,
+              occurred_at, input_tokens, output_tokens, cache_creation_tokens,
+              cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens,
+              billed_cents, cost_usd, tier, session_id, cwd, ingested_at
             ) VALUES (
-              :source, :message_id, :request_id, :project, :model, :occurred_at,
-              :input_tokens, :output_tokens, :cache_creation_tokens, :cache_read_tokens,
-              :cache_creation_5m_tokens, :cache_creation_1h_tokens, :cost_usd,
-              :session_id, :cwd, :ingested_at
+              :vendor, :source, :person, :cycle, :message_id, :request_id, :project, :model,
+              :occurred_at, :input_tokens, :output_tokens, :cache_creation_tokens,
+              :cache_read_tokens, :cache_creation_5m_tokens, :cache_creation_1h_tokens,
+              :billed_cents, :cost_usd, :tier, :session_id, :cwd, :ingested_at
             )
             """,
             payload,
         )
+        upsert_project(conn, payload.get("project"))
         return "inserted"
 
     richer = payload["output_tokens"] > int(existing["output_tokens"]) or (
@@ -154,8 +379,11 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
 
     conn.execute(
         """
-        UPDATE entries SET
+        UPDATE events SET
+          vendor = :vendor,
           source = :source,
+          person = COALESCE(NULLIF(:person, ''), person),
+          cycle = :cycle,
           project = COALESCE(:project, project),
           model = COALESCE(:model, model),
           occurred_at = :occurred_at,
@@ -165,7 +393,9 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
           cache_read_tokens = :cache_read_tokens,
           cache_creation_5m_tokens = :cache_creation_5m_tokens,
           cache_creation_1h_tokens = :cache_creation_1h_tokens,
+          billed_cents = COALESCE(:billed_cents, billed_cents),
           cost_usd = :cost_usd,
+          tier = :tier,
           session_id = COALESCE(:session_id, session_id),
           cwd = COALESCE(:cwd, cwd),
           ingested_at = :ingested_at
@@ -173,7 +403,234 @@ def upsert_entry(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
         """,
         payload,
     )
+    upsert_project(conn, payload.get("project"))
     return "updated"
+
+
+def upsert_project(conn: sqlite3.Connection, slug: str | None, *, remote_url: str | None = None) -> None:
+    if not slug:
+        return
+    now = _now()
+    conn.execute(
+        """
+        INSERT INTO projects(slug, remote_url, first_seen, last_seen)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(slug) DO UPDATE SET
+          last_seen = excluded.last_seen,
+          remote_url = COALESCE(excluded.remote_url, projects.remote_url)
+        """,
+        (slug, remote_url, now, now),
+    )
+
+
+def upsert_snapshot(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
+    _reject_secrets(row)
+    payload = {
+        "vendor": row["vendor"],
+        "person": row.get("person") or "",
+        "cycle": row["cycle"],
+        "as_of": row.get("as_of") or _now(),
+        "input_tokens": int(row.get("input_tokens") or 0),
+        "output_tokens": int(row.get("output_tokens") or 0),
+        "cache_read_tokens": int(row.get("cache_read_tokens") or 0),
+        "cache_creation_tokens": int(row.get("cache_creation_tokens") or 0),
+        "billed_cents": row.get("billed_cents"),
+        "cost_usd": row.get("cost_usd"),
+        "tier": row.get("tier") or "T1",
+        "ingested_at": _now(),
+    }
+    conn.execute(
+        """
+        INSERT INTO snapshots (
+          vendor, person, cycle, as_of, input_tokens, output_tokens,
+          cache_read_tokens, cache_creation_tokens, billed_cents, cost_usd, tier, ingested_at
+        ) VALUES (
+          :vendor, :person, :cycle, :as_of, :input_tokens, :output_tokens,
+          :cache_read_tokens, :cache_creation_tokens, :billed_cents, :cost_usd, :tier, :ingested_at
+        )
+        ON CONFLICT(vendor, person, cycle, as_of) DO UPDATE SET
+          input_tokens = excluded.input_tokens,
+          output_tokens = excluded.output_tokens,
+          cache_read_tokens = excluded.cache_read_tokens,
+          cache_creation_tokens = excluded.cache_creation_tokens,
+          billed_cents = excluded.billed_cents,
+          cost_usd = excluded.cost_usd,
+          tier = excluded.tier,
+          ingested_at = excluded.ingested_at
+        """,
+        payload,
+    )
+    return "upserted"
+
+
+def upsert_invoice(conn: sqlite3.Connection, row: dict[str, Any]) -> str:
+    """Insert or replace a pasted invoice. Credentials are rejected."""
+    _reject_secrets(row)
+    billed = row.get("billed_cents")
+    try:
+        billed_i = int(billed) if billed is not None and billed != "" else None
+    except (TypeError, ValueError):
+        raise ValueError("invoice billed_cents must be an integer") from None
+    if billed_i is None:
+        raise ValueError("invoice requires billed_cents")
+    payload = {
+        "vendor": str(row.get("vendor") or "").strip().lower(),
+        "person": row.get("person") or "",
+        "cycle": str(row.get("cycle") or "").strip(),
+        "invoice_id": str(row.get("invoice_id") or "").strip(),
+        "billed_cents": billed_i,
+        "currency": str(row.get("currency") or "USD"),
+        "status": row.get("status"),
+        "issued_at": row.get("issued_at"),
+        "source": row.get("source") or "paste",
+        "notes": row.get("notes"),
+        "ingested_at": _now(),
+    }
+    if not payload["vendor"]:
+        raise ValueError("invoice requires vendor")
+    if not payload["cycle"] or len(payload["cycle"]) < 7:
+        raise ValueError("invoice requires cycle YYYY-MM")
+    existing = conn.execute(
+        """
+        SELECT billed_cents FROM invoices
+        WHERE vendor = :vendor AND person = :person AND cycle = :cycle AND invoice_id = :invoice_id
+        """,
+        payload,
+    ).fetchone()
+    conn.execute(
+        """
+        INSERT INTO invoices (
+          vendor, person, cycle, invoice_id, billed_cents, currency, status,
+          issued_at, source, notes, ingested_at
+        ) VALUES (
+          :vendor, :person, :cycle, :invoice_id, :billed_cents, :currency, :status,
+          :issued_at, :source, :notes, :ingested_at
+        )
+        ON CONFLICT(vendor, person, cycle, invoice_id) DO UPDATE SET
+          billed_cents = excluded.billed_cents,
+          currency = excluded.currency,
+          status = excluded.status,
+          issued_at = excluded.issued_at,
+          source = excluded.source,
+          notes = excluded.notes,
+          ingested_at = excluded.ingested_at
+        """,
+        payload,
+    )
+    return "updated" if existing is not None else "inserted"
+
+
+def list_invoices(
+    conn: sqlite3.Connection,
+    *,
+    cycle: str | None = None,
+    vendor: str | None = None,
+    person: str | None = None,
+) -> list[dict[str, Any]]:
+    sql = "SELECT * FROM invoices WHERE 1=1"
+    args: list[Any] = []
+    if cycle:
+        sql += " AND cycle = ?"
+        args.append(cycle)
+    if vendor:
+        sql += " AND vendor = ?"
+        args.append(vendor)
+    if person is not None:
+        sql += " AND person = ?"
+        args.append(person)
+    sql += " ORDER BY vendor, person, cycle, invoice_id, id"
+    return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+
+def latest_snapshot(
+    conn: sqlite3.Connection, *, vendor: str, person: str | None, cycle: str
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT * FROM snapshots
+        WHERE vendor = ? AND person = ? AND cycle = ?
+        ORDER BY as_of DESC, id DESC
+        LIMIT 1
+        """,
+        (vendor, person or "", cycle),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def set_sync_state(
+    conn: sqlite3.Connection,
+    *,
+    vendor: str,
+    kind: str,
+    person: str | None = None,
+    cursor: str | None = None,
+    last_error: str | None = None,
+    ok: bool = True,
+) -> None:
+    now = _now()
+    conn.execute(
+        """
+        INSERT INTO sync_state(vendor, person, kind, cursor, last_success, last_error, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(vendor, person, kind) DO UPDATE SET
+          cursor = COALESCE(excluded.cursor, sync_state.cursor),
+          last_success = CASE WHEN excluded.last_error IS NULL THEN excluded.last_success ELSE sync_state.last_success END,
+          last_error = excluded.last_error,
+          updated_at = excluded.updated_at
+        """,
+        (
+            vendor,
+            person or "",
+            kind,
+            cursor,
+            now if ok else None,
+            None if ok else last_error,
+            now,
+        ),
+    )
+
+
+def seed_prices(conn: sqlite3.Connection) -> None:
+    user = paths.user_prices()
+    bundled = paths.bundled_prices()
+    book = prices.load_pricebook(
+        user.stat().st_mtime if user.is_file() else None,
+        bundled.stat().st_mtime if bundled.is_file() else None,
+    )
+    now = _now()
+    currency = str(book.get("currency") or "USD")
+    unit = str(book.get("unit") or "per_million_tokens")
+    for model, rates in (book.get("models") or {}).items():
+        if not isinstance(rates, dict):
+            continue
+        conn.execute(
+            """
+            INSERT INTO prices(
+              model, input, output, cache_read, cache_write_5m, cache_write_1h,
+              currency, unit, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(model) DO UPDATE SET
+              input = excluded.input,
+              output = excluded.output,
+              cache_read = excluded.cache_read,
+              cache_write_5m = excluded.cache_write_5m,
+              cache_write_1h = excluded.cache_write_1h,
+              currency = excluded.currency,
+              unit = excluded.unit,
+              updated_at = excluded.updated_at
+            """,
+            (
+                str(model),
+                float(rates.get("input") or 0),
+                float(rates.get("output") or 0),
+                float(rates.get("cache_read") or 0),
+                float(rates.get("cache_write_5m") or 0),
+                float(rates.get("cache_write_1h") or 0),
+                currency,
+                unit,
+                now,
+            ),
+        )
 
 
 def mark_source(conn: sqlite3.Connection, path: Path, *, bytes_: int, mtime: float) -> None:
@@ -199,3 +656,7 @@ def source_unchanged(conn: sqlite3.Connection, path: Path, *, bytes_: int, mtime
 
 def count_entries(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0])
+
+
+def required_tables() -> tuple[str, ...]:
+    return ("events", "snapshots", "prices", "projects", "sync_state", "invoices")
