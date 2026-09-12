@@ -41,7 +41,9 @@ fi
 BIN="$ROOT/bin/ardoise"
 chmod +x "$BIN" \
   "$ROOT/plugins/shared/capture.sh" \
+  "$ROOT/plugins/shared/snapshot.sh" \
   "$ROOT/plugins/claude/hooks/capture.sh" \
+  "$ROOT/plugins/claude/hooks/snapshot.sh" \
   "$ROOT/plugins/cursor/capture.sh" 2>/dev/null || true
 
 if [ "$JSON" -eq 1 ]; then

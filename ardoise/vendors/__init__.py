@@ -50,6 +50,11 @@ def get_adapter(name: str) -> VendorAdapter:
     return cls()
 
 
+def get_vendor(name: str) -> VendorAdapter:
+    """Alias used by the T1 snapshot CLI path."""
+    return get_adapter(name)
+
+
 def test_adapter(name: str) -> VendorTestResult:
     return get_adapter(name).test()
 
@@ -65,6 +70,7 @@ __all__ = [
     "VendorTestResult",
     "entry_to_event",
     "get_adapter",
+    "get_vendor",
     "list_adapters",
     "result_text",
     "test_adapter",

@@ -35,6 +35,10 @@ def _script_path() -> Path:
     return dest
 
 
+def _snapshot_script_path() -> Path:
+    return paths.ardoise_home() / "hooks" / "snapshot.sh"
+
+
 def install_capture_script() -> Path:
     paths.ensure_home()
     src = paths.repo_root() / "plugins" / "shared" / "capture.sh"
@@ -49,6 +53,21 @@ def install_capture_script() -> Path:
     if enqueue.is_file():
         target = dest.parent / "hook_enqueue.py"
         shutil.copyfile(enqueue, target)
+    install_snapshot_script()
+    return dest
+
+
+def install_snapshot_script() -> Path:
+    """SessionStart trigger: ``ardoise snapshot anthropic`` (T1, throttled)."""
+    paths.ensure_home()
+    src = paths.repo_root() / "plugins" / "shared" / "snapshot.sh"
+    dest = _snapshot_script_path()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if src.is_file():
+        shutil.copyfile(src, dest)
+    else:
+        dest.write_text(_embedded_snapshot_sh(), encoding="utf-8")
+    dest.chmod(0o755)
     return dest
 
 
@@ -68,40 +87,73 @@ exit 0
 """
 
 
+def _embedded_snapshot_sh() -> str:
+    return """#!/bin/sh
+set -eu
+# Discard hook stdin; this is a T1 snapshot trigger, not a usage event.
+cat >/dev/null || true
+if [ -n "${ARDOISE_BIN:-}" ] && [ -x "$ARDOISE_BIN" ]; then
+  "$ARDOISE_BIN" snapshot anthropic --json >/dev/null 2>&1 || true
+  exit 0
+fi
+if command -v ardoise >/dev/null 2>&1; then
+  ardoise snapshot anthropic --json >/dev/null 2>&1 || true
+  exit 0
+fi
+if [ -x "$HOME/.local/bin/ardoise" ]; then
+  "$HOME/.local/bin/ardoise" snapshot anthropic --json >/dev/null 2>&1 || true
+  exit 0
+fi
+exit 0
+"""
+
+
 def _claude_command(script: Path) -> str:
     return str(script)
 
 
-def merge_claude_settings(settings_path: Path, script: Path) -> None:
+def _merge_claude_event(
+    hooks: dict[str, Any],
+    event: str,
+    script: Path,
+    extra_drop: tuple[Path, ...] = (),
+) -> None:
+    command = _claude_command(script)
+    entries = hooks.get(event)
+    if not isinstance(entries, list):
+        entries = []
+        hooks[event] = entries
+    kept = []
+    for item in entries:
+        blob = json.dumps(item)
+        if MARKER in blob or str(script) in blob:
+            continue
+        if any(str(path) in blob for path in extra_drop):
+            continue
+        kept.append(item)
+    kept.append(
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": command,
+                }
+            ]
+        }
+    )
+    hooks[event] = kept
+
+
+def merge_claude_settings(settings_path: Path, script: Path, snapshot_script: Path | None = None) -> None:
     data = _load_json(settings_path, {})
     hooks = data.setdefault("hooks", {})
     if not isinstance(hooks, dict):
         hooks = {}
         data["hooks"] = hooks
-    command = _claude_command(script)
     for event in ("Stop", "SessionEnd"):
-        entries = hooks.get(event)
-        if not isinstance(entries, list):
-            entries = []
-            hooks[event] = entries
-        # Drop previous Ardoise entries
-        kept = []
-        for item in entries:
-            blob = json.dumps(item)
-            if MARKER in blob or str(script) in blob:
-                continue
-            kept.append(item)
-        kept.append(
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": command,
-                    }
-                ]
-            }
-        )
-        hooks[event] = kept
+        _merge_claude_event(hooks, event, script)
+    snap = snapshot_script or _snapshot_script_path()
+    _merge_claude_event(hooks, "SessionStart", snap, extra_drop=(script,))
     _dump_json(settings_path, data)
 
 
@@ -149,14 +201,16 @@ def install(*, no_plugin_manager: bool = True) -> dict[str, str]:
         # Phase 1 only supports the file-copy path.
         no_plugin_manager = True
     script = install_capture_script()
+    snapshot_script = install_snapshot_script()
     claude_settings = paths.home() / ".claude" / "settings.json"
     cursor_hooks = paths.cursor_root() / "hooks.json"
-    merge_claude_settings(claude_settings, script)
+    merge_claude_settings(claude_settings, script, snapshot_script)
     merge_cursor_hooks(cursor_hooks, script)
     bound = link_bin()
     plugin_note = "copied hooks into ~/.claude/settings.json and ~/.cursor/hooks.json (no plugin manager)"
     return {
         "script": str(script),
+        "snapshot_script": str(snapshot_script),
         "claude_settings": str(claude_settings),
         "cursor_hooks": str(cursor_hooks),
         "bin": str(bound or ""),

@@ -1,4 +1,4 @@
-"""bin/ardoise — status, statement, export, backfill, capture."""
+"""bin/ardoise — status, statement, export, backfill, capture, snapshot."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from pathlib import Path
 
 from ardoise import __version__, backfill as backfill_mod, capture as capture_mod
 from ardoise import export as export_mod
-from ardoise import install_hooks, invoice as invoice_mod, paths, statement, status as status_mod
+from ardoise import install_hooks, invoice as invoice_mod, paths, snapshot as snapshot_mod
+from ardoise import statement, status as status_mod
 from ardoise.vendors import get_adapter, list_adapters, result_text
 
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
@@ -76,6 +77,20 @@ def build_parser() -> argparse.ArgumentParser:
     vp = vsub.add_parser("pull", help="Pull T2 usage events into the ledger")
     vp.add_argument("name", help="Vendor name (cursor)")
     vp.add_argument("--json", action="store_true")
+
+    snap = sub.add_parser("snapshot", help="Record a vendor T1 seat snapshot")
+    snap.add_argument(
+        "vendor",
+        nargs="?",
+        default="anthropic",
+        help="Vendor name (default: anthropic)",
+    )
+    snap.add_argument("--json", action="store_true")
+    snap.add_argument(
+        "--force",
+        action="store_true",
+        help="Bypass the 3-minute T1 throttle",
+    )
 
     inv = sub.add_parser("invoice", help="Owner-received vendor totals for statement section A")
     isub = inv.add_subparsers(dest="invoice_cmd", required=True)
@@ -201,6 +216,25 @@ def main(argv: list[str] | None = None) -> int:
                     sys.stdout.write(cursor_mod.render_pull(data))
                 return 0 if data.get("ok") else 2
             return _die(f"unknown vendor command: {args.vendor_cmd}")
+
+        if args.cmd == "snapshot":
+            result = snapshot_mod.record_vendor_snapshot(
+                args.vendor,
+                force=bool(args.force),
+            )
+            if args.json:
+                print(json.dumps(result, indent=2, ensure_ascii=True))
+            else:
+                vendor = result.get("vendor") or args.vendor
+                reason = result.get("reason") or "ok"
+                extra = result.get("extra_usage") if isinstance(result.get("extra_usage"), dict) else {}
+                delta = extra.get("delta")
+                recorded = "recorded" if result.get("recorded") else "not-recorded"
+                print(
+                    f"snapshot vendor={vendor} empty={bool(result.get('empty'))} "
+                    f"reason={reason} delta={delta} {recorded}"
+                )
+            return 0
 
         if args.cmd == "invoice":
             if args.invoice_cmd == "add":
