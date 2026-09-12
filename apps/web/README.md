@@ -10,6 +10,6 @@ npm run build
 
 From the repo root, `npm run build` runs this app via the workspace.
 
-OTP (Supabase email, then JWT to [`apps/api`](../api)) is stubbed in
-[`lib/saas-otp.ts`](lib/saas-otp.ts). Landing CTAs stay `#install`.
-Do not put Stripe secrets here.
+OTP helpers live in [`lib/saas-otp.ts`](lib/saas-otp.ts)
+(`requestEmailOtp` / `verifyEmailOtp` → `API_BASE`). Marketing CTAs go to
+`/signup` and `/pricing`. OTP stays API-backed. Do not put Stripe secrets here.

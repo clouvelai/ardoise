@@ -14,18 +14,25 @@ export function Hero() {
             Turn Claude Code and Cursor usage into a local ledger.
             Nothing leaves the machine.
           </p>
-          {/* OTP later: lib/saas-otp.ts → apps/api. CTA stays #install. */}
-          <a
-            href="#install"
-            className="mt-8 inline-flex items-center rounded-full bg-grape px-8 py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
-          >
-            Install for free
-            <span aria-hidden className="ml-1.5">
-              →
-            </span>
-          </a>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <a
+              href="/signup"
+              className="inline-flex items-center rounded-full bg-grape px-8 py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
+            >
+              Start for free
+              <span aria-hidden className="ml-1.5">
+                →
+              </span>
+            </a>
+            <a
+              href="#install"
+              className="inline-flex items-center rounded-full bg-white px-6 py-3.5 text-[15px] font-semibold text-ink shadow-[0_1px_2px_rgba(23,20,31,0.06)] ring-1 ring-black/5 transition hover:bg-mist"
+            >
+              Install
+            </a>
+          </div>
           <p className="mt-4 text-[13px] text-muted">
-            Python 3 · stdlib only · MIT
+            No credit card required.
           </p>
         </div>
         <LedgerCard />

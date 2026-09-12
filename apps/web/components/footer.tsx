@@ -11,10 +11,13 @@ export function Footer() {
         >
           GitHub
         </a>
-        <a href="#privacy" className="transition hover:text-ink">
+        <a href="/pricing" className="transition hover:text-ink">
+          Pricing
+        </a>
+        <a href="/#privacy" className="transition hover:text-ink">
           Privacy
         </a>
-        <a href="#install" className="transition hover:text-ink">
+        <a href="/#install" className="transition hover:text-ink">
           Install
         </a>
       </div>
