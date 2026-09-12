@@ -343,37 +343,21 @@ def reconcile_month(conn: sqlite3.Connection, month: str) -> list[ReconciledCycl
 
 
 def section_a(conn: sqlite3.Connection, month: str) -> list[dict[str, Any]]:
-    """One vendor line per scope. Prefer invoice, else T2, else T1, else T0 estimated."""
+    """Invoice / T2 / T1 vendor lines only. T0 never appears here — it allocates in B."""
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     for rec in reconcile_month(conn, month):
-        key = (rec.vendor, rec.person, rec.cycle)
+        if rec.billed is None:
+            continue
+        key = (rec.billed.vendor, rec.billed.person, rec.billed.cycle)
         if key in seen:
             continue
         seen.add(key)
-        if rec.billed is not None:
-            item = rec.billed.as_dict()
-            item["usd_cents"] = rec.billed.billed_cents
-            item["tier_of_truth"] = rec.billed.tier
-            item["invoice_grade"] = True
-            rows.append(item)
-            continue
-        cents = int(round(float(rec.cost_usd) * 100))
-        rows.append(
-            {
-                "vendor": rec.vendor,
-                "person": rec.person,
-                "cycle": rec.cycle,
-                "billed_cents": cents,
-                "usd_cents": cents,
-                "billed_usd": round(float(rec.cost_usd), 6),
-                "tier": "T0",
-                "tier_of_truth": "T0",
-                "source": "T0 estimated",
-                "invoice_id": None,
-                "invoice_grade": False,
-            }
-        )
+        item = rec.billed.as_dict()
+        item["usd_cents"] = rec.billed.billed_cents
+        item["tier_of_truth"] = rec.billed.tier
+        item["invoice_grade"] = True
+        rows.append(item)
     rows.sort(key=lambda row: (row.get("vendor") or "", row.get("person") or "", row.get("cycle") or ""))
     return rows
 

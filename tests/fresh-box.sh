@@ -145,10 +145,8 @@ for table in ("events", "snapshots", "prices", "projects", "sync_state", "invoic
 md0 = (home / ".ardoise" / "statements" / "2026-09.md").read_text()
 if "A. Vendor lines" not in md0 or "B. T0 allocation" not in md0:
     raise SystemExit("statement missing section A / T0 allocation")
-if "T0" not in md0:
-    raise SystemExit("pre-paste section A must print T0 estimated tier")
-if "invoice-grade total: none" not in md0.lower() and "T0 estimated" not in md0:
-    raise SystemExit("pre-paste section A must label T0 as estimated, not invoice")
+if "No invoice, T2 billed events, or T1 snapshot" not in md0:
+    raise SystemExit("pre-paste section A must not treat T0 as billed")
 inv_cols = {row[1] for row in conn.execute("PRAGMA table_info(invoices)")}
 for col in ("vendor", "cycle", "person", "usd_cents", "source", "notes", "created_at"):
     if col not in inv_cols:

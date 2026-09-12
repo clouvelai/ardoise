@@ -191,19 +191,17 @@ class InvoiceAndReconcileTests(unittest.TestCase):
             self.assertEqual(rows[0]["source"], "paste")
             self.assertTrue(rows[0]["created_at"])
 
-    def test_section_a_t0_fallback_prints_tier(self) -> None:
+    def test_section_a_omits_t0_without_invoice(self) -> None:
         with db.session() as conn:
             self._seed_t0(conn)
         data = summarize("2026-09")
-        self.assertTrue(data["section_a"])
-        self.assertEqual({row["tier_of_truth"] for row in data["section_a"]}, {"T0"})
+        self.assertEqual(data["section_a"], [])
         self.assertEqual(data["billed_usd"], 0)
         self.assertGreater(data["cost_usd"], 0)
         written = write_statement("2026-09")
         md = Path(written["md"]).read_text(encoding="utf-8")
         self.assertIn("A. Vendor lines", md)
-        self.assertRegex(md, r"\|\s*anthropic\s*\|.*\|\s*T0\s*\|")
-        self.assertIn("T0 estimated", md)
+        self.assertIn("No invoice, T2 billed events, or T1 snapshot", md)
         self.assertIn("B. T0 allocation", md)
 
     def test_prefer_invoice_over_t1_and_t2(self) -> None:

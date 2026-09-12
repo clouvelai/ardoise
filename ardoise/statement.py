@@ -37,10 +37,10 @@ def _md(summary: dict[str, Any]) -> str:
     lines = [
         f"# Ardoise statement {month}",
         "",
-        "## A. Vendor lines (invoice / T2 / T1 / T0)",
+        "## A. Vendor lines (invoice / T2 / T1)",
         "",
-        "Prefer pasted invoice, else T2 billed events, else T1 snapshot, else T0 estimated.",
-        "Each line prints its **tier of truth**. T0 is list-price estimate, not invoice-grade.",
+        "Prefer pasted invoice, else T2 billed events, else T1 snapshot.",
+        "Each line prints its **tier of truth**. T0 list-price estimates are not billed truth.",
         "",
     ]
     if section_a:
@@ -48,7 +48,7 @@ def _md(summary: dict[str, Any]) -> str:
         if invoice_grade:
             lines.append(f"**Invoice-grade total (invoice / T1 / T2): ${billed_usd:.2f}**")
         else:
-            lines.append("**Invoice-grade total: none** — vendor lines below are T0 estimated.")
+            lines.append("**Invoice-grade total: none** — add an invoice or wait for T1/T2.")
         lines += [
             "",
             "| Vendor | Scope | Cycle | USD | Tier | Source |",
@@ -66,7 +66,11 @@ def _md(summary: dict[str, Any]) -> str:
                 )
             )
     else:
-        lines += ["No vendor activity for this cycle.", ""]
+        lines += [
+            "No invoice, T2 billed events, or T1 snapshot for this cycle.",
+            "T0 estimates in section B are allocation weights only — not billed totals.",
+            "",
+        ]
 
     lines += [
         "",
@@ -145,7 +149,7 @@ def _html_page(summary: dict[str, Any]) -> str:
         headline = (
             f"<p>Invoice-grade total <strong>${billed_usd:.2f}</strong> (invoice / T1 / T2)</p>"
             if grade
-            else "<p>Invoice-grade total: none. Vendor lines below are T0 estimated.</p>"
+            else "<p>Invoice-grade total: none — add an invoice or wait for T1/T2.</p>"
         )
         billed_block = (
             headline
@@ -154,7 +158,10 @@ def _html_page(summary: dict[str, Any]) -> str:
             + f"<tbody>{billed_rows}</tbody></table>"
         )
     else:
-        billed_block = "<p>No vendor activity for this cycle.</p>"
+        billed_block = (
+            "<p>No invoice, T2 billed events, or T1 snapshot for this cycle. "
+            "T0 estimates in section B are allocation weights only.</p>"
+        )
 
     project_rows = "".join(
         (
@@ -200,9 +207,9 @@ th {{ text-align: left; }}
 </head>
 <body>
 <h1>Ardoise statement {cell(summary['month'])}</h1>
-<h2>A. Vendor lines (invoice / T2 / T1 / T0)</h2>
-<p class="note">Prefer pasted invoice, else T2 billed events, else T1 snapshot, else T0 estimated.
-Each line prints its tier of truth. T0 is list-price estimate, not invoice-grade.</p>
+<h2>A. Vendor lines (invoice / T2 / T1)</h2>
+<p class="note">Prefer pasted invoice, else T2 billed events, else T1 snapshot.
+Each line prints its tier of truth. T0 list-price estimates are not billed truth.</p>
 {billed_block}
 <h2>B. T0 allocation</h2>
 <p class="note">T0 token weights attribute an invoice / T1 / T2 total across projects.
