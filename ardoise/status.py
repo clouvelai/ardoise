@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from ardoise import anomaly, attribution, budget, config as config_mod, db, paths, reconcile
+from ardoise import anomaly, attribution, budget, config as config_mod, db, paths, reconcile, roster
 
 
 def _month_bounds(month: str) -> tuple[str, str]:
@@ -75,7 +75,7 @@ def _group(
     return out
 
 
-def summarize(month: str | None = None) -> dict[str, Any]:
+def summarize(month: str | None = None, *, person: str | None = None) -> dict[str, Any]:
     month = month or current_month()
     paths.ensure_home()
     cfg = config_mod.load()
@@ -84,7 +84,19 @@ def summarize(month: str | None = None) -> dict[str, Any]:
         lines = reconcile.flatten_month(conn, month)
         section_a = reconcile.section_a(conn, month)
         cycles = [item.as_dict() for item in reconcile.reconcile_month(conn, month)]
-        anomalies = anomaly.scan(conn, month=month, lines=lines, config=cfg)
+        members = roster.collect(conn, month=month, config=cfg)
+        filt = roster.resolve(person, roster=members)
+        if filt:
+            lines = roster.apply_rows(lines, filt)
+            section_a = roster.apply_rows(section_a, filt)
+            cycles = roster.apply_rows(cycles, filt)
+        # Day-spike heuristics stay org-wide; skip them on a seat view.
+        anomalies = anomaly.scan(
+            None if filt else conn,
+            month=month,
+            lines=lines,
+            config=cfg,
+        )
 
     estimated = round(sum(float(row.get("estimated_usd") or row.get("cost_usd") or 0) for row in lines), 6)
     billed_usd = round(
@@ -121,6 +133,8 @@ def summarize(month: str | None = None) -> dict[str, Any]:
             for item in cycles
         ],
         "anomalies": anomalies,
+        "roster": members,
+        "filter": filt,
     }
     data["budgets"] = budget.evaluate(data, cfg)
     notes: list[str] = []
@@ -128,6 +142,9 @@ def summarize(month: str | None = None) -> dict[str, Any]:
         notes.append(str(cfg["load_error"]))
     notes.extend(budget.notes_from(data["budgets"]))
     notes.extend(str(item.get("note") or "") for item in anomalies if item.get("note"))
+    filter_note = roster.note_for(filt, matched_rows=len(section_a) + len(lines))
+    if filter_note:
+        notes.append(filter_note)
     data["notes"] = [item for item in notes if item]
     return data
 
@@ -139,7 +156,9 @@ def render_text(data: dict[str, Any]) -> str:
         billed_line = f"billed    ${float(billed or 0):.2f}  (invoice / T1 / T2)"
     else:
         billed_line = "billed    (none)  — invoice add or T1/T2; T0 vendor lines are estimated"
-    lines = [
+    filt = data.get("filter") or {}
+    roster_rows = data.get("roster") or []
+    header = [
         f"Ardoise  {data['month']}",
         f"ledger   {data['ledger']}",
         f"entries  {data['month_entries']} this month / {data['entries']} total",
@@ -147,16 +166,35 @@ def render_text(data: dict[str, Any]) -> str:
         f"estimated ${data['cost_usd']:.4f}  (T0 allocate only — not billed)",
         f"tokens   in={data['input_tokens']} out={data['output_tokens']} "
         f"cache_read={data['cache_read_tokens']} cache_write={data['cache_creation_tokens']}",
-        "",
-        "section A — vendor lines",
     ]
+    if filt:
+        header.append(
+            f"filter   {roster.display(filt.get('canonical') or filt.get('query'))}  "
+            "(view only — ledger unchanged)"
+        )
+    elif len(roster_rows) > 1:
+        names = [roster.display(row.get("person")) for row in roster_rows]
+        header.append("roster   " + ", ".join(names))
+    lines = header + ["", "section A — vendor lines"]
     if not section_a:
         lines.append("  (empty)")
     for row in section_a:
         usd = float(row.get("billed_usd") or 0)
         tier = row.get("tier_of_truth") or row.get("tier") or "T0"
         fmt = f"${usd:.2f}" if row.get("invoice_grade") else f"${usd:.4f}"
-        lines.append(f"  {str(row.get('vendor') or ''):<16} {fmt}  {tier}  {row.get('source')}")
+        person = str(row.get("person") or "").strip()
+        scope = f"  {person}" if person else ""
+        lines.append(f"  {str(row.get('vendor') or ''):<16} {fmt}  {tier}  {row.get('source')}{scope}")
+    people = data.get("by_person") or []
+    if filt or len(people) > 1:
+        lines.append("by person (T0 allocation)")
+        if not people:
+            lines.append("  (empty)")
+        for row in people:
+            label = roster.display(row.get("person"))
+            lines.append(
+                f"  {label:<32} est=${row['cost_usd']:.4f}  n={row['entries']}  T0"
+            )
     lines.append("by project (T0 allocation)")
     if not data["by_project"]:
         lines.append("  (empty)")

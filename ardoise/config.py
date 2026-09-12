@@ -1,4 +1,4 @@
-"""Optional ~/.ardoise/config.json (soft caps + anomaly knobs).
+"""Optional ~/.ardoise/config.json (soft caps, anomaly knobs, roster aliases).
 
 Never stores prompts or credentials. Unknown keys are ignored.
 A missing or invalid file is a no-op: status still prints, estimate still prices.
@@ -27,6 +27,7 @@ def empty() -> dict[str, Any]:
     return {
         "budgets": {"monthly_usd": None, "person": {}, "project": {}},
         "anomalies": dict(DEFAULT_ANOMALIES),
+        "roster": {},
         "path": None,
         "loaded": False,
         "load_error": None,
@@ -62,6 +63,37 @@ def _usd_map(raw: Any) -> dict[str, float]:
     return out
 
 
+def _roster(raw: Any) -> dict[str, list[str]]:
+    """Optional known seats. List of names, or `{canonical: [aliases]}`."""
+    out: dict[str, list[str]] = {}
+    if raw is None or raw is False:
+        return out
+    if isinstance(raw, list):
+        items = [(item, []) for item in raw]
+    elif isinstance(raw, dict):
+        items = list(raw.items())
+    else:
+        return out
+    for key, aliases in items:
+        name = "" if key in (None, "*", "default") else str(key).strip()
+        extra: list[str] = []
+        if isinstance(aliases, str):
+            alias_list = [aliases]
+        elif isinstance(aliases, list):
+            alias_list = aliases
+        else:
+            alias_list = []
+        seen = {name.casefold()}
+        for alias in alias_list:
+            text = str(alias or "").strip()
+            if not text or text.casefold() in seen:
+                continue
+            seen.add(text.casefold())
+            extra.append(text)
+        out[name] = extra
+    return out
+
+
 def _anomalies(raw: Any) -> dict[str, float | int]:
     merged: dict[str, float | int] = dict(DEFAULT_ANOMALIES)
     if not isinstance(raw, dict):
@@ -92,6 +124,7 @@ def _parse(raw: dict[str, Any], path: Path) -> dict[str, Any]:
         "project": _usd_map(budgets_raw.get("project")),
     }
     cfg["anomalies"] = _anomalies(raw.get("anomalies"))
+    cfg["roster"] = _roster(raw.get("roster"))
     return cfg
 
 

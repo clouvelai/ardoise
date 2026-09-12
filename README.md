@@ -26,6 +26,8 @@ bin/ardoise backfill            # Anthropic T0 JSONL + Cursor logs + hook queue
 bin/ardoise capture             # drain ~/.ardoise/queue
 bin/ardoise capture --stdin     # one hook event (used by plugins)
 bin/ardoise statement 2026-09   # writes MD + HTML + CSV
+bin/ardoise status --person alice
+bin/ardoise statement 2026-09 --seat alice   # YYYY-MM--alice.{md,html,csv}
 bin/ardoise export              # JSONL of usage rows
 bin/ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
 bin/ardoise vendor test anthropic  # T2a probe; skip if no Analytics API key
@@ -98,6 +100,10 @@ Optional `~/.ardoise/config.json` (override path with `ARDOISE_CONFIG`):
     "min_day_usd": 1,
     "project_share": 0.75,
     "min_month_usd": 1
+  },
+  "roster": {
+    "alice": ["alice@acme.com"],
+    "bob": []
   }
 }
 ```
@@ -112,6 +118,21 @@ notes, not an alerts pipeline.
 
 `ardoise estimate` prices a hypothetical token/model ask from the price table.
 Hooks may call it later; it writes nothing, needs no network, and always exits 0.
+
+## Roster filters (multi-seat)
+
+`status` and `statement` accept `--person` / `--seat` / `--roster` to view one
+seat. The filter is **read-only**: it does not write the ledger and unknown
+names exit 0 with an empty view plus a soft note.
+
+Roster members come from existing `person` columns on events, snapshots, and
+invoices (the same dimension T1/T2 and `invoice --person` already store).
+Optional `config.json` `roster` is a name list or `{canonical: [aliases]}` map
+so `alice` and `alice@acme.com` resolve to one seat.
+
+Unfiltered statements stay `YYYY-MM.{md,html,csv}`. Filtered files use
+`YYYY-MM--alice.{md,html,csv}` so a seat view does not clobber the org
+statement. HTML adds a quiet seat chip — no roster tables.
 
 ## Privacy
 

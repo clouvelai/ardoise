@@ -42,6 +42,14 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("--json", action="store_true", help="Print JSON")
     st.add_argument("--month", help="YYYY-MM (default: current UTC month)")
     st.add_argument(
+        "--person",
+        "--seat",
+        "--roster",
+        dest="person",
+        default=None,
+        help="Filter to one seat/person (view only; does not write the ledger)",
+    )
+    st.add_argument(
         "--estimate",
         action="store_true",
         help="Also print a $0 estimate stub (use `ardoise estimate` for a real ask)",
@@ -50,6 +58,14 @@ def build_parser() -> argparse.ArgumentParser:
     sm = sub.add_parser("statement", help="Write MD+HTML+CSV for a month")
     sm.add_argument("month", help="YYYY-MM")
     sm.add_argument("--out-dir", help="Output directory")
+    sm.add_argument(
+        "--person",
+        "--seat",
+        "--roster",
+        dest="person",
+        default=None,
+        help="Filter to one seat/person (view only; does not write the ledger)",
+    )
 
     ex = sub.add_parser("export", help="Export ledger JSONL (usage only)")
     ex.add_argument("--month", help="YYYY-MM")
@@ -143,7 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "status":
             month = _check_month(args.month)
-            data = status_mod.summarize(month)
+            data = status_mod.summarize(month, person=getattr(args, "person", None))
             if args.estimate:
                 data["estimate"] = estimate_mod.price_ask(month=month)
             if args.json:
@@ -178,7 +194,11 @@ def main(argv: list[str] | None = None) -> int:
             if not month:
                 return _die("statement requires YYYY-MM")
             out_dir = Path(args.out_dir).expanduser() if args.out_dir else None
-            written = statement.write_statement(month, out_dir=out_dir)
+            written = statement.write_statement(
+                month,
+                out_dir=out_dir,
+                person=getattr(args, "person", None),
+            )
             print(json.dumps(written, indent=2, ensure_ascii=True))
             return 0
 
