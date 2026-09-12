@@ -120,6 +120,7 @@ def record_vendor_snapshot(
                     person=person_key,
                     ok=False,
                     last_error=reason,
+                    now=stamp,
                 )
             return {
                 **_empty(adapter.name, reason, capabilities=tiers),
@@ -150,6 +151,7 @@ def record_vendor_snapshot(
             person=person_key,
             cursor=snap.as_of,
             ok=True,
+            now=stamp,
         )
         return {
             "vendor": adapter.name,

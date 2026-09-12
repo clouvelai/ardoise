@@ -704,8 +704,13 @@ def set_sync_state(
     cursor: str | None = None,
     last_error: str | None = None,
     ok: bool = True,
+    now: str | datetime | None = None,
 ) -> None:
-    now = _now()
+    if isinstance(now, datetime):
+        stamp = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+        stamp_iso = stamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    else:
+        stamp_iso = now or _now()
     conn.execute(
         """
         INSERT INTO sync_state(vendor, person, kind, cursor, last_success, last_error, updated_at)
@@ -721,9 +726,9 @@ def set_sync_state(
             person or "",
             kind,
             cursor,
-            now if ok else None,
+            stamp_iso if ok else None,
             None if ok else last_error,
-            now,
+            stamp_iso,
         ),
     )
 
