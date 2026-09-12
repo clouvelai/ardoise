@@ -63,6 +63,17 @@ tests/fresh-box.sh
 
 Must print `FRESH-BOX-OK` with no network.
 
+## Landing
+
+Marketing site lives in [`apps/web`](apps/web) (Next.js App Router + Tailwind).
+
+```bash
+cd apps/web
+npm install
+npm run dev    # http://localhost:3000
+npm run build
+```
+
 ## Later (not Phase 1)
 
 A hosted companion, if any, should follow
