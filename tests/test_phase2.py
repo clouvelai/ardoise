@@ -175,6 +175,11 @@ class InvoiceAndReconcileTests(unittest.TestCase):
         self.assertIn("B. T0 allocation", md)
         self.assertIn("19.50", md)
         self.assertRegex(md, r"\|\s*anthropic\s*\|.*\|\s*invoice\s*\|")
+        self.assertIn("T2 billed events · T1 seat usage · T0 local estimate · Invoice paste-in", md)
+        self.assertIn("[T0]", md)
+        self.assertIn("badge invoice", html)
+        self.assertIn("@media print", html)
+        self.assertIn("#7C5CFF", html)
         self.assertIn("A_vendor", csv_text)
         self.assertIn("B_t0_allocation", csv_text)
 
