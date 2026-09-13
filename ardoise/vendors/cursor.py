@@ -69,7 +69,10 @@ def discover_cursor_files(root: Path) -> list[Path]:
         files.extend(p for p in root.glob(pattern) if p.is_file())
     seen: set[Path] = set()
     out: list[Path] = []
+    skip_parts = {"agent-transcripts", "subagents"}
     for path in files:
+        if any(part in skip_parts for part in path.parts):
+            continue
         resolved = path.resolve()
         if resolved in seen:
             continue

@@ -203,6 +203,9 @@ class InvoiceAndReconcileTests(unittest.TestCase):
         self.assertIn("#7C5CFF", html)
         self.assertIn("A_vendor", csv_text)
         self.assertIn("B_t0_allocation", csv_text)
+        self.assertNotIn("### Lines", md)
+        self.assertIn(".csv", md)
+        self.assertNotIn("<h3>Lines</h3>", html)
 
     def test_invoice_add_idempotent_on_vendor_cycle_person(self) -> None:
         first = invoice.add(vendor="anthropic", cycle="2026-09", usd_cents=1000, notes="stripe inv_1")
