@@ -19,9 +19,14 @@ export function Footer() {
         <Link href="/#privacy" className="transition hover:text-ink">
           Privacy
         </Link>
-        <Link href="/#install" className="transition hover:text-ink">
+        <a
+          href="https://github.com/clouvelai/ardoise#install"
+          className="transition hover:text-ink"
+          target="_blank"
+          rel="noreferrer"
+        >
           Install
-        </Link>
+        </a>
       </div>
     </footer>
   );

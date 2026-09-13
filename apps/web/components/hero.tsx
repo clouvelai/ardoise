@@ -25,12 +25,15 @@ export function Hero() {
                 →
               </span>
             </Link>
-            <a
-              href="#install"
+            <Link
+              href="/pricing"
               className="inline-flex items-center rounded-full bg-white px-6 py-3.5 text-[15px] font-semibold text-ink shadow-[0_1px_2px_rgba(23,20,31,0.06)] ring-1 ring-black/5 transition hover:bg-mist"
             >
-              Install
-            </a>
+              See pricing
+              <span aria-hidden className="ml-1.5">
+                →
+              </span>
+            </Link>
           </div>
           <p className="mt-4 text-[13px] text-muted">
             No credit card required.
