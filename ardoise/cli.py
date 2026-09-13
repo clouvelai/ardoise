@@ -78,6 +78,11 @@ def build_parser() -> argparse.ArgumentParser:
     bf = sub.add_parser("backfill", help="Ingest ~/.claude and ~/.cursor logs")
     bf.add_argument("--claude-root", help="Override Claude config root")
     bf.add_argument("--cursor-root", help="Override Cursor config root")
+    bf.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-read files even when size and mtime match the last ingest",
+    )
     bf.add_argument("--json", action="store_true")
 
     cap = sub.add_parser("capture", help="Drain hook queue or ingest stdin")
@@ -215,17 +220,23 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.cmd == "backfill":
+            progress = None
+            if sys.stderr.isatty() and not args.json:
+                progress = backfill_mod.tty_progress
             result = backfill_mod.backfill(
                 claude=Path(args.claude_root).expanduser() if args.claude_root else None,
                 cursor=Path(args.cursor_root).expanduser() if args.cursor_root else None,
+                force=bool(args.force),
+                progress=progress,
             )
+            if progress is not None:
+                sys.stderr.write("\n")
             if args.json:
                 print(json.dumps(result, indent=2))
             else:
                 print(
-                    "backfill inserted={inserted} updated={updated} skipped={skipped} files={files}".format(
-                        **result
-                    )
+                    "backfill inserted={inserted} updated={updated} skipped={skipped} "
+                    "files={files} skipped_files={skipped_files}".format(**result)
                 )
             return 0
 
