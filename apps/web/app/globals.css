@@ -32,15 +32,16 @@ body {
 @keyframes perch {
   0%,
   100% {
-    transform: translateY(0);
+    transform: rotate(0deg);
   }
   50% {
-    transform: translateY(-5px);
+    transform: rotate(-1.8deg);
   }
 }
 
 .mascot-bob {
-  animation: perch 3.6s ease-in-out infinite;
+  transform-origin: 58% 100%;
+  animation: perch 3.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

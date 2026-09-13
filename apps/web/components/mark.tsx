@@ -26,48 +26,77 @@ export function SlateMark({ className }: { className?: string }) {
 export function Mascot({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 80 88"
+      viewBox="0 0 200 220"
+      preserveAspectRatio="xMidYMax meet"
       className={className}
       aria-hidden
       fill="none"
     >
-      <ellipse cx="40" cy="84" rx="16" ry="3.2" fill="#5B21B6" opacity="0.12" />
       <path
-        d="M18 48c0-14 10.5-24 24.5-24 9.2 0 17.2 5.2 21 13.2 2.6-1.4 6.6-1.2 8.8 1.6 2.4 3.1.6 7.4-2.8 8.8 1.8 3.4 2.4 7.4 1.4 11.4C67.2 73 55 80 41.2 80 26 80 18 68.6 18 56.2V48Z"
-        fill="#6D28D9"
+        d="M62 150c-22 8-38 28-28 46 3 5 11 4 13-2 4-12 10-20 22-26"
+        fill="#8B6CE8"
+      />
+      <ellipse cx="32" cy="190" rx="14" ry="12" fill="#A78BFA" />
+      <ellipse cx="26" cy="186" rx="6" ry="5" fill="#C4B5FD" />
+
+      <ellipse cx="70" cy="184" rx="28" ry="24" fill="#8B6CE8" />
+      <ellipse cx="130" cy="184" rx="28" ry="24" fill="#8B6CE8" />
+      <ellipse cx="100" cy="168" rx="50" ry="40" fill="#A78BFA" />
+      <ellipse cx="100" cy="176" rx="32" ry="28" fill="#F4F0FC" />
+
+      <ellipse cx="80" cy="206" rx="18" ry="13" fill="#C4B5FD" />
+      <ellipse cx="120" cy="206" rx="18" ry="13" fill="#C4B5FD" />
+      <ellipse cx="80" cy="208" rx="12" ry="8" fill="#F8F4FF" />
+      <ellipse cx="120" cy="208" rx="12" ry="8" fill="#F8F4FF" />
+      <ellipse cx="80" cy="210" rx="4.4" ry="3.2" fill="#E8A878" />
+      <ellipse cx="120" cy="210" rx="4.4" ry="3.2" fill="#E8A878" />
+      <ellipse cx="72" cy="205" rx="2.2" ry="2.6" fill="#E8A878" />
+      <ellipse cx="80" cy="203" rx="2.2" ry="2.6" fill="#E8A878" />
+      <ellipse cx="88" cy="205" rx="2.2" ry="2.6" fill="#E8A878" />
+      <ellipse cx="112" cy="205" rx="2.2" ry="2.6" fill="#E8A878" />
+      <ellipse cx="120" cy="203" rx="2.2" ry="2.6" fill="#E8A878" />
+      <ellipse cx="128" cy="205" rx="2.2" ry="2.6" fill="#E8A878" />
+
+      <circle cx="52" cy="86" r="30" fill="#8B6CE8" />
+      <circle cx="148" cy="86" r="30" fill="#8B6CE8" />
+      <circle cx="64" cy="52" r="26" fill="#9D7EF0" />
+      <circle cx="136" cy="52" r="26" fill="#9D7EF0" />
+      <circle cx="100" cy="42" r="28" fill="#A78BFA" />
+      <circle cx="38" cy="108" r="20" fill="#9D7EF0" />
+      <circle cx="162" cy="108" r="20" fill="#9D7EF0" />
+      <circle cx="56" cy="128" r="16" fill="#B8A0F8" />
+      <circle cx="144" cy="128" r="16" fill="#B8A0F8" />
+      <circle cx="100" cy="34" r="10" fill="#C4B5FD" />
+
+      <ellipse cx="62" cy="40" rx="16" ry="18" fill="#A78BFA" />
+      <ellipse cx="138" cy="40" rx="16" ry="18" fill="#A78BFA" />
+      <ellipse cx="62" cy="43" rx="8.5" ry="10" fill="#F3C4C8" />
+      <ellipse cx="138" cy="43" rx="8.5" ry="10" fill="#F3C4C8" />
+
+      <circle cx="100" cy="92" r="46" fill="#C4B5FD" />
+      <ellipse cx="100" cy="102" rx="34" ry="30" fill="#F8F4FF" />
+
+      <ellipse cx="70" cy="108" rx="11" ry="7" fill="#F4C4D0" opacity="0.75" />
+      <ellipse cx="130" cy="108" rx="11" ry="7" fill="#F4C4D0" opacity="0.75" />
+
+      <ellipse cx="82" cy="90" rx="8.5" ry="10.5" fill="#1F1633" />
+      <ellipse cx="118" cy="90" rx="8.5" ry="10.5" fill="#1F1633" />
+      <circle cx="79" cy="86" r="3" fill="white" />
+      <circle cx="115" cy="86" r="3" fill="white" />
+      <circle cx="85" cy="94" r="1.3" fill="white" opacity="0.75" />
+      <circle cx="121" cy="94" r="1.3" fill="white" opacity="0.75" />
+
+      <ellipse cx="100" cy="112" rx="5.6" ry="4.2" fill="#E8A070" />
+      <path
+        d="M100 116.2v3.2"
+        stroke="#D48960"
+        strokeWidth="1.4"
+        strokeLinecap="round"
       />
       <path
-        d="M28 62c2.4 8.6 12.8 13.2 22.4 8.4 6.4-3.2 9.6-9.4 8.6-15.6"
-        fill="#7C5CFF"
-      />
-      <ellipse cx="36" cy="58" rx="11" ry="13" fill="#EDE9FE" />
-      <circle cx="44" cy="34" r="13" fill="#5B21B6" />
-      <path d="M55.5 35.5 66 32.2l-8.2 10.4-2.3-7.1Z" fill="#F59E0B" />
-      <circle cx="47.2" cy="32.2" r="4.1" fill="white" />
-      <circle cx="48.3" cy="32.4" r="2.05" fill="#17141F" />
-      <circle cx="49.1" cy="31.5" r="0.7" fill="white" />
-      <path
-        d="M40 17c1.2-6.4 5.6-9.4 8.8-8.6 1.4.4 2.2 2.2 1.4 4.2"
+        d="M88 124c4 4.6 8 6.4 12 6.4s8-1.8 12-6.4"
         stroke="#5B21B6"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M47 15.5c1.6-5.2 5.8-7.2 8.4-5.8 1.6.8 1.8 3.2.6 5.4"
-        stroke="#6D28D9"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      <path
-        d="M26 72.5c2.2 3.4 1.4 6.2-1.2 7.2"
-        stroke="#4C1D95"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <path
-        d="M33 74c1.6 3.6.6 6.4-2 7.4"
-        stroke="#4C1D95"
-        strokeWidth="2.4"
+        strokeWidth="2.2"
         strokeLinecap="round"
       />
     </svg>
