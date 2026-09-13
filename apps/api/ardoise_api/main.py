@@ -107,6 +107,7 @@ def create_app(
             "version": __version__,
             "stripe_mock": settings.stripe_mock,
             "lab_auth_bypass": settings.lab_auth_bypass_enabled,
+            "supabase_otp_configured": settings.supabase_otp_configured,
             "store": "sqlite",
             "database_url_configured": bool(settings.database_url),
             "urls": {

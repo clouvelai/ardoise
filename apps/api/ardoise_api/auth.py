@@ -16,6 +16,7 @@ from ardoise_api.settings import Settings
 from ardoise_api.store import Store
 
 _jwks_clients: dict[str, PyJWKClient] = {}
+_ASYMMETRIC_ALGS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA")
 
 
 class AuthError(Exception):
@@ -41,10 +42,14 @@ def _normalize_email(email: str) -> str:
 
 
 def _gotrue_headers(settings: Settings) -> dict[str, str]:
+    """Gotrue OTP: `apikey` is required. Bearer copies the same key (legacy JWT or `sb_*`)."""
     key = settings.supabase_auth_key
     return {
         "Content-Type": "application/json",
         "apikey": key,
+        # Legacy eyJ… keys must be Bearer. Newer sb_publishable_/sb_secret_
+        # keys are not JWTs; they live on `apikey`. Kong still accepts a copy
+        # on Authorization for unauthenticated OTP (same as supabase-js).
         "Authorization": f"Bearer {key}",
     }
 
@@ -58,9 +63,11 @@ def kickoff_otp(settings: Settings, email: str) -> dict[str, Any]:
             "mocked": True,
             "email": email,
             "detail": (
-                "SUPABASE_URL / SUPABASE_ANON_KEY unset. Browser OTP is skipped. "
-                "Mint an HS256 JWT with SUPABASE_JWT_SECRET for /v1/me, or enable "
-                "lab bypass only in non-production."
+                "SUPABASE_URL and a publishable/anon key unset. Browser OTP is "
+                "skipped. Set SUPABASE_ANON_KEY or SUPABASE_PUBLISHABLE_KEY "
+                "(legacy eyJ… or sb_publishable_…). Mint an HS256 JWT with "
+                "SUPABASE_JWT_SECRET for /v1/me, or enable lab bypass only in "
+                "non-production."
             ),
         }
     payload = json.dumps({"email": email, "create_user": True}).encode("utf-8")
@@ -113,15 +120,16 @@ def verify_email_otp(
         raise AuthError("one-time code required", 400)
 
     if not settings.supabase_otp_configured:
-        if not settings.supabase_jwt_secret:
+        if not settings.has_hs256_secret:
             return {
                 "ok": False,
                 "mocked": True,
                 "email": email,
                 "detail": (
-                    "SUPABASE_URL / SUPABASE_ANON_KEY unset. OTP verify is not "
-                    "configured. Set those keys, or SUPABASE_JWT_SECRET to mint "
-                    "a local mock session."
+                    "SUPABASE_URL and a publishable/anon key unset. OTP verify "
+                    "is not configured. Set SUPABASE_ANON_KEY or "
+                    "SUPABASE_PUBLISHABLE_KEY, or a raw SUPABASE_JWT_SECRET "
+                    "(not a JWT or sb_* key) to mint a local mock session."
                 ),
             }
         access_token = mint_mock_access_token(settings, email)
@@ -207,33 +215,73 @@ def verify_email_otp(
     }
 
 
-def decode_access_token(settings: Settings, token: str) -> dict[str, Any]:
-    options = {"require": ["exp", "sub"]}
-    audience = "authenticated"
+def _token_header(token: str) -> dict[str, Any]:
+    try:
+        header = jwt.get_unverified_header(token)
+    except jwt.PyJWTError:
+        return {}
+    return header if isinstance(header, dict) else {}
+
+
+def _jwks_client(settings: Settings) -> PyJWKClient:
+    url = settings.jwks_url
+    if not url:
+        raise AuthError("API has no SUPABASE_URL JWKS")
+    client = _jwks_clients.get(url)
+    if client is None:
+        client = PyJWKClient(url, cache_jwk_set=True)
+        _jwks_clients[url] = client
+    return client
+
+
+def _decode_kwargs(settings: Settings) -> dict[str, Any]:
     issuer = settings.jwt_issuer or None
-    if settings.supabase_jwt_secret:
+    return {
+        "audience": "authenticated",
+        "issuer": issuer,
+        "options": {"require": ["exp", "sub"], "verify_iss": bool(issuer)},
+    }
+
+
+def _prefer_jwks(settings: Settings, header: dict[str, Any]) -> bool:
+    """Prefer JWKS when a signing key id is present and no HS256 secret yet."""
+    if not settings.jwks_url:
+        return False
+    alg = str(header.get("alg") or "")
+    kid = header.get("kid")
+    if alg in _ASYMMETRIC_ALGS:
+        return True
+    if kid and not settings.has_hs256_secret:
+        return True
+    if not settings.has_hs256_secret:
+        return True
+    return False
+
+
+def _decode_via_jwks(settings: Settings, token: str) -> dict[str, Any]:
+    client = _jwks_client(settings)
+    key = client.get_signing_key_from_jwt(token)
+    return jwt.decode(
+        token,
+        key.key,
+        algorithms=list(_ASYMMETRIC_ALGS),
+        **_decode_kwargs(settings),
+    )
+
+
+def decode_access_token(settings: Settings, token: str) -> dict[str, Any]:
+    header = _token_header(token)
+    if _prefer_jwks(settings, header):
+        return _decode_via_jwks(settings, token)
+    if settings.has_hs256_secret:
         return jwt.decode(
             token,
             settings.supabase_jwt_secret,
             algorithms=["HS256"],
-            audience=audience,
-            issuer=issuer,
-            options={**options, "verify_iss": bool(issuer)},
+            **_decode_kwargs(settings),
         )
     if settings.jwks_url:
-        client = _jwks_clients.get(settings.jwks_url)
-        if client is None:
-            client = PyJWKClient(settings.jwks_url, cache_jwk_set=True)
-            _jwks_clients[settings.jwks_url] = client
-        key = client.get_signing_key_from_jwt(token)
-        return jwt.decode(
-            token,
-            key.key,
-            algorithms=["RS256", "ES256", "EdDSA"],
-            audience=audience,
-            issuer=issuer,
-            options={**options, "verify_iss": bool(issuer)},
-        )
+        return _decode_via_jwks(settings, token)
     raise AuthError("API has no SUPABASE_JWT_SECRET or SUPABASE_URL JWKS")
 
 

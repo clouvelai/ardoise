@@ -7,9 +7,9 @@ Follows [`docs/saas-scaffold.md`](../../docs/saas-scaffold.md):
 
 | Concern | Pattern |
 |---|---|
-| Auth | **Account first.** Supabase **email OTP** via Gotrue HTTP (`POST /v1/auth/otp` + `/verify`). API verifies `Authorization: Bearer` JWT (HS256 `SUPABASE_JWT_SECRET` or JWKS). Email/`sub` → `ops.accounts.external_key`. No card at signup. No passwords. No supabase-js. |
+| Auth | **Account first.** Supabase **email OTP** via Gotrue HTTP (`POST /v1/auth/otp` + `/verify`). API verifies `Authorization: Bearer` JWT (HS256 `SUPABASE_JWT_SECRET` when it is a raw secret, otherwise JWKS). Email/`sub` → `ops.accounts.external_key`. No card at signup. No passwords. No supabase-js. |
 | Billing | Stripe **Checkout Sessions** `mode=subscription` for Team ($39/mo) / Business ($149/mo). `POST /v1/billing/checkout` + `/v1/billing/webhook`. Not Connect. Invoice-grade claims are **Business+**. Legacy `mode=payment` credits stay on `/v1/checkout/sessions`. |
-| Mock | Missing Supabase keys → OTP mock (verify mints a JWT when `SUPABASE_JWT_SECRET` is set). `STRIPE_MOCK=true` **or** missing `STRIPE_SECRET_KEY` → local mock Checkout. |
+| Mock | Missing Supabase URL or publishable/anon key → OTP mock (verify mints a JWT when `SUPABASE_JWT_SECRET` is a raw HMAC secret). `STRIPE_MOCK=true` **or** missing `STRIPE_SECRET_KEY` → local mock Checkout. |
 | Sync | Stub only. Future `POST /v1/usage/sync` accepts already-priced JSONL (`bin/ardoise export`) after OTP. Never upload `ledger.db`. |
 
 ## Run locally with mocks
@@ -26,9 +26,11 @@ python -m ardoise_api
 # http://127.0.0.1:8787/health
 ```
 
-Postgres is optional for mock smoke. When `DATABASE_URL` is unset, the API uses
-SQLite at `.data/local.db`. Apply `migrations/*.sql` on the Supabase primary
-when you stand up a real project.
+Postgres is optional for mock smoke **and** for Auth OTP e2e. OTP request/verify
+talk to Gotrue over HTTP; they do not need `DATABASE_URL` or the database
+password. When `DATABASE_URL` is unset, accounts live in SQLite at
+`.data/local.db`. Apply `migrations/*.sql` on the Supabase primary only when
+you want hosted Postgres.
 
 ### Offline smoke
 
@@ -65,9 +67,9 @@ Open the mock URL and click **Pay (mock)**, or `POST /v1/stripe/webhook` with
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/health` | no | `stripe_mock`, `lab_auth_bypass` |
-| `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the anon (or server-only service role) key. Mocked if unset. |
-| `POST` | `/v1/auth/otp/verify` | no | Forwards to `{SUPABASE_URL}/auth/v1/verify`. Creates a **free** account (no card). Mock: mints HS256 JWT when `SUPABASE_JWT_SECRET` is set; otherwise returns “not configured”. |
+| `GET` | `/health` | no | `stripe_mock`, `lab_auth_bypass`, `supabase_otp_configured` (no secrets) |
+| `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the publishable/anon (or server-only secret) key. Accepts legacy `eyJ…` JWTs and `sb_publishable_…` / `sb_secret_…`. Mocked if URL or key unset. |
+| `POST` | `/v1/auth/otp/verify` | no | Forwards to `{SUPABASE_URL}/auth/v1/verify`. Creates a **free** account (no card). Mock: mints HS256 JWT when a raw `SUPABASE_JWT_SECRET` is set; otherwise returns “not configured”. |
 | `GET` | `/v1/me` | Bearer JWT | Account + `plan` + `invoice_grade` (Business+) + credit balance |
 | `POST` | `/v1/billing/checkout` | Bearer JWT | Team/Business Checkout Session (`mode=subscription`). Price IDs: `STRIPE_PRICE_TEAM` / `STRIPE_PRICE_BUSINESS`. |
 | `POST` | `/v1/billing/webhook` | Stripe signature (live) | Idempotent `checkout.session.completed` (sets plan) |
@@ -83,7 +85,26 @@ Lab bypass (`ARDOISE_LAB_AUTH_BYPASS=true` + `X-Ardoise-Lab-User: email`) is
 ## Env
 
 See [`.env.example`](.env.example). Stripe secrets stay on this process. The
-web app may ship `NEXT_PUBLIC_SUPABASE_URL` + anon key only.
+web app may ship `NEXT_PUBLIC_SUPABASE_URL` + publishable/anon key only.
+
+### Dashboard → env (Ardoise project only)
+
+Live Auth project ref `yokxvbgzcoaayahouhsd` (not Arbusteia). Copy values into
+the **host secret store** or local `.env` — never commit them.
+
+| Dashboard | Env var(s) | Notes |
+|---|---|---|
+| Project Settings → Data API → Project URL | `SUPABASE_URL` | `https://yokxvbgzcoaayahouhsd.supabase.co` |
+| API Keys → Publishable (`sb_publishable_…`) | `SUPABASE_ANON_KEY` **or** `SUPABASE_PUBLISHABLE_KEY` | Preferred for OTP (`apikey` header) |
+| API Keys → Legacy anon JWT (`eyJ…`) | `SUPABASE_ANON_KEY` | Same slot as publishable |
+| API Keys → Secret (`sb_secret_…`) | `SUPABASE_SERVICE_ROLE_KEY` **or** `SUPABASE_SECRET_KEY` | Server-only fallback. Never send to `apps/web` |
+| API Keys → Legacy service_role JWT | `SUPABASE_SERVICE_ROLE_KEY` | Same slot as secret |
+| JWT Keys → JWT Secret (HS256) | `SUPABASE_JWT_SECRET` | Optional. Skip if the Dashboard only shows a signing **key id** — verify via JWKS |
+| Database → URI | `DATABASE_URL` | Optional. Not required for Auth OTP |
+
+JWKS fallback: `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`. A JWT-shaped
+or `sb_*` value in `SUPABASE_JWT_SECRET` is ignored as an HMAC secret so the
+API does not try to HS256-verify with an API key.
 
 ## Web CTA
 

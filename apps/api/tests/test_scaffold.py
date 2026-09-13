@@ -98,6 +98,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(body["service"], "ardoise-api")
         self.assertTrue(body["stripe_mock"])
         self.assertFalse(body["lab_auth_bypass"])
+        self.assertFalse(body["supabase_otp_configured"])
 
     def test_me_requires_bearer(self) -> None:
         client = self._cli()

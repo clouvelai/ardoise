@@ -9,7 +9,9 @@ psql "$DATABASE_URL" -f migrations/003_subscriptions.sql
 ```
 
 Local mock smoke (`STRIPE_MOCK=true` or no `STRIPE_SECRET_KEY`) uses SQLite
-and does not need Postgres. Schema is equivalent: `accounts` (incl. `plan`),
+and does not need Postgres. Auth OTP e2e is the same: Gotrue is HTTP-only,
+so `DATABASE_URL` / the DB password stay optional until you want hosted
+accounts. Schema is equivalent: `accounts` (incl. `plan`),
 `customers`, `checkout_sessions` (incl. `mode` / subscription plan),
 `credit_ledger`, `synced_usage`.
 
