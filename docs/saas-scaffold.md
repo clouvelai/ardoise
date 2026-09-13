@@ -18,7 +18,8 @@ Arbusteia humans sign in with **Supabase Auth email OTP**:
    Dashboard only shows a signing key id).
 4. Email (or `sub`) becomes the account `external_key`. Customer rows and the
    credit ledger live in **Postgres** (Supabase primary, not a replica) when
-   `DATABASE_URL` is set. Auth OTP itself does not need the database password.
+   `DATABASE_URL` is set. A set-but-unreachable URL must fail startup — do not
+   fall back to SQLite. Auth OTP itself does not need the database password.
 
 A hosted Ardoise does the same: OTP through `apps/api` (`POST /v1/auth/otp`
 and `/v1/auth/otp/verify`), JWT on later calls, Postgres as the system of

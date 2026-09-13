@@ -73,6 +73,7 @@ class Settings:
     supabase_service_role_key: str = ""
     stripe_price_team: str = ""
     stripe_price_business: str = ""
+    store_force: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -91,8 +92,9 @@ class Settings:
                 "SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY"
             ),
             supabase_jwt_secret=_env("SUPABASE_JWT_SECRET"),
-            database_url=os.environ.get("DATABASE_URL", ""),
-            sqlite_path=os.environ.get("ARDOISE_API_SQLITE", ""),
+            database_url=_env("DATABASE_URL"),
+            sqlite_path=_env("ARDOISE_API_SQLITE"),
+            store_force=_env("ARDOISE_API_STORE"),
             stripe_secret_key=os.environ.get("STRIPE_SECRET_KEY", ""),
             stripe_webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", ""),
             stripe_price_lookup_key=os.environ.get(

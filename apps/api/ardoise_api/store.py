@@ -1,4 +1,4 @@
-"""Local SQLite store matching ops.* (Postgres migrations are the source of truth)."""
+"""Account/credit store. SQLite locally; Postgres (ops.*) when DATABASE_URL is set."""
 
 from __future__ import annotations
 
@@ -7,6 +7,84 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+PG_BOOTSTRAP = (
+    "CREATE SCHEMA IF NOT EXISTS ops",
+    """
+    CREATE TABLE IF NOT EXISTS ops.accounts (
+        id uuid PRIMARY KEY,
+        external_key text NOT NULL UNIQUE,
+        email text,
+        supabase_sub text,
+        plan text NOT NULL DEFAULT 'free',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ops.customers (
+        id uuid PRIMARY KEY,
+        account_id uuid NOT NULL UNIQUE REFERENCES ops.accounts (id) ON DELETE CASCADE,
+        stripe_customer_id text UNIQUE,
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ops.checkout_sessions (
+        id uuid PRIMARY KEY,
+        account_id uuid REFERENCES ops.accounts (id) ON DELETE SET NULL,
+        stripe_session_id text NOT NULL UNIQUE,
+        amount_cents integer NOT NULL,
+        credits integer NOT NULL,
+        currency text NOT NULL DEFAULT 'usd',
+        status text NOT NULL DEFAULT 'open',
+        checkout_url text,
+        fulfilled_at timestamptz,
+        mode text NOT NULL DEFAULT 'payment',
+        plan text,
+        stripe_subscription_id text,
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ops.credit_ledger (
+        id uuid PRIMARY KEY,
+        account_id uuid NOT NULL REFERENCES ops.accounts (id) ON DELETE CASCADE,
+        amount integer NOT NULL,
+        reason text NOT NULL,
+        checkout_session_id uuid UNIQUE REFERENCES ops.checkout_sessions (id),
+        created_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ops.synced_usage (
+        id uuid PRIMARY KEY,
+        account_id uuid NOT NULL REFERENCES ops.accounts (id) ON DELETE CASCADE,
+        source text,
+        message_id text,
+        request_id text,
+        project text,
+        model text,
+        occurred_at timestamptz,
+        input_tokens integer,
+        output_tokens integer,
+        cache_read_tokens integer,
+        cache_creation_tokens integer,
+        cost_usd numeric,
+        session_id text,
+        payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (account_id, message_id, request_id)
+    )
+    """,
+    "ALTER TABLE ops.accounts ADD COLUMN IF NOT EXISTS plan text NOT NULL DEFAULT 'free'",
+    "ALTER TABLE ops.checkout_sessions ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'payment'",
+    "ALTER TABLE ops.checkout_sessions ADD COLUMN IF NOT EXISTS plan text",
+    "ALTER TABLE ops.checkout_sessions ADD COLUMN IF NOT EXISTS stripe_subscription_id text",
+    "CREATE INDEX IF NOT EXISTS checkout_sessions_account_idx ON ops.checkout_sessions (account_id)",
+    "CREATE INDEX IF NOT EXISTS credit_ledger_account_idx ON ops.credit_ledger (account_id)",
+    "CREATE INDEX IF NOT EXISTS synced_usage_account_idx ON ops.synced_usage (account_id)",
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -73,32 +151,104 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _row(cur: sqlite3.Row | None) -> dict[str, Any] | None:
+def _as_dict(row: Any) -> dict[str, Any]:
+    data = dict(row)
+    for key, value in list(data.items()):
+        if isinstance(value, uuid.UUID):
+            data[key] = str(value)
+        elif isinstance(value, datetime):
+            data[key] = value.isoformat()
+    return data
+
+
+def _row(cur: Any) -> dict[str, Any] | None:
     if cur is None:
         return None
-    return dict(cur)
+    return _as_dict(cur)
+
+
+class _Conn:
+    """Adapt ``?`` placeholders for Postgres; pass SQLite through."""
+
+    def __init__(self, raw: Any, backend: str) -> None:
+        self._raw = raw
+        self.backend = backend
+
+    def execute(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
+        if self.backend == "postgres":
+            sql = sql.replace("?", "%s")
+        return self._raw.execute(sql, params)
+
+    def executescript(self, sql: str) -> Any:
+        return self._raw.executescript(sql)
+
+    def __enter__(self) -> _Conn:
+        self._raw.__enter__()
+        return self
+
+    def __exit__(self, *exc: Any) -> Any:
+        return self._raw.__exit__(*exc)
 
 
 class Store:
-    def __init__(self, path: str | Path) -> None:
+    def __init__(
+        self,
+        path: str | Path | None = None,
+        *,
+        database_url: str = "",
+    ) -> None:
+        url = (database_url or "").strip()
+        if url:
+            self.backend = "postgres"
+            self.path = ""
+            self.dsn = url
+            self._init_postgres()
+            return
+        if path is None:
+            raise ValueError("Store requires a sqlite path or database_url")
+        self.backend = "sqlite"
         self.path = str(path)
+        self.dsn = ""
         if self.path not in {":memory:", "file:mem?mode=memory&cache=shared"}:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._init()
 
-    def connect(self) -> sqlite3.Connection:
+    def connect(self) -> _Conn:
+        if self.backend == "postgres":
+            from ardoise_api.db import connect_postgres
+
+            raw = connect_postgres(self.dsn)
+            raw.execute("SET search_path TO ops, public")
+            return _Conn(raw, "postgres")
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
-        return conn
+        return _Conn(conn, "sqlite")
 
     def _init(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
             self._ensure_columns(conn)
 
+    def _init_postgres(self) -> None:
+        from ardoise_api.db import open_postgres
+
+        raw, dsn = open_postgres(self.dsn)
+        self.dsn = dsn
+        try:
+            raw.execute("SET search_path TO ops, public")
+            for stmt in PG_BOOTSTRAP:
+                raw.execute(stmt)
+            raw.execute("SELECT 1")
+            raw.commit()
+        except Exception:
+            raw.rollback()
+            raise
+        finally:
+            raw.close()
+
     @staticmethod
-    def _ensure_columns(conn: sqlite3.Connection) -> None:
+    def _ensure_columns(conn: Any) -> None:
         patches = (
             ("accounts", "plan", "TEXT NOT NULL DEFAULT 'free'"),
             ("checkout_sessions", "mode", "TEXT NOT NULL DEFAULT 'payment'"),
@@ -161,7 +311,7 @@ class Store:
                     "SELECT * FROM accounts WHERE id = ?", (account_id,)
                 ).fetchone()
         assert row is not None
-        return dict(row)
+        return _as_dict(row)
 
     def credit_balance(self, account_id: str) -> int:
         with self.connect() as conn:
@@ -215,7 +365,7 @@ class Store:
                 "SELECT * FROM checkout_sessions WHERE id = ?", (session_id,)
             ).fetchone()
         assert row is not None
-        return dict(row)
+        return _as_dict(row)
 
     def get_checkout_by_stripe_id(self, stripe_session_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -13,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ardoise_api import __version__
 from ardoise_api.auth import AuthError, kickoff_otp, require_account, verify_email_otp
+from ardoise_api.db import open_store
 from ardoise_api.settings import Settings
 from ardoise_api.store import Store
 from ardoise_api.stripeutil import (
@@ -65,19 +65,12 @@ class UsageSyncBody(BaseModel):
     rows: list[dict[str, Any]] = Field(default_factory=list)
 
 
-def _default_sqlite(settings: Settings) -> str:
-    if settings.sqlite_path:
-        return settings.sqlite_path
-    here = Path(__file__).resolve().parent.parent / ".data" / "local.db"
-    return str(here)
-
-
 def create_app(
     settings: Settings | None = None,
     store: Store | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
-    store = store or Store(_default_sqlite(settings))
+    store = store or open_store(settings)
 
     app = FastAPI(
         title="Ardoise API",
@@ -108,7 +101,7 @@ def create_app(
             "stripe_mock": settings.stripe_mock,
             "lab_auth_bypass": settings.lab_auth_bypass_enabled,
             "supabase_otp_configured": settings.supabase_otp_configured,
-            "store": "sqlite",
+            "store": getattr(store, "backend", "sqlite"),
             "database_url_configured": bool(settings.database_url),
             "urls": {
                 "health": "/health",

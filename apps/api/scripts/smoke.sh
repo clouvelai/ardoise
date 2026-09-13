@@ -17,6 +17,9 @@ export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 export STRIPE_MOCK=true
 unset STRIPE_SECRET_KEY || true
+# Offline smoke stays on SQLite even if the host exported a live DATABASE_URL.
+unset DATABASE_URL || true
+export ARDOISE_API_STORE=sqlite
 # Isolate from a host that already has live Ardoise keys (offline mock only).
 unset SUPABASE_ANON_KEY SUPABASE_PUBLISHABLE_KEY || true
 unset SUPABASE_SERVICE_ROLE_KEY SUPABASE_SECRET_KEY || true

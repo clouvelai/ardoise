@@ -19,6 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+os.environ.pop("DATABASE_URL", None)
+os.environ.pop("ARDOISE_API_STORE", None)
+
 from ardoise_api.main import create_app  # noqa: E402
 from ardoise_api.settings import Settings  # noqa: E402
 from ardoise_api.store import Store  # noqa: E402
@@ -99,6 +102,8 @@ class ScaffoldTests(unittest.TestCase):
         self.assertTrue(body["stripe_mock"])
         self.assertFalse(body["lab_auth_bypass"])
         self.assertFalse(body["supabase_otp_configured"])
+        self.assertEqual(body["store"], "sqlite")
+        self.assertFalse(body["database_url_configured"])
 
     def test_me_requires_bearer(self) -> None:
         client = self._cli()

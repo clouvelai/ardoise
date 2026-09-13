@@ -11,7 +11,9 @@ psql "$DATABASE_URL" -f migrations/003_subscriptions.sql
 Local mock smoke (`STRIPE_MOCK=true` or no `STRIPE_SECRET_KEY`) uses SQLite
 and does not need Postgres. Auth OTP e2e is the same: Gotrue is HTTP-only,
 so `DATABASE_URL` / the DB password stay optional until you want hosted
-accounts. Schema is equivalent: `accounts` (incl. `plan`),
+accounts. When `DATABASE_URL` is set, the API also bootstraps `ops.*` on
+connect (001 + 003 shape) so Railway does not depend on a separate `psql`
+step. Schema is equivalent: `accounts` (incl. `plan`),
 `customers`, `checkout_sessions` (incl. `mode` / subscription plan),
 `credit_ledger`, `synced_usage`.
 
