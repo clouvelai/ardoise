@@ -3,10 +3,10 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Mascot } from "./mark";
 
-const STEPS = ["capture", "ledger", "invoice"] as const;
-type Step = (typeof STEPS)[number];
+export const WORKFLOW_STEPS = ["capture", "ledger", "invoice"] as const;
+export type WorkflowStep = (typeof WORKFLOW_STEPS)[number];
 
-const HOLD_MS: Record<Step, number> = {
+const HOLD_MS: Record<WorkflowStep, number> = {
   capture: 2600,
   ledger: 2800,
   invoice: 3600,
@@ -37,24 +37,52 @@ function reducedMotionSnapshot() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function WorkflowCard() {
+export function useWorkflowView({
+  paused = false,
+}: { paused?: boolean } = {}) {
   const reduced = useSyncExternalStore(
     subscribeReducedMotion,
     reducedMotionSnapshot,
     () => false,
   );
-  const [step, setStep] = useState<Step>("capture");
-  const view = reduced ? "invoice" : step;
+  const [step, setStep] = useState<WorkflowStep>("capture");
+  const [chosen, setChosen] = useState<WorkflowStep | null>(null);
 
   useEffect(() => {
-    if (reduced) {
+    if (paused || reduced) {
       return;
     }
     const timer = window.setTimeout(() => {
-      setStep((current) => STEPS[(STEPS.indexOf(current) + 1) % STEPS.length]);
+      setStep(
+        (current) =>
+          WORKFLOW_STEPS[
+            (WORKFLOW_STEPS.indexOf(current) + 1) % WORKFLOW_STEPS.length
+          ],
+      );
     }, HOLD_MS[step]);
     return () => window.clearTimeout(timer);
-  }, [reduced, step]);
+  }, [paused, reduced, step]);
+
+  const select = (next: WorkflowStep) => {
+    setChosen(next);
+    setStep(next);
+  };
+
+  const view = reduced ? (chosen ?? "invoice") : step;
+  return { view, select };
+}
+
+export function WorkflowCard({
+  view: controlledView,
+  className,
+}: {
+  view?: WorkflowStep;
+  className?: string;
+} = {}) {
+  const fallback = useWorkflowView({
+    paused: controlledView !== undefined,
+  });
+  const view = controlledView ?? fallback.view;
 
   const caption =
     view === "capture"
@@ -64,7 +92,12 @@ export function WorkflowCard() {
         : "Invoice ready";
 
   return (
-    <div className="relative mx-auto mt-16 w-full max-w-[440px] lg:mt-8">
+    <div
+      className={
+        className ??
+        "relative mx-auto mt-16 w-full max-w-[440px] lg:mt-8"
+      }
+    >
       <div
         className="mascot-bob pointer-events-none absolute -top-[106px] right-1 z-10 h-[124px] w-[96px] sm:-top-[122px] sm:right-2 sm:h-[144px] sm:w-[112px]"
         aria-hidden
@@ -108,13 +141,13 @@ export function WorkflowCard() {
   );
 }
 
-function Stepper({ step }: { step: Step }) {
-  const active = STEPS.indexOf(step);
+function Stepper({ step }: { step: WorkflowStep }) {
+  const active = WORKFLOW_STEPS.indexOf(step);
   const labels = { capture: "Capture", ledger: "Ledger", invoice: "Invoice" };
 
   return (
     <ol className="mt-5 flex items-center">
-      {STEPS.map((id, index) => {
+      {WORKFLOW_STEPS.map((id, index) => {
         const done = index < active;
         const current = index === active;
         return (
