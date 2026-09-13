@@ -28,6 +28,28 @@ def current_month(now: datetime | None = None) -> str:
     return stamp.strftime("%Y-%m")
 
 
+def _latest_month(conn) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT substr(occurred_at, 1, 7) AS month,
+               COUNT(*) AS n,
+               COALESCE(SUM(cost_usd), 0) AS usd
+        FROM events
+        WHERE occurred_at IS NOT NULL AND occurred_at != ''
+        GROUP BY 1
+        ORDER BY 1 DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if row is None or not row["month"]:
+        return None
+    return {
+        "month": str(row["month"]),
+        "entries": int(row["n"] or 0),
+        "cost_usd": round(float(row["usd"] or 0), 6),
+    }
+
+
 def _group(
     rows: list[dict[str, Any]],
     column: str,
@@ -97,6 +119,7 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
             lines=lines,
             config=cfg,
         )
+        latest = _latest_month(conn) if int(total_rows or 0) else None
 
     estimated = round(sum(float(row.get("estimated_usd") or row.get("cost_usd") or 0) for row in lines), 6)
     billed_usd = round(
@@ -117,7 +140,7 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
         "output_tokens": sum(int(row.get("output_tokens") or 0) for row in lines),
         "cache_read_tokens": sum(int(row.get("cache_read_tokens") or 0) for row in lines),
         "cache_creation_tokens": sum(int(row.get("cache_creation_tokens") or 0) for row in lines),
-        "by_project": _group(lines, "project"),
+        "by_project": _group(lines, "project", missing="unmapped"),
         "by_person": _group(lines, "person"),
         "by_source": _group(lines, "source"),
         "by_model": _group(lines, "model"),
@@ -135,6 +158,7 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
         "anomalies": anomalies,
         "roster": members,
         "filter": filt,
+        "latest_month": latest,
     }
     data["budgets"] = budget.evaluate(data, cfg)
     notes: list[str] = []
@@ -211,14 +235,32 @@ def render_text(data: dict[str, Any]) -> str:
         lines.append(
             f"  {row['source']:<32} est=${row['cost_usd']:.4f}  n={row['entries']}  T0"
         )
+    models = data.get("by_model") or []
+    if models:
+        lines.append("by model (T0 allocation)")
+        shown = models[:8]
+        for row in shown:
+            lines.append(
+                f"  {str(row.get('model') or ''):<32} est=${row['cost_usd']:.4f}  n={row['entries']}  T0"
+            )
+        extra = len(models) - len(shown)
+        if extra > 0:
+            lines.append(f"  … {extra} more")
     if attribution.any_present(data):
         lines.append("attribution (when present)")
         for dim in attribution.DIMENSIONS:
-            for row in attribution.present(data.get(f"by_{dim}"), dim):
+            rows = attribution.present(data.get(f"by_{dim}"), dim)
+            extra = 0
+            if len(rows) > 8:
+                extra = len(rows) - 8
+                rows = rows[:8]
+            for row in rows:
                 lines.append(
                     f"  {dim:<8} {str(row[dim]):<24} "
                     f"est=${row['cost_usd']:.4f}  n={row['entries']}"
                 )
+            if extra:
+                lines.append(f"  {dim:<8} … {extra} more")
     budgets = data.get("budgets") or {}
     if budgets.get("configured"):
         lines.append("soft caps (warn only — never blocks)")
@@ -246,4 +288,16 @@ def render_text(data: dict[str, Any]) -> str:
                 "  ardoise status",
             ]
         )
+    else:
+        latest = data.get("latest_month") or {}
+        latest_month = str(latest.get("month") or "")
+        if int(data.get("month_entries") or 0) == 0 and latest_month and latest_month != data.get("month"):
+            lines.extend(
+                [
+                    "",
+                    f"this month is empty. latest T0 activity is {latest_month}  "
+                    f"est=${float(latest.get('cost_usd') or 0):.2f}  n={int(latest.get('entries') or 0)}",
+                    f"  ardoise status --month {latest_month}",
+                ]
+            )
     return "\n".join(lines) + "\n"

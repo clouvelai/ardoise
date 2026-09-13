@@ -172,7 +172,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.estimate:
                 data["estimate"] = estimate_mod.price_ask(month=month)
             if args.json:
-                print(json.dumps(data, indent=2, ensure_ascii=True))
+                payload = {k: v for k, v in data.items() if k != "lines"}
+                print(json.dumps(payload, indent=2, ensure_ascii=True))
             else:
                 sys.stdout.write(status_mod.render_text(data))
                 if args.estimate:

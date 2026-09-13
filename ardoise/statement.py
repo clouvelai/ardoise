@@ -54,13 +54,6 @@ def _alloc_cell(value: Any, *, places: int = 2) -> str:
     return f"{float(value):.{places}f}"
 
 
-def _when(value: Any) -> str:
-    text = "" if value is None else str(value)
-    if len(text) >= 19 and text[10] == "T":
-        return f"{text[:10]} {text[11:16]}"
-    return text
-
-
 def _md_attribution(summary: dict[str, Any]) -> list[str]:
     if not attribution.any_present(summary):
         return []
@@ -73,6 +66,10 @@ def _md_attribution(summary: dict[str, Any]) -> list[str]:
         rows = attribution.present(summary.get(f"by_{dim}"), dim)
         if not rows:
             continue
+        extra = 0
+        if len(rows) > 8:
+            extra = len(rows) - 8
+            rows = rows[:8]
         lines += [
             f"### By {titles[dim].lower()}",
             "",
@@ -88,6 +85,8 @@ def _md_attribution(summary: dict[str, Any]) -> list[str]:
                     alloc=_alloc_cell(row.get("allocated_billed_usd")),
                 )
             )
+        if extra:
+            lines.append(f"| … | {extra} more | — | — |")
         lines.append("")
     return lines
 
@@ -101,6 +100,10 @@ def _html_attribution(summary: dict[str, Any], cell) -> str:
         rows = attribution.present(summary.get(f"by_{dim}"), dim)
         if not rows:
             continue
+        extra = 0
+        if len(rows) > 8:
+            extra = len(rows) - 8
+            rows = rows[:8]
         body = "".join(
             (
                 "<tr>"
@@ -112,6 +115,11 @@ def _html_attribution(summary: dict[str, Any], cell) -> str:
             )
             for r in rows
         )
+        if extra:
+            body += (
+                f'<tr><td>…</td><td class="num">{extra} more</td>'
+                '<td class="num">—</td><td class="num">—</td></tr>'
+            )
         blocks.append(
             f"<h3>By {titles[dim].lower()}</h3>"
             '<div class="alloc">'
@@ -241,27 +249,32 @@ def _md(summary: dict[str, Any]) -> str:
     if not summary.get("by_project"):
         lines.append("| (none) | 0 | 0.0000 | — | [T0] |")
 
+    models = summary.get("by_model") or []
+    if models:
+        lines += [
+            "",
+            "### By model",
+            "",
+            "| Model | Entries | T0 estimate USD | Allocated billed USD | Tier |",
+            "|---|---:|---:|---:|---|",
+        ]
+        for row in models:
+            lines.append(
+                "| {model} | {entries} | {est:.4f} | {alloc} | {tier} |".format(
+                    model=row.get("model") or "",
+                    entries=row["entries"],
+                    est=float(row["cost_usd"]),
+                    alloc=_alloc_cell(row.get("allocated_billed_usd")),
+                    tier=_tier_md(row.get("tier") or "T0"),
+                )
+            )
+
     lines += [
         "",
-        "### Lines",
+        "### Per-event detail",
         "",
-        "| When | Project | Source | Model | In | Out | T0 estimate | Allocated billed | Tier |",
-        "|---|---|---|---|---:|---:|---:|---:|---|",
+        f"Event-level rows are in `{summary.get('month')}.csv` next to this file.",
     ]
-    for row in summary.get("lines") or []:
-        lines.append(
-            "| {occurred_at} | {project} | {source} | {model} | {input_tokens} | {output_tokens} | {est:.4f} | {alloc} | {tier} |".format(
-                occurred_at=row.get("occurred_at") or "",
-                project=row.get("project") or "",
-                source=row.get("source") or "",
-                model=row.get("model") or "",
-                input_tokens=int(row.get("input_tokens") or 0),
-                output_tokens=int(row.get("output_tokens") or 0),
-                est=float(row.get("estimated_usd") or row.get("cost_usd") or 0),
-                alloc=_alloc_cell(row.get("allocated_billed_usd")),
-                tier=_tier_md(row.get("origin_tier") or row.get("tier") or "T0"),
-            )
-        )
     attr_bits = _md_attribution(summary)
     if attr_bits:
         lines += [
@@ -397,22 +410,18 @@ def _html_page(summary: dict[str, Any]) -> str:
         for r in summary.get("by_project") or []
     ) or '<tr><td colspan="5">(none)</td></tr>'
 
-    line_rows = "".join(
+    model_rows = "".join(
         (
             "<tr>"
-            f"<td>{cell(_when(r.get('occurred_at')))}</td>"
-            f"<td>{cell(r.get('project'))}</td>"
-            f"<td>{cell(r.get('source'))}</td>"
             f"<td>{cell(r.get('model'))}</td>"
-            f'<td class="num">{int(r.get("input_tokens") or 0)}</td>'
-            f'<td class="num">{int(r.get("output_tokens") or 0)}</td>'
-            f'<td class="num">{float(r.get("estimated_usd") or r.get("cost_usd") or 0):.4f}</td>'
+            f'<td class="num">{r["entries"]}</td>'
+            f'<td class="num">{float(r["cost_usd"]):.4f}</td>'
             f'<td class="num">{_alloc_cell(r.get("allocated_billed_usd"))}</td>'
-            f"<td>{_badge(r.get('origin_tier') or r.get('tier') or 'T0')}</td>"
+            f"<td>{_badge(r.get('tier') or 'T0')}</td>"
             "</tr>"
         )
-        for r in summary.get("lines") or []
-    ) or '<tr><td colspan="9">(none)</td></tr>'
+        for r in summary.get("by_model") or []
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -624,25 +633,8 @@ tbody tr:last-child td {{ border-bottom: none; }}
         <tbody>{project_rows}</tbody>
       </table>
     </div>
-    <h3>Lines</h3>
-    <div class="alloc lines">
-      <table>
-        <thead>
-          <tr>
-            <th>When</th>
-            <th>Project</th>
-            <th>Source</th>
-            <th>Model</th>
-            <th class="num">In</th>
-            <th class="num">Out</th>
-            <th class="num">T0 estimate</th>
-            <th class="num">Allocated billed</th>
-            <th>Tier</th>
-          </tr>
-        </thead>
-        <tbody>{line_rows}</tbody>
-      </table>
-    </div>
+    {"<h3>By model</h3><div class=\"alloc\"><table><thead><tr><th>Model</th><th class=\"num\">Entries</th><th class=\"num\">T0 estimate</th><th class=\"num\">Allocated billed</th><th>Tier</th></tr></thead><tbody>" + model_rows + "</tbody></table></div>" if model_rows else ""}
+    <p class="lede">Per-event rows are in <code>{month}.csv</code> next to this statement.</p>
   </section>
   {attr_block}
   {notes_block}
