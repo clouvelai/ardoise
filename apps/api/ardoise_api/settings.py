@@ -91,7 +91,7 @@ class Settings:
                 "SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY"
             ),
             supabase_jwt_secret=_env("SUPABASE_JWT_SECRET"),
-            database_url=os.environ.get("DATABASE_URL", ""),
+            database_url=(os.environ.get("DATABASE_URL") or "").strip(),
             sqlite_path=os.environ.get("ARDOISE_API_SQLITE", ""),
             stripe_secret_key=os.environ.get("STRIPE_SECRET_KEY", ""),
             stripe_webhook_secret=os.environ.get("STRIPE_WEBHOOK_SECRET", ""),
