@@ -10,34 +10,38 @@ machine. Prompts and credentials are never stored.
 ## Install
 
 ```bash
-./install.sh --no-plugin-manager
+./install.sh
+ardoise backfill
+ardoise status
 ```
 
 That copies shared capture hooks into `~/.claude/settings.json` and
-`~/.cursor/hooks.json` (no plugin marketplace). `bin/ardoise` is linked to
-`~/.local/bin/ardoise` when possible.
+`~/.cursor/hooks.json` (no plugin marketplace) and links `bin/ardoise` to
+`~/.local/bin/ardoise`. `--no-plugin-manager` is accepted and is the default.
+
+Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 
 ## Commands
 
 ```bash
-bin/ardoise status              # this UTC month
-bin/ardoise status --json
-bin/ardoise backfill            # Anthropic T0 JSONL + Cursor logs + hook queue
-bin/ardoise capture             # drain ~/.ardoise/queue
-bin/ardoise capture --stdin     # one hook event (used by plugins)
-bin/ardoise statement 2026-09   # writes MD + HTML + CSV
-bin/ardoise status --person alice
-bin/ardoise statement 2026-09 --seat alice   # YYYY-MM--alice.{md,html,csv}
-bin/ardoise export              # JSONL of usage rows
-bin/ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
-bin/ardoise vendor test anthropic  # T2a probe; skip if no Analytics API key
-bin/ardoise vendor pull anthropic  # ingest Analytics usage/cost when key is set
-bin/ardoise vendor test cursor  # T2 probe; T0-only if no Admin API key
-bin/ardoise vendor pull cursor  # ingest team usage events when key is set
-bin/ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
-bin/ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
-bin/ardoise estimate --model claude-sonnet-4-6 --input-tokens 1000 --output-tokens 400
-bin/ardoise estimate --stdin --json               # hook-friendly ask on stdin
+ardoise                         # status for this UTC month
+ardoise status --json
+ardoise backfill                # Anthropic T0 JSONL + Cursor logs + hook queue
+ardoise capture                 # drain ~/.ardoise/queue
+ardoise capture --stdin         # one hook event (used by plugins)
+ardoise statement 2026-09       # writes MD + HTML + CSV
+ardoise status --person alice
+ardoise statement 2026-09 --seat alice   # YYYY-MM--alice.{md,html,csv}
+ardoise export                  # JSONL of usage rows
+ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
+ardoise vendor test anthropic   # T2a probe; skip if no Analytics API key
+ardoise vendor pull anthropic   # ingest Analytics usage/cost when key is set
+ardoise vendor test cursor      # T2 probe; T0-only if no Admin API key
+ardoise vendor pull cursor      # ingest team usage events when key is set
+ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
+ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
+ardoise estimate --model claude-sonnet-4-6 --input-tokens 1000 --output-tokens 400
+ardoise estimate --stdin --json # hook-friendly ask on stdin
 ```
 
 Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.

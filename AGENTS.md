@@ -3,7 +3,7 @@
 Local AI spend ledger. Core is **Python 3 stdlib only**.
 
 ```bash
-./install.sh --no-plugin-manager
+./install.sh
 bin/ardoise status --json
 bin/ardoise backfill
 bin/ardoise statement YYYY-MM

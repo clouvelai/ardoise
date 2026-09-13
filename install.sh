@@ -1,42 +1,34 @@
 #!/bin/sh
-# Install Ardoise locally. Phase 1 path: --no-plugin-manager
-# Copies shared hooks into ~/.claude/settings.json and ~/.cursor/hooks.json.
+# Install Ardoise locally: CLI on PATH + Claude Code / Cursor capture hooks.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-NO_PLUGIN_MANAGER=0
 JSON=0
 
 for arg in "$@"; do
   case "$arg" in
-    --no-plugin-manager) NO_PLUGIN_MANAGER=1 ;;
+    --no-plugin-manager) ;; # default; kept so older scripts keep working
     --json) JSON=1 ;;
     -h|--help)
       cat <<'EOF'
-Usage: ./install.sh --no-plugin-manager
+Usage: ./install.sh
 
 Install the local Ardoise CLI and shared Claude Code / Cursor capture hooks
-without invoking any plugin marketplace or plugin manager.
+without invoking any plugin marketplace.
 
 Options:
-  --no-plugin-manager   Required Phase 1 mode (file-copy hooks)
+  --no-plugin-manager   Accepted (this is the default)
   --json                Print machine-readable result
 EOF
       exit 0
       ;;
     *)
       echo "unknown argument: $arg" >&2
-      echo "Phase 1 expects: ./install.sh --no-plugin-manager" >&2
+      echo "Usage: $0" >&2
       exit 2
       ;;
   esac
 done
-
-if [ "$NO_PLUGIN_MANAGER" -ne 1 ]; then
-  echo "Phase 1 installs hooks by copying files." >&2
-  echo "Re-run: $0 --no-plugin-manager" >&2
-  exit 2
-fi
 
 BIN="$ROOT/bin/ardoise"
 chmod +x "$BIN" \

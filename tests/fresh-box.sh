@@ -26,7 +26,15 @@ chmod +x "$ROOT/bin/ardoise" \
   "$ROOT/plugins/claude/hooks/snapshot.sh" \
   "$ROOT/plugins/cursor/capture.sh"
 
-"$ROOT/install.sh" --no-plugin-manager >/dev/null
+"$ROOT/install.sh" >/dev/null
+
+# ~/.local/bin/ardoise is a symlink; it must still find the package from /
+LAUNCHER="$HOME/.local/bin/ardoise"
+if [ ! -x "$LAUNCHER" ]; then
+  echo "install did not link $LAUNCHER" >&2
+  exit 1
+fi
+( cd / && "$LAUNCHER" --version >/dev/null )
 
 # --- fixtures with this box's project cwd ---
 CLAUDE_DIR="$HOME/.claude/projects/-tmp-proj"
