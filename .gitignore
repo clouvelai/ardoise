@@ -5,11 +5,14 @@ __pycache__/
 .venv/
 .DS_Store
 *.db
+*.pem
 /statements/
 /tmp/
 node_modules/
 .next/
 out/
 .env
+.env.*
+!.env.example
 apps/api/.venv/
 apps/api/.data/

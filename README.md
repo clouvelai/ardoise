@@ -9,15 +9,20 @@ machine. Prompts and credentials are never stored.
 
 ## Install
 
+Phase 1 is clone-then-run. Requires **Python 3** (standard library only).
+
 ```bash
-./install.sh
-ardoise backfill
-ardoise status
+git clone https://github.com/clouvelai/ardoise.git
+cd ardoise
+./install.sh --no-plugin-manager
+bin/ardoise backfill
+bin/ardoise status
 ```
 
 That copies shared capture hooks into `~/.claude/settings.json` and
 `~/.cursor/hooks.json` (no plugin marketplace) and links `bin/ardoise` to
 `~/.local/bin/ardoise`. `--no-plugin-manager` is accepted and is the default.
+If `~/.local/bin` is not on `PATH`, keep using `bin/ardoise` from the clone.
 
 Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 
@@ -177,3 +182,7 @@ Scaffold lives in [`apps/api`](apps/api) (FastAPI). Local mock:
 ```bash
 apps/api/scripts/smoke.sh   # SMOKE-OK health+mock-checkout+otp+billing
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 clouvelai.
