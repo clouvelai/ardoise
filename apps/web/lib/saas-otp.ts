@@ -1,19 +1,21 @@
 /**
  * Email OTP helpers for /signup. Fetch only — no supabase-js, no Stripe keys.
  *
+ * Browser calls same-origin `/ardoise-api/*` (apps/web route). The route
+ * forwards to the public Railway API so production marketing is not blocked
+ * by the API CORS allow-list. Never put STRIPE_* / SUPABASE_JWT_SECRET here.
+ *
  *   requestEmailOtp → POST {API_BASE}/v1/auth/otp
  *   verifyEmailOtp  → POST {API_BASE}/v1/auth/otp/verify
- *
- * If the API is down or verify is not configured, helpers throw
- * OtpNotWiredError so the UI can stay a polished “coming soon” stub.
- *
- * Stripe Checkout Sessions stay server-side (apps/api). Never put
- * STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / SUPABASE_JWT_SECRET here.
- *
- * Production default is the public Railway API. Local `next dev` keeps
- * localhost unless NEXT_PUBLIC_ARDOISE_API_URL is set. See
- * apps/api/README.md and docs/saas-scaffold.md.
  */
+
+import {
+  COPY,
+  NetworkError,
+  detailOf,
+  isRecord,
+  sparseMessage,
+} from "./saas-errors";
 
 export const EARLY_ACCESS_MAILTO =
   "mailto:hello@ardoise.ai?subject=Early%20access";
@@ -24,14 +26,18 @@ export const ENTERPRISE_MAILTO =
 const PRODUCTION_API_URL = "https://api-production-ea055.up.railway.app";
 const LOCAL_API_URL = "http://127.0.0.1:8787";
 
-export const API_BASE =
+/** Upstream the Next route proxies to. Public URL only — not a secret. */
+export const API_UPSTREAM =
   process.env.NEXT_PUBLIC_ARDOISE_API_URL ??
   (process.env.NODE_ENV === "development" ? LOCAL_API_URL : PRODUCTION_API_URL);
+
+/** Same-origin prefix used by the browser. */
+export const API_BASE = "/ardoise-api";
 
 export class OtpNotWiredError extends Error {
   readonly code = "OTP_NOT_WIRED" as const;
 
-  constructor(message = "Coming soon — API not wired") {
+  constructor(message = COPY.notWired) {
     super(message);
     this.name = "OtpNotWiredError";
   }
@@ -48,17 +54,6 @@ export type OtpVerifyResult = {
   accessToken: string;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function detailOf(payload: unknown, fallback: string): string {
-  if (isRecord(payload) && typeof payload.detail === "string" && payload.detail) {
-    return payload.detail;
-  }
-  return fallback;
-}
-
 async function postJson(path: string, body: unknown): Promise<unknown> {
   let response: Response;
   try {
@@ -66,9 +61,10 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      cache: "no-store",
     });
   } catch {
-    throw new OtpNotWiredError();
+    throw new NetworkError();
   }
 
   let payload: unknown = null;
@@ -95,7 +91,7 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
 export async function requestEmailOtp(email: string): Promise<OtpRequestResult> {
   const trimmed = email.trim().toLowerCase();
   if (!trimmed || !trimmed.includes("@")) {
-    throw new Error("Enter a valid email");
+    throw new Error(COPY.invalidEmail);
   }
 
   const payload = await postJson("/v1/auth/otp", { email: trimmed });
@@ -117,10 +113,10 @@ export async function verifyEmailOtp(
   const trimmedEmail = email.trim().toLowerCase();
   const trimmedCode = code.trim();
   if (!trimmedEmail || !trimmedEmail.includes("@")) {
-    throw new Error("Enter a valid email");
+    throw new Error(COPY.invalidEmail);
   }
   if (!trimmedCode) {
-    throw new Error("Enter the code from your email");
+    throw new Error(COPY.invalidCode);
   }
 
   const payload = await postJson("/v1/auth/otp/verify", {
@@ -144,4 +140,11 @@ export async function verifyEmailOtp(
 
 export function isOtpNotWired(error: unknown): error is OtpNotWiredError {
   return error instanceof OtpNotWiredError;
+}
+
+export function otpMessage(error: unknown): string {
+  if (isOtpNotWired(error)) {
+    return COPY.notWired;
+  }
+  return sparseMessage(error);
 }

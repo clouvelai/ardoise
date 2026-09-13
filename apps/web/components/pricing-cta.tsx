@@ -3,8 +3,9 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { isBillingNotWired, startCheckout, type PaidPlan } from "@/lib/saas-billing";
-import { getSession } from "@/lib/saas-session";
+import { billingMessage, isPaidPlan, startCheckout, type PaidPlan } from "@/lib/saas-billing";
+import { COPY, isSessionRequired } from "@/lib/saas-errors";
+import { clearSession, getSession } from "@/lib/saas-session";
 
 const featuredClass =
   "mt-8 flex w-full items-center justify-center rounded-full bg-grape py-3 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep disabled:cursor-wait disabled:opacity-70";
@@ -24,11 +25,11 @@ export function PricingCta({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [stub, setStub] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const className = featured ? featuredClass : quietClass;
 
-  if (!plan) {
+  if (!plan || !isPaidPlan(plan)) {
     return (
       <Link href={href} className={className}>
         {children}
@@ -42,9 +43,10 @@ export function PricingCta({
     }
     const paidPlan = plan;
     setError(null);
+    setStatus(null);
     const session = getSession();
     if (!session) {
-      router.push(`/signup?plan=${paidPlan}`);
+      router.push("/signup?next=/pricing");
       return;
     }
     setPending(true);
@@ -52,11 +54,17 @@ export function PricingCta({
       const checkout = await startCheckout(paidPlan, session.accessToken);
       window.location.assign(checkout.url);
     } catch (caught) {
-      if (isBillingNotWired(caught)) {
-        setStub(true);
+      if (isSessionRequired(caught)) {
+        clearSession();
+        router.push("/signup?next=/pricing");
         return;
       }
-      setError(caught instanceof Error ? caught.message : "Checkout failed");
+      const message = billingMessage(caught);
+      if (message === COPY.notWired) {
+        setStatus(COPY.notWired);
+        return;
+      }
+      setError(message);
     } finally {
       setPending(false);
     }
@@ -67,12 +75,12 @@ export function PricingCta({
       <button type="button" className={className} disabled={pending} onClick={onPay}>
         {pending ? "Continuing…" : children}
       </button>
-      {stub ? (
+      {status ? (
         <p
           role="status"
           className="mt-3 text-center text-[13px] leading-relaxed text-muted"
         >
-          Coming soon — API not wired
+          {status}
         </p>
       ) : null}
       {error ? (

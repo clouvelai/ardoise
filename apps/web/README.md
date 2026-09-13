@@ -8,15 +8,15 @@ npm run dev
 npm run build
 ```
 
-From the repo root, `npm run build` runs this app via the workspace.
-
 **Account first, card later.** `/signup` is email OTP (no card). `/pricing`
-Free stays signup-only; Team/Business call `POST /v1/billing/checkout` after
-a session exists (`lib/saas-billing.ts`). Helpers: [`lib/saas-otp.ts`](lib/saas-otp.ts)
-(`requestEmailOtp` / `verifyEmailOtp` → `API_BASE`). Production `/signup` OTP
-hits `https://api-production-ea055.up.railway.app`. Local `next dev` keeps
-`http://127.0.0.1:8787` unless `NEXT_PUBLIC_ARDOISE_API_URL` overrides. If the
-API is down the UI stays a polished stub. Do not put Stripe secrets here.
+Free stays signup-only. Team/Business without a session go to
+`/signup?next=/pricing`; after OTP they return to pricing, then
+`POST /v1/billing/checkout` (`lib/saas-billing.ts`).
+
+The browser calls same-origin `/ardoise-api/*` (allow-listed proxy). The
+route forwards to `NEXT_PUBLIC_ARDOISE_API_URL`, or Railway in production /
+`http://127.0.0.1:8787` in `next dev`. Do not put Stripe or Supabase secrets
+here.
 
 ```
 NEXT_PUBLIC_ARDOISE_API_URL=https://api-production-ea055.up.railway.app
