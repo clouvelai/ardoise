@@ -29,26 +29,16 @@ const ROWS = [
 
 export function WorkflowCard() {
   const [step, setStep] = useState<Step>("capture");
-  const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setReduced(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
-
-  useEffect(() => {
-    if (reduced) {
-      setStep("invoice");
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return;
     }
     const timer = window.setTimeout(() => {
       setStep((current) => STEPS[(STEPS.indexOf(current) + 1) % STEPS.length]);
     }, HOLD_MS[step]);
     return () => window.clearTimeout(timer);
-  }, [reduced, step]);
+  }, [step]);
 
   const caption =
     step === "capture"
@@ -84,21 +74,34 @@ export function WorkflowCard() {
           </p>
         </div>
 
-        <Stepper step={step} />
+        <div className="motion-reduce:hidden">
+          <Stepper step={step} />
+        </div>
+        <div className="hidden motion-reduce:block">
+          <Stepper step="invoice" />
+        </div>
 
         <p
-          className="mt-5 text-[13px] font-medium text-ink/70"
+          className="mt-5 text-[13px] font-medium text-ink/70 motion-reduce:hidden"
           aria-live="polite"
         >
           {caption}
         </p>
+        <p className="mt-5 hidden text-[13px] font-medium text-ink/70 motion-reduce:block">
+          Invoice ready
+        </p>
 
         <div className="mt-4 min-h-[236px]">
-          {step === "capture" ? (
-            <CaptureScene />
-          ) : (
-            <LedgerInvoiceScene stamped={step === "invoice"} />
-          )}
+          <div className="motion-reduce:hidden">
+            {step === "capture" ? (
+              <CaptureScene />
+            ) : (
+              <LedgerInvoiceScene stamped={step === "invoice"} />
+            )}
+          </div>
+          <div className="hidden motion-reduce:block">
+            <LedgerInvoiceScene stamped />
+          </div>
         </div>
       </div>
     </div>
