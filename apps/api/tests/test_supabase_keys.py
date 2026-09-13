@@ -186,7 +186,7 @@ class JwtVerifyTests(unittest.TestCase):
 
         class _Client:
             def get_signing_key_from_jwt(self, given: str) -> _Key:
-                self.assertEqual(given, token)
+                assert given == token
                 return _Key()
 
         with patch("ardoise_api.auth._jwks_client", return_value=_Client()):
