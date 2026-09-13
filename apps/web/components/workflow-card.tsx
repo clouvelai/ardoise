@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Mascot } from "./mark";
 
 const STEPS = ["capture", "ledger", "invoice"] as const;
@@ -27,23 +27,39 @@ const ROWS = [
   },
 ];
 
+function subscribeReducedMotion(onChange: () => void) {
+  const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+}
+
+function reducedMotionSnapshot() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export function WorkflowCard() {
+  const reduced = useSyncExternalStore(
+    subscribeReducedMotion,
+    reducedMotionSnapshot,
+    () => false,
+  );
   const [step, setStep] = useState<Step>("capture");
+  const view = reduced ? "invoice" : step;
 
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (reduced) {
       return;
     }
     const timer = window.setTimeout(() => {
       setStep((current) => STEPS[(STEPS.indexOf(current) + 1) % STEPS.length]);
     }, HOLD_MS[step]);
     return () => window.clearTimeout(timer);
-  }, [step]);
+  }, [reduced, step]);
 
   const caption =
-    step === "capture"
+    view === "capture"
       ? "Capturing usage…"
-      : step === "ledger"
+      : view === "ledger"
         ? "Attributing spend…"
         : "Invoice ready";
 
@@ -74,34 +90,18 @@ export function WorkflowCard() {
           </p>
         </div>
 
-        <div className="motion-reduce:hidden">
-          <Stepper step={step} />
-        </div>
-        <div className="hidden motion-reduce:block">
-          <Stepper step="invoice" />
-        </div>
+        <Stepper step={view} />
 
-        <p
-          className="mt-5 text-[13px] font-medium text-ink/70 motion-reduce:hidden"
-          aria-live="polite"
-        >
+        <p className="mt-5 text-[13px] font-medium text-ink/70" aria-live="polite">
           {caption}
-        </p>
-        <p className="mt-5 hidden text-[13px] font-medium text-ink/70 motion-reduce:block">
-          Invoice ready
         </p>
 
         <div className="mt-4 min-h-[236px]">
-          <div className="motion-reduce:hidden">
-            {step === "capture" ? (
-              <CaptureScene />
-            ) : (
-              <LedgerInvoiceScene stamped={step === "invoice"} />
-            )}
-          </div>
-          <div className="hidden motion-reduce:block">
-            <LedgerInvoiceScene stamped />
-          </div>
+          {view === "capture" ? (
+            <CaptureScene />
+          ) : (
+            <LedgerInvoiceScene stamped={view === "invoice"} />
+          )}
         </div>
       </div>
     </div>
@@ -159,7 +159,7 @@ function Stepper({ step }: { step: Step }) {
 
 function CaptureScene() {
   return (
-    <div key="capture" className="hero-enter flex h-[236px] flex-col items-center justify-center text-center">
+    <div className="hero-enter flex h-[236px] flex-col items-center justify-center text-center">
       <p className="flex items-center gap-1.5 text-[14px] text-ink/75">
         <span className="hero-spark" aria-hidden>
           ✦
@@ -221,7 +221,9 @@ function LedgerInvoiceScene({ stamped }: { stamped: boolean }) {
       ) : (
         <div className="mt-4 flex h-[62px] items-center justify-between rounded-2xl border border-dashed border-violet-200/90 bg-mist/40 px-4">
           <p className="text-[13px] text-muted">Writing statement…</p>
-          <p className="text-[13px] font-medium tabular-nums text-ink/35">$69.24</p>
+          <p className="text-[13px] font-medium tabular-nums text-ink/35">
+            $69.24
+          </p>
         </div>
       )}
     </div>
