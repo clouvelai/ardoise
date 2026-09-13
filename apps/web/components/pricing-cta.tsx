@@ -12,8 +12,8 @@ const featuredClass =
 const quietClass =
   "mt-8 flex w-full items-center justify-center rounded-full bg-lavender py-3 text-[15px] font-semibold text-grape transition hover:bg-violet-100 disabled:cursor-wait disabled:opacity-70";
 
-// Free is a Link to /signup. Pro/Team start checkout when a session exists;
-// otherwise they bounce to /signup?next=/pricing (account first, card later).
+// Free is a Link to /signup. Pro/Team start checkout (plan=pro|team) when a
+// session exists; otherwise they bounce to /signup?next=/pricing.
 
 export function PricingCta({
   plan,
