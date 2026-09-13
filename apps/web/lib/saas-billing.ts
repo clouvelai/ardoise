@@ -1,16 +1,25 @@
 /**
- * Stripe Checkout stays on apps/api. This file only POSTs plan + Bearer JWT.
- * Never put STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / price IDs here.
+ * Stripe Checkout stays on apps/api. This file only POSTs plan + Bearer JWT
+ * through the same-origin `/ardoise-api` proxy. Never put STRIPE_SECRET_KEY /
+ * STRIPE_WEBHOOK_SECRET / price IDs here.
  */
 
 import { API_BASE } from "./saas-otp";
+import {
+  COPY,
+  NetworkError,
+  SessionRequiredError,
+  detailOf,
+  isRecord,
+  sparseMessage,
+} from "./saas-errors";
 
 export type PaidPlan = "team" | "business";
 
 export class BillingNotWiredError extends Error {
   readonly code = "BILLING_NOT_WIRED" as const;
 
-  constructor(message = "Coming soon — API not wired") {
+  constructor(message = COPY.notWired) {
     super(message);
     this.name = "BillingNotWiredError";
   }
@@ -22,21 +31,14 @@ export type CheckoutResult = {
   plan: PaidPlan;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function detailOf(payload: unknown, fallback: string): string {
-  if (isRecord(payload) && typeof payload.detail === "string" && payload.detail) {
-    return payload.detail;
-  }
-  return fallback;
-}
-
 export async function startCheckout(
   plan: PaidPlan,
   accessToken: string,
 ): Promise<CheckoutResult> {
+  if (!accessToken) {
+    throw new SessionRequiredError();
+  }
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE}/v1/billing/checkout`, {
@@ -50,9 +52,10 @@ export async function startCheckout(
         success_url: `${window.location.origin}/billing/success`,
         cancel_url: `${window.location.origin}/billing/cancel`,
       }),
+      cache: "no-store",
     });
   } catch {
-    throw new BillingNotWiredError();
+    throw new NetworkError();
   }
 
   let payload: unknown = null;
@@ -69,7 +72,7 @@ export async function startCheckout(
     throw new BillingNotWiredError();
   }
   if (response.status === 401) {
-    throw new Error("Sign in again to continue to checkout");
+    throw new SessionRequiredError();
   }
   if (!response.ok) {
     throw new Error(detailOf(payload, `Checkout failed (${response.status})`));
@@ -93,4 +96,11 @@ export function isBillingNotWired(
 
 export function isPaidPlan(value: string | null | undefined): value is PaidPlan {
   return value === "team" || value === "business";
+}
+
+export function billingMessage(error: unknown): string {
+  if (isBillingNotWired(error)) {
+    return COPY.notWired;
+  }
+  return sparseMessage(error);
 }

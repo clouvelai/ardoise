@@ -1,59 +1,53 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import {
-  isBillingNotWired,
-  isPaidPlan,
-  startCheckout,
-} from "@/lib/saas-billing";
-import {
-  isOtpNotWired,
-  requestEmailOtp,
-  verifyEmailOtp,
-} from "@/lib/saas-otp";
-import { saveSession } from "@/lib/saas-session";
+import { useRouter, useSearchParams } from "next/navigation";
+import { COPY, isNetworkError, safeNextPath } from "@/lib/saas-errors";
+import { isOtpNotWired, otpMessage, requestEmailOtp, verifyEmailOtp } from "@/lib/saas-otp";
+import { getSession, saveSession } from "@/lib/saas-session";
 import { Mascot } from "./mark";
 
 type Step = "email" | "code" | "done";
 
-function messageOf(error: unknown): string {
-  if (isOtpNotWired(error)) {
-    return error.message;
-  }
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return "Something went wrong";
-}
+const fieldClass =
+  "w-full rounded-full border border-black/[0.06] bg-mist/70 px-5 py-3.5 text-[15px] text-ink outline-none transition placeholder:text-muted/70 focus:border-grape/40 focus:ring-4 focus:ring-grape/15 disabled:opacity-70";
+const primaryClass =
+  "flex w-full items-center justify-center rounded-full bg-grape py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep disabled:cursor-wait disabled:opacity-70";
 
 export function SignupForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedPlan = searchParams.get("plan");
+  const nextPath = safeNextPath(searchParams.get("next"));
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stub, setStub] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (nextPath && getSession()) {
+      router.replace(nextPath);
+    }
+  }, [nextPath, router]);
 
   async function onRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
     setError(null);
+    setStatus(null);
     try {
       const result = await requestEmailOtp(email);
       setEmail(result.email);
-      setStub(result.mocked);
       setStep("code");
+      setStatus(result.mocked ? COPY.notWired : null);
     } catch (caught) {
       if (isOtpNotWired(caught)) {
-        setStub(true);
-        setStep("code");
+        setStatus(COPY.notWired);
         return;
       }
-      setError(messageOf(caught));
+      setError(otpMessage(caught));
     } finally {
       setPending(false);
     }
@@ -61,39 +55,40 @@ export function SignupForm() {
 
   async function onVerify(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (stub && !code.trim()) {
-      return;
-    }
     setPending(true);
     setError(null);
     try {
       const session = await verifyEmailOtp(email, code);
       saveSession(session);
-      setStub(false);
-      if (isPaidPlan(requestedPlan)) {
-        try {
-          const checkout = await startCheckout(
-            requestedPlan,
-            session.accessToken,
-          );
-          window.location.assign(checkout.url);
-          return;
-        } catch (billing) {
-          if (!isBillingNotWired(billing)) {
-            setError(
-              billing instanceof Error ? billing.message : "Checkout failed",
-            );
-          }
-        }
-      }
-      setStep("done");
-    } catch (caught) {
-      if (isOtpNotWired(caught)) {
-        setStub(true);
-        setError(null);
+      if (nextPath) {
+        router.replace(nextPath);
         return;
       }
-      setError(messageOf(caught));
+      setStep("done");
+      setStatus(null);
+    } catch (caught) {
+      if (isOtpNotWired(caught)) {
+        setStatus(COPY.notWired);
+        return;
+      }
+      setError(otpMessage(caught));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onResend() {
+    setPending(true);
+    setError(null);
+    try {
+      await requestEmailOtp(email);
+      setStatus("Sent again.");
+    } catch (caught) {
+      if (isOtpNotWired(caught) || isNetworkError(caught)) {
+        setStatus(otpMessage(caught));
+        return;
+      }
+      setError(otpMessage(caught));
     } finally {
       setPending(false);
     }
@@ -121,14 +116,11 @@ export function SignupForm() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@company.com"
-                className="w-full rounded-full border border-black/[0.06] bg-mist/70 px-5 py-3.5 text-[15px] text-ink outline-none transition placeholder:text-muted/70 focus:border-grape/40 focus:ring-4 focus:ring-grape/15"
+                disabled={pending}
+                className={fieldClass}
               />
             </label>
-            <button
-              type="submit"
-              disabled={pending}
-              className="flex w-full items-center justify-center rounded-full bg-grape py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep disabled:cursor-wait disabled:opacity-70"
-            >
+            <button type="submit" disabled={pending} className={primaryClass}>
               {pending ? "Sending…" : "Continue"}
             </button>
           </form>
@@ -137,7 +129,7 @@ export function SignupForm() {
         {step === "code" ? (
           <form onSubmit={onVerify} className="space-y-5">
             <p className="text-[15px] text-muted">
-              {stub ? "Enter a code." : `We sent a code to ${email}.`}
+              We sent a code to {email}.
             </p>
             <label className="block">
               <span className="sr-only">One-time code</span>
@@ -148,32 +140,43 @@ export function SignupForm() {
                 autoComplete="one-time-code"
                 autoFocus
                 spellCheck={false}
-                required={!stub}
+                required
+                maxLength={8}
                 value={code}
-                onChange={(event) => setCode(event.target.value)}
+                onChange={(event) =>
+                  setCode(event.target.value.replace(/\s/g, ""))
+                }
                 placeholder="••••••"
-                className="w-full rounded-full border border-black/[0.06] bg-mist/70 px-5 py-3.5 text-center text-[18px] tracking-[0.35em] text-ink outline-none transition placeholder:tracking-[0.35em] placeholder:text-muted/50 focus:border-grape/40 focus:ring-4 focus:ring-grape/15"
+                disabled={pending}
+                className={`${fieldClass} text-center text-[18px] tracking-[0.35em] placeholder:tracking-[0.35em] placeholder:text-muted/50`}
               />
             </label>
-            <button
-              type="submit"
-              disabled={pending}
-              className="flex w-full items-center justify-center rounded-full bg-grape py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep disabled:cursor-wait disabled:opacity-70"
-            >
+            <button type="submit" disabled={pending} className={primaryClass}>
               {pending ? "Checking…" : "Verify"}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStep("email");
-                setCode("");
-                setError(null);
-                setStub(false);
-              }}
-              className="mx-auto block text-[13px] font-medium text-muted transition hover:text-ink"
-            >
-              Use a different email
-            </button>
+            <div className="flex items-center justify-center gap-4 text-[13px] font-medium">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setStep("email");
+                  setCode("");
+                  setError(null);
+                  setStatus(null);
+                }}
+                className="text-muted transition hover:text-ink"
+              >
+                Use a different email
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={onResend}
+                className="text-muted transition hover:text-ink"
+              >
+                Resend
+              </button>
+            </div>
           </form>
         ) : null}
 
@@ -185,24 +188,32 @@ export function SignupForm() {
             <p className="mt-2 text-[15px] text-muted">
               Local ledger stays on your machine.
             </p>
-            <Link
-              href="/#install"
-              className="mt-6 inline-flex items-center rounded-full bg-lavender px-6 py-3 text-[15px] font-semibold text-grape transition hover:bg-violet-100"
-            >
-              Install the CLI
-              <span aria-hidden className="ml-1.5">
-                →
-              </span>
-            </Link>
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <Link
+                href="/#install"
+                className="inline-flex items-center rounded-full bg-grape px-6 py-3 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
+              >
+                Install the CLI
+                <span aria-hidden className="ml-1.5">
+                  →
+                </span>
+              </Link>
+              <Link
+                href="/pricing"
+                className="text-[13px] font-medium text-muted transition hover:text-ink"
+              >
+                See pricing
+              </Link>
+            </div>
           </div>
         ) : null}
 
-        {stub && step !== "done" ? (
+        {status && step !== "done" ? (
           <p
             role="status"
             className="mt-5 rounded-2xl bg-mist/80 px-4 py-3 text-center text-[13px] leading-relaxed text-muted"
           >
-            Coming soon — API not wired
+            {status}
           </p>
         ) : null}
 

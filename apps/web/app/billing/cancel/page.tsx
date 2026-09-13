@@ -10,12 +10,12 @@ export const metadata: Metadata = {
 export default function BillingCancelPage() {
   return (
     <PageShell>
-      <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6 pb-20 pt-8 sm:px-8">
+      <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6 pb-20 pt-4 sm:px-8 lg:pt-2">
         <div className="max-w-xl">
-          <h1 className="text-[2.75rem] font-bold leading-[1.05] tracking-[-0.045em] text-ink sm:text-[3.6rem]">
+          <h1 className="text-[2.75rem] font-bold leading-[1.05] tracking-[-0.045em] text-ink sm:text-[3.6rem] lg:text-[4.15rem]">
             No charge.
           </h1>
-          <p className="mt-5 text-[17px] text-muted sm:text-[18px]">
+          <p className="mt-6 max-w-md text-[17px] leading-relaxed text-muted sm:text-[18px]">
             Your free account is still here. Card later.
           </p>
           <Link
