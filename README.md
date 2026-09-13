@@ -174,8 +174,8 @@ npm run build
 A hosted companion follows [`docs/saas-scaffold.md`](docs/saas-scaffold.md):
 **account first, card later**. Supabase email OTP creates a free account
 (no card). Stripe Checkout Sessions (`mode=subscription`) run only when
-someone pays for Team ($39/mo) or Business ($149/mo). Invoice-grade claims
-stay Business+. Phase 1 CLI does not call those services.
+someone pays for Pro ($20/mo) or Team ($49/mo). Invoice-grade claims
+stay Pro+. Phase 1 CLI does not call those services.
 
 Scaffold lives in [`apps/api`](apps/api) (FastAPI). Local mock:
 

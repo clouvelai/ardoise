@@ -1,5 +1,5 @@
 #!/bin/sh
-# Offline mock smoke: health + Checkout + OTP verify + Team billing.
+# Offline mock smoke: health + Checkout + OTP verify + Pro/Team billing.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -105,6 +105,44 @@ assert verified.status_code == 200, verified.text
 assert verified.json()["access_token"]
 assert verified.json()["account"]["plan"] == "free"
 
+biz = client.post(
+    "/v1/billing/checkout",
+    json={"plan": "business"},
+    headers={"Authorization": f"Bearer {verified.json()['access_token']}"},
+)
+assert biz.status_code == 400, biz.text
+assert "pro or team" in str(biz.json().get("detail", ""))
+
+pro = client.post(
+    "/v1/billing/checkout",
+    json={"plan": "pro"},
+    headers={"Authorization": f"Bearer {verified.json()['access_token']}"},
+)
+assert pro.status_code == 200, pro.text
+assert pro.json()["mode"] == "subscription" and pro.json()["plan"] == "pro"
+assert pro.json()["amount_cents"] == 2000
+pro_hook = client.post(
+    "/v1/billing/webhook",
+    content=json.dumps(
+        {
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": pro.json()["stripe_session_id"],
+                    "metadata": {"plan": "pro"},
+                }
+            },
+        }
+    ),
+)
+assert pro_hook.status_code == 200 and pro_hook.json()["ok"], pro_hook.text
+pro_me = client.get(
+    "/v1/me",
+    headers={"Authorization": f"Bearer {verified.json()['access_token']}"},
+)
+assert pro_me.json()["account"]["plan"] == "pro"
+assert pro_me.json()["account"]["invoice_grade"] is True
+
 team = client.post(
     "/v1/billing/checkout",
     json={"plan": "team"},
@@ -112,6 +150,7 @@ team = client.post(
 )
 assert team.status_code == 200, team.text
 assert team.json()["mode"] == "subscription" and team.json()["plan"] == "team"
+assert team.json()["amount_cents"] == 4900
 bill_hook = client.post(
     "/v1/billing/webhook",
     content=json.dumps(
@@ -132,7 +171,7 @@ paid = client.get(
     headers={"Authorization": f"Bearer {verified.json()['access_token']}"},
 )
 assert paid.json()["account"]["plan"] == "team"
-assert paid.json()["account"]["invoice_grade"] is False
+assert paid.json()["account"]["invoice_grade"] is True
 
 # Bind uvicorn briefly and curl /health (matches "run locally" README).
 host, port = "127.0.0.1", int(os.environ.get("ARDOISE_API_PORT", "8787"))

@@ -14,7 +14,7 @@ import {
   sparseMessage,
 } from "./saas-errors";
 
-export type PaidPlan = "team" | "business";
+export type PaidPlan = "pro" | "team";
 
 export class BillingNotWiredError extends Error {
   readonly code = "BILLING_NOT_WIRED" as const;
@@ -84,7 +84,7 @@ export async function startCheckout(
   return {
     url: payload.url,
     mock: payload.mock === true,
-    plan: payload.plan === "business" ? "business" : "team",
+    plan: payload.plan === "team" ? "team" : "pro",
   };
 }
 
@@ -95,7 +95,7 @@ export function isBillingNotWired(
 }
 
 export function isPaidPlan(value: string | null | undefined): value is PaidPlan {
-  return value === "team" || value === "business";
+  return value === "pro" || value === "team";
 }
 
 export function billingMessage(error: unknown): string {

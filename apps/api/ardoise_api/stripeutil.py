@@ -24,19 +24,19 @@ class StripeError(Exception):
 
 
 SUBSCRIPTION_PLANS: dict[str, dict[str, Any]] = {
+    "pro": {
+        "amount_cents": 2000,
+        "name": "Ardoise Pro",
+        "price_attr": "stripe_price_pro",
+    },
     "team": {
-        "amount_cents": 3900,
+        "amount_cents": 4900,
         "name": "Ardoise Team",
         "price_attr": "stripe_price_team",
     },
-    "business": {
-        "amount_cents": 14900,
-        "name": "Ardoise Business",
-        "price_attr": "stripe_price_business",
-    },
 }
 
-INVOICE_GRADE_PLANS = frozenset({"business", "enterprise"})
+INVOICE_GRADE_PLANS = frozenset({"pro", "team"})
 
 
 def invoice_grade(plan: str | None) -> bool:
@@ -47,7 +47,7 @@ def resolve_subscription_plan(plan: str) -> dict[str, Any]:
     key = (plan or "").strip().lower()
     spec = SUBSCRIPTION_PLANS.get(key)
     if spec is None:
-        raise StripeError("plan must be team or business", 400)
+        raise StripeError("plan must be pro or team", 400)
     return {"plan": key, **spec}
 
 
@@ -242,7 +242,7 @@ def create_subscription_checkout(
     success_url: str | None = None,
     cancel_url: str | None = None,
 ) -> dict[str, Any]:
-    """Checkout Sessions mode=subscription for Team ($39) / Business ($149)."""
+    """Checkout Sessions mode=subscription for Pro ($20) / Team ($49)."""
     spec = resolve_subscription_plan(plan)
     plan_key = spec["plan"]
     amount = int(spec["amount_cents"])

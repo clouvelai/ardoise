@@ -5,7 +5,7 @@ import { PricingGrid } from "@/components/pricing-grid";
 export const metadata: Metadata = {
   title: "Pricing — Ardoise",
   description:
-    "Free local CLI. Team $39/mo. Business $149/mo. Account first, card later.",
+    "Free local CLI. Pro $20/mo. Team $49/mo. Account first, card later.",
 };
 
 export default function PricingPage() {

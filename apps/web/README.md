@@ -9,7 +9,7 @@ npm run build
 ```
 
 **Account first, card later.** `/signup` is email OTP (no card). `/pricing`
-Free stays signup-only. Team/Business without a session go to
+Free stays signup-only. Pro/Team without a session go to
 `/signup?next=/pricing`; after OTP they return to pricing, then
 `POST /v1/billing/checkout` (`lib/saas-billing.ts`).
 

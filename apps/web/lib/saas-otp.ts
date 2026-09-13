@@ -20,9 +20,6 @@ import {
 export const EARLY_ACCESS_MAILTO =
   "mailto:hello@ardoise.ai?subject=Early%20access";
 
-export const ENTERPRISE_MAILTO =
-  "mailto:hello@ardoise.ai?subject=Ardoise%20Enterprise";
-
 const PRODUCTION_API_URL = "https://api-production-ea055.up.railway.app";
 const LOCAL_API_URL = "http://127.0.0.1:8787";
 

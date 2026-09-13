@@ -30,15 +30,15 @@ production. Missing Supabase keys keep a mock/stub path so local smoke works.
 
 ## Billing: Stripe Checkout Sessions
 
-Team ($39/mo) and Business ($149/mo) use **Stripe Checkout Sessions**
+Pro ($20/mo) and Team ($49/mo) use **Stripe Checkout Sessions**
 (`mode=subscription`), not Connect, not raw PaymentIntents:
 
-1. `POST /v1/billing/checkout` with `plan=team|business` after OTP.
-2. Resolve `STRIPE_PRICE_TEAM` / `STRIPE_PRICE_BUSINESS` (or inline monthly
+1. `POST /v1/billing/checkout` with `plan=pro|team` after OTP.
+2. Resolve `STRIPE_PRICE_PRO` / `STRIPE_PRICE_TEAM` (or inline monthly
    `price_data`). Persist `ops.checkout_sessions`.
 3. Redirect the human to the hosted Checkout URL (`apps/web` success/cancel).
 4. Fulfill on `checkout.session.completed` (`POST /v1/billing/webhook`) —
-   sets `accounts.plan`. Invoice-grade claims stay **Business+**.
+   sets `accounts.plan`. Invoice-grade claims stay **Pro+**.
 5. When `STRIPE_MOCK=true` / no secret key, a local mock session stands in.
 
 Legacy PAYG credits remain on `POST /v1/checkout/sessions` (`mode=payment`).

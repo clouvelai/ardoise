@@ -71,8 +71,8 @@ class Settings:
     checkout_success_url: str
     checkout_cancel_url: str
     supabase_service_role_key: str = ""
+    stripe_price_pro: str = ""
     stripe_price_team: str = ""
-    stripe_price_business: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -112,8 +112,8 @@ class Settings:
             supabase_service_role_key=_env(
                 "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"
             ),
+            stripe_price_pro=os.environ.get("STRIPE_PRICE_PRO", ""),
             stripe_price_team=os.environ.get("STRIPE_PRICE_TEAM", ""),
-            stripe_price_business=os.environ.get("STRIPE_PRICE_BUSINESS", ""),
         )
 
     @property
