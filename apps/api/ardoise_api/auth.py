@@ -13,7 +13,7 @@ from fastapi import Header, HTTPException, Request
 from jwt import PyJWKClient
 
 from ardoise_api.settings import Settings
-from ardoise_api.store import Store
+from ardoise_api.store import AccountStore
 
 _jwks_clients: dict[str, PyJWKClient] = {}
 _ASYMMETRIC_ALGS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA")
@@ -30,7 +30,7 @@ def _settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
-def _store(request: Request) -> Store:
+def _store(request: Request) -> AccountStore:
     return request.app.state.store
 
 
@@ -109,7 +109,7 @@ def mint_mock_access_token(settings: Settings, email: str) -> str:
 
 def verify_email_otp(
     settings: Settings,
-    store: Store,
+    store: AccountStore,
     email: str,
     token: str,
 ) -> dict[str, Any]:

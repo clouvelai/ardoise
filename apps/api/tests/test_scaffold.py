@@ -99,6 +99,10 @@ class ScaffoldTests(unittest.TestCase):
         self.assertTrue(body["stripe_mock"])
         self.assertFalse(body["lab_auth_bypass"])
         self.assertFalse(body["supabase_otp_configured"])
+        self.assertEqual(body["store"], "sqlite")
+        self.assertTrue(body["store_ok"])
+        self.assertFalse(body["database_url_configured"])
+        self.assertNotIn("store_error", body)
 
     def test_me_requires_bearer(self) -> None:
         client = self._cli()

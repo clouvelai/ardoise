@@ -18,7 +18,9 @@ Arbusteia humans sign in with **Supabase Auth email OTP**:
    Dashboard only shows a signing key id).
 4. Email (or `sub`) becomes the account `external_key`. Customer rows and the
    credit ledger live in **Postgres** (Supabase primary, not a replica) when
-   `DATABASE_URL` is set. Auth OTP itself does not need the database password.
+   `DATABASE_URL` is set — that env var is what switches `apps/api` off
+   SQLite. Auth OTP itself does not need the database password. `GET /health`
+   reports `store: "postgres"` after a successful ping (never the URI).
 
 A hosted Ardoise does the same: OTP through `apps/api` (`POST /v1/auth/otp`
 and `/v1/auth/otp/verify`), JWT on later calls, Postgres as the system of
@@ -53,7 +55,8 @@ does not upload the SQLite file. `~/.ardoise/ledger.db` is the product.
 ## Scaffold location
 
 Implementation (not the Phase 1 CLI): [`apps/api`](../apps/api) — FastAPI,
-Postgres migrations under `apps/api/migrations/`, local mock when
+Postgres (`ops.*`) when `DATABASE_URL` is set, SQLite when unset. Migrations
+under `apps/api/migrations/`. Local mock when
 `STRIPE_MOCK=true` or `STRIPE_SECRET_KEY` is unset. Marketing CTAs on
 `apps/web` hit `/signup` and `/pricing`. OTP is API-backed via
 `apps/web/lib/saas-otp.ts` (`NEXT_PUBLIC_ARDOISE_API_URL`, production default

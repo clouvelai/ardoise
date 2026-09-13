@@ -20,6 +20,7 @@ unset STRIPE_SECRET_KEY || true
 # Isolate from a host that already has live Ardoise keys (offline mock only).
 unset SUPABASE_ANON_KEY SUPABASE_PUBLISHABLE_KEY || true
 unset SUPABASE_SERVICE_ROLE_KEY SUPABASE_SECRET_KEY || true
+unset DATABASE_URL || true
 export SUPABASE_JWT_SECRET="test-supabase-jwt-secret-for-local-smoke"
 export SUPABASE_URL="https://example.supabase.co"
 export ARDOISE_LAB_AUTH_BYPASS=false
@@ -55,6 +56,9 @@ client = TestClient(app)
 health = client.get("/health")
 assert health.status_code == 200 and health.json()["ok"], health.text
 assert health.json()["stripe_mock"] is True
+assert health.json()["store"] == "sqlite"
+assert health.json()["store_ok"] is True
+assert health.json()["database_url_configured"] is False
 
 now = int(time.time())
 token = jwt.encode(

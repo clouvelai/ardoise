@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -14,7 +13,7 @@ from pydantic import BaseModel, Field
 from ardoise_api import __version__
 from ardoise_api.auth import AuthError, kickoff_otp, require_account, verify_email_otp
 from ardoise_api.settings import Settings
-from ardoise_api.store import Store
+from ardoise_api.store import AccountStore, open_store
 from ardoise_api.stripeutil import (
     StripeError,
     create_checkout_session,
@@ -65,19 +64,17 @@ class UsageSyncBody(BaseModel):
     rows: list[dict[str, Any]] = Field(default_factory=list)
 
 
-def _default_sqlite(settings: Settings) -> str:
-    if settings.sqlite_path:
-        return settings.sqlite_path
-    here = Path(__file__).resolve().parent.parent / ".data" / "local.db"
-    return str(here)
+def _store_error_name(exc: BaseException) -> str:
+    """Exception type only — never echo DSN / password from driver messages."""
+    return type(exc).__name__
 
 
 def create_app(
     settings: Settings | None = None,
-    store: Store | None = None,
+    store: AccountStore | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
-    store = store or Store(_default_sqlite(settings))
+    store = store or open_store(settings)
 
     app = FastAPI(
         title="Ardoise API",
@@ -101,15 +98,23 @@ def create_app(
 
     @app.get("/health")
     def health() -> dict[str, Any]:
-        return {
-            "ok": True,
+        store_error = None
+        try:
+            store.ping()
+            store_ok = True
+        except Exception as exc:
+            store_ok = False
+            store_error = _store_error_name(exc)
+        body: dict[str, Any] = {
+            "ok": store_ok,
             "service": "ardoise-api",
             "version": __version__,
             "stripe_mock": settings.stripe_mock,
             "lab_auth_bypass": settings.lab_auth_bypass_enabled,
             "supabase_otp_configured": settings.supabase_otp_configured,
-            "store": "sqlite",
-            "database_url_configured": bool(settings.database_url),
+            "store": getattr(store, "kind", "sqlite"),
+            "store_ok": store_ok,
+            "database_url_configured": bool((settings.database_url or "").strip()),
             "urls": {
                 "health": "/health",
                 "otp": "/v1/auth/otp",
@@ -121,6 +126,9 @@ def create_app(
                 "webhook": "/v1/stripe/webhook",
             },
         }
+        if store_error:
+            body["store_error"] = store_error
+        return body
 
     def _safe_return_url(candidate: str | None, fallback: str) -> str:
         if not candidate:

@@ -26,11 +26,18 @@ python -m ardoise_api
 # http://127.0.0.1:8787/health
 ```
 
-Postgres is optional for mock smoke **and** for Auth OTP e2e. OTP request/verify
-talk to Gotrue over HTTP; they do not need `DATABASE_URL` or the database
-password. When `DATABASE_URL` is unset, accounts live in SQLite at
-`.data/local.db`. Apply `migrations/*.sql` on the Supabase primary only when
-you want hosted Postgres.
+**`DATABASE_URL` switches the store.** When it is set, accounts, credits, and
+plans live in Postgres (`ops.*` — same tables as `migrations/*.sql`). The API
+connects as a privileged role (service connection string); keep `ops` off
+PostgREST. When `DATABASE_URL` is unset, the store is SQLite at
+`.data/local.db` (local / mock smoke). OTP request/verify talk to Gotrue over
+HTTP and do not need the database password. Apply migrations on the Supabase
+primary before pointing Railway at that URI.
+
+`GET /health` reports `store: "postgres"` or `"sqlite"` for the backend in
+use, plus `store_ok` (a live ping) and `database_url_configured`. It does
+not echo the URI. If the URL is set but the ping fails, `ok` / `store_ok`
+are false and `store` stays `"postgres"` — there is no silent SQLite fallback.
 
 ### Offline smoke
 
@@ -67,7 +74,7 @@ Open the mock URL and click **Pay (mock)**, or `POST /v1/stripe/webhook` with
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/health` | no | `stripe_mock`, `lab_auth_bypass`, `supabase_otp_configured` (no secrets) |
+| `GET` | `/health` | no | `store` (`sqlite` / `postgres`), `store_ok`, `database_url_configured`, `stripe_mock`, `lab_auth_bypass`, `supabase_otp_configured` (no secrets, no DSN) |
 | `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the publishable/anon (or server-only secret) key. Accepts legacy `eyJ…` JWTs and `sb_publishable_…` / `sb_secret_…`. Mocked if URL or key unset. |
 | `POST` | `/v1/auth/otp/verify` | no | Forwards to `{SUPABASE_URL}/auth/v1/verify`. Creates a **free** account (no card). Mock: mints HS256 JWT when a raw `SUPABASE_JWT_SECRET` is set; otherwise returns “not configured”. |
 | `GET` | `/v1/me` | Bearer JWT | Account + `plan` + `invoice_grade` (Business+) + credit balance |
@@ -100,7 +107,7 @@ the **host secret store** or local `.env` — never commit them.
 | API Keys → Secret (`sb_secret_…`) | `SUPABASE_SERVICE_ROLE_KEY` **or** `SUPABASE_SECRET_KEY` | Server-only fallback. Never send to `apps/web` |
 | API Keys → Legacy service_role JWT | `SUPABASE_SERVICE_ROLE_KEY` | Same slot as secret |
 | JWT Keys → JWT Secret (HS256) | `SUPABASE_JWT_SECRET` | Optional. Skip if the Dashboard only shows a signing **key id** — verify via JWKS |
-| Database → URI | `DATABASE_URL` | Optional. Not required for Auth OTP |
+| Database → URI | `DATABASE_URL` | When set, Postgres is the system of record (`ops.*`). Unset → SQLite. Not required for Auth OTP |
 
 JWKS fallback: `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`. A JWT-shaped
 or `sb_*` value in `SUPABASE_JWT_SECRET` is ignored as an HMAC secret so the

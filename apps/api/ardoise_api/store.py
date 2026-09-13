@@ -1,4 +1,4 @@
-"""Local SQLite store matching ops.* (Postgres migrations are the source of truth)."""
+"""Account store: SQLite locally, Postgres (ops.*) when DATABASE_URL is set."""
 
 from __future__ import annotations
 
@@ -6,7 +6,9 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
+
+from ardoise_api.settings import Settings
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -79,7 +81,99 @@ def _row(cur: sqlite3.Row | None) -> dict[str, Any] | None:
     return dict(cur)
 
 
+@runtime_checkable
+class AccountStore(Protocol):
+    """SQLite or Postgres. Routes depend on this surface only."""
+
+    kind: str
+
+    def ping(self) -> None: ...
+
+    def upsert_account(
+        self,
+        *,
+        external_key: str,
+        email: str | None,
+        supabase_sub: str | None,
+    ) -> dict[str, Any]: ...
+
+    def credit_balance(self, account_id: str) -> int: ...
+
+    def insert_checkout(
+        self,
+        *,
+        account_id: str,
+        stripe_session_id: str,
+        amount_cents: int,
+        credits: int,
+        currency: str,
+        checkout_url: str,
+        status: str = "open",
+        mode: str = "payment",
+        plan: str | None = None,
+        stripe_subscription_id: str | None = None,
+    ) -> dict[str, Any]: ...
+
+    def get_checkout_by_stripe_id(
+        self, stripe_session_id: str
+    ) -> dict[str, Any] | None: ...
+
+    def set_customer_stripe_id(
+        self, account_id: str, stripe_customer_id: str
+    ) -> None: ...
+
+    def set_account_plan(self, account_id: str, plan: str) -> None: ...
+
+    def fulfill_checkout(
+        self,
+        stripe_session_id: str,
+        *,
+        stripe_customer_id: str | None = None,
+        stripe_subscription_id: str | None = None,
+        plan: str | None = None,
+    ) -> dict[str, Any]: ...
+
+
+class UnavailableStore:
+    """Configured for Postgres but the driver or DSN is not usable."""
+
+    kind = "postgres"
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+    def ping(self) -> None:
+        raise RuntimeError(self.reason)
+
+    def __getattr__(self, name: str) -> Any:
+        def _fail(*_args: object, **_kwargs: object) -> Any:
+            raise RuntimeError(self.reason)
+
+        return _fail
+
+
+def default_sqlite_path(settings: Settings) -> str:
+    if settings.sqlite_path:
+        return settings.sqlite_path
+    here = Path(__file__).resolve().parent.parent / ".data" / "local.db"
+    return str(here)
+
+
+def open_store(settings: Settings) -> AccountStore:
+    """Postgres when DATABASE_URL is set; SQLite otherwise. No silent fallback."""
+    url = (settings.database_url or "").strip()
+    if not url:
+        return Store(default_sqlite_path(settings))
+    try:
+        from ardoise_api.pgstore import PostgresStore
+    except ImportError:
+        return UnavailableStore("psycopg_missing")
+    return PostgresStore(url)
+
+
 class Store:
+    kind = "sqlite"
+
     def __init__(self, path: str | Path) -> None:
         self.path = str(path)
         if self.path not in {":memory:", "file:mem?mode=memory&cache=shared"}:
@@ -91,6 +185,10 @@ class Store:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
+
+    def ping(self) -> None:
+        with self.connect() as conn:
+            conn.execute("SELECT 1 FROM accounts LIMIT 0")
 
     def _init(self) -> None:
         with self.connect() as conn:
