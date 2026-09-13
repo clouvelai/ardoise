@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LedgerCard } from "./ledger-card";
+import { WorkflowCard } from "./workflow-card";
 
 export function Hero() {
   return (
@@ -12,8 +12,8 @@ export function Hero() {
             every <span className="text-grape">token</span> went.
           </h1>
           <p className="mt-6 max-w-md text-[17px] leading-relaxed text-muted sm:text-[18px]">
-            Turn Claude Code and Cursor usage into a local ledger.
-            Nothing leaves the machine.
+            Claude Code and Cursor spend, attributable per project.
+            Local ledger first — invoice-grade later.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
@@ -36,7 +36,7 @@ export function Hero() {
             No credit card required.
           </p>
         </div>
-        <LedgerCard />
+        <WorkflowCard />
       </div>
     </section>
   );
