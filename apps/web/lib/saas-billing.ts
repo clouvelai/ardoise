@@ -14,6 +14,7 @@ import {
   sparseMessage,
 } from "./saas-errors";
 
+/** Checkout plan keys: Pro → pro, Team → team. Never business. */
 export type PaidPlan = "pro" | "team";
 
 export class BillingNotWiredError extends Error {

@@ -16,8 +16,8 @@ export default function PricingPage() {
           <h1 className="text-[2.75rem] font-bold leading-[1.05] tracking-[-0.045em] text-ink sm:text-[3.6rem] lg:text-[4.15rem]">
             Pricing.
           </h1>
-          <p className="mt-6 max-w-md text-[17px] leading-relaxed text-muted sm:text-[18px]">
-            Account first. Card later.
+          <p className="mt-6 max-w-lg text-[17px] leading-relaxed text-muted sm:text-[18px]">
+            Free on disk forever. Pro is the companion. Team is the org.
           </p>
         </div>
         <div className="mt-14">
