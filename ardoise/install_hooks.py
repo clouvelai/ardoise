@@ -196,6 +196,37 @@ def link_bin() -> Path | None:
         return dest
 
 
+def _on_path(bound: Path | None) -> bool:
+    if bound is None:
+        return False
+    parts = (os.environ.get("PATH") or "").split(os.pathsep)
+    return str(bound.parent) in parts
+
+
+def render_text(result: dict[str, str]) -> str:
+    bound = result.get("bin") or ""
+    on_path = result.get("on_path") == "yes"
+    lines = [
+        "Installed Ardoise.",
+        "",
+        f"  binary   {bound or '(not linked)'}",
+        f"  hooks    {result.get('claude_settings')} + {result.get('cursor_hooks')}",
+        "",
+    ]
+    if bound and not on_path:
+        lines.append(f"  PATH     {Path(bound).parent} is not on PATH — add it, or call the binary by full path.")
+        lines.append("")
+    lines.extend(
+        [
+            "Next:",
+            "  ardoise backfill",
+            "  ardoise status",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def install(*, no_plugin_manager: bool = True) -> dict[str, str]:
     if not no_plugin_manager:
         # Phase 1 only supports the file-copy path.
@@ -208,11 +239,14 @@ def install(*, no_plugin_manager: bool = True) -> dict[str, str]:
     merge_cursor_hooks(cursor_hooks, script)
     bound = link_bin()
     plugin_note = "copied hooks into ~/.claude/settings.json and ~/.cursor/hooks.json (no plugin manager)"
+    on_path = _on_path(bound)
     return {
         "script": str(script),
         "snapshot_script": str(snapshot_script),
         "claude_settings": str(claude_settings),
         "cursor_hooks": str(cursor_hooks),
         "bin": str(bound or ""),
+        "on_path": "yes" if on_path else "no",
+        "next": "ardoise backfill && ardoise status",
         "mode": plugin_note,
     }

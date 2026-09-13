@@ -33,10 +33,14 @@ def _add_month(parser: argparse.ArgumentParser, *, required: bool = False) -> No
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ardoise",
-        description="Local AI spend ledger for Claude Code and Cursor.",
+        description=(
+            "Local AI spend ledger for Claude Code and Cursor. "
+            "With no command, prints status."
+        ),
     )
     parser.add_argument("--version", action="version", version=f"ardoise {__version__}")
-    sub = parser.add_subparsers(dest="cmd", required=True)
+    sub = parser.add_subparsers(dest="cmd", required=False)
+    parser.set_defaults(cmd="status", json=False, month=None, person=None, estimate=False)
 
     st = sub.add_parser("status", help="Show ledger totals")
     st.add_argument("--json", action="store_true", help="Print JSON")
@@ -246,8 +250,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.json:
                 print(json.dumps(result, indent=2))
             else:
-                for key, value in result.items():
-                    print(f"{key}: {value}")
+                sys.stdout.write(install_hooks.render_text(result))
             return 0
 
         if args.cmd == "vendor":

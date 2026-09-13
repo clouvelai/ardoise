@@ -237,4 +237,13 @@ def render_text(data: dict[str, Any]) -> str:
         lines.append("notes (soft)")
         for note in notes:
             lines.append(f"  {note}")
+    if int(data.get("entries") or 0) == 0:
+        lines.extend(
+            [
+                "",
+                "ledger is empty — ingest local Claude Code / Cursor logs:",
+                "  ardoise backfill",
+                "  ardoise status",
+            ]
+        )
     return "\n".join(lines) + "\n"
