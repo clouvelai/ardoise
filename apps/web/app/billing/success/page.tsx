@@ -19,8 +19,10 @@ export default function BillingSuccessPage() {
             Local ledger stays on your machine.
           </p>
           <Link
-            href="/#install"
+            href="https://github.com/clouvelai/ardoise#install"
             className="mt-8 inline-flex items-center rounded-full bg-grape px-8 py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
+            target="_blank"
+            rel="noreferrer"
           >
             Install the CLI
             <span aria-hidden className="ml-1.5">
