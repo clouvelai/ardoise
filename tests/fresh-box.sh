@@ -64,6 +64,7 @@ BIN="$ROOT/bin/ardoise"
 HOOK_STDIN="$HOME/.ardoise/hook-stdin.json"
 "$BIN" capture --stdin < "$HOOK_STDIN"
 "$BIN" backfill --json >"$BOX/backfill.json"
+"$BIN" backfill --json >"$BOX/backfill2.json"
 
 "$BIN" status --json --month 2026-09 >"$BOX/status.json"
 "$BIN" statement 2026-09 --out-dir "$HOME/.ardoise/statements" >"$BOX/statement.json"
@@ -222,6 +223,12 @@ if n_snap != 0:
 for needle in (b"sk-ant-oat", b"access_token", b"Bearer "):
     if needle in blob:
         raise SystemExit(f"ledger stored credential-like {needle!r}")
+
+rerun = json.loads((box / "backfill2.json").read_text())
+if int(rerun.get("inserted") or 0) != 0:
+    raise SystemExit(f"second backfill inserted={rerun}")
+if int(rerun.get("skipped_files") or 0) < 1:
+    raise SystemExit(f"second backfill should skip unchanged files: {rerun}")
 
 print("checks=ok entries=3 cost=0.02105 project=clouvelai/Arbusteia")
 PY
