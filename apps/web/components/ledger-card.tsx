@@ -7,12 +7,12 @@ const rows = [
 
 export function LedgerCard() {
   return (
-    <div className="relative mx-auto mt-10 w-full max-w-[440px] lg:mt-6">
+    <div className="relative mx-auto mt-16 w-full max-w-[440px] lg:mt-8">
       <div
-        className="mascot-bob pointer-events-none absolute -top-[84px] right-3 z-10 h-[92px] w-[84px] sm:-top-[100px] sm:right-4 sm:h-[108px] sm:w-[98px]"
+        className="mascot-bob pointer-events-none absolute -top-[106px] right-1 z-10 h-[124px] w-[96px] sm:-top-[122px] sm:right-2 sm:h-[144px] sm:w-[112px]"
         aria-hidden
       >
-        <Mascot className="h-full w-full drop-shadow-[0_6px_10px_rgba(91,33,182,0.18)]" />
+        <Mascot className="h-full w-full drop-shadow-[0_8px_12px_rgba(91,33,182,0.16)]" />
       </div>
       <div className="rounded-[28px] bg-white px-6 py-7 shadow-[0_8px_30px_rgba(76,29,149,0.07),0_28px_80px_rgba(76,29,149,0.08)] ring-1 ring-black/[0.03] sm:px-8 sm:py-8">
         <p className="mb-3 text-[12px] font-medium text-muted">
