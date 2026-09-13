@@ -209,6 +209,7 @@ class Store:
         self.backend = "sqlite"
         self.path = str(path)
         self.dsn = ""
+        self._mem: sqlite3.Connection | None = None
         if self.path not in {":memory:", "file:mem?mode=memory&cache=shared"}:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._init()
@@ -220,6 +221,13 @@ class Store:
             raw = connect_postgres(self.dsn)
             raw.execute("SET search_path TO ops, public")
             return _Conn(raw, "postgres")
+        if self.path in {":memory:", "file:mem?mode=memory&cache=shared"}:
+            if self._mem is None:
+                uri = self.path.startswith("file:")
+                self._mem = sqlite3.connect(self.path, uri=uri)
+                self._mem.row_factory = sqlite3.Row
+                self._mem.execute("PRAGMA foreign_keys=ON")
+            return _Conn(self._mem, "sqlite")
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")

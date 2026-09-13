@@ -140,8 +140,12 @@ class OpenStoreTests(unittest.TestCase):
             "ardoise_api.db.open_postgres",
             side_effect=OSError("connection refused"),
         ):
-            with self.assertRaises(RuntimeError) as ctx:
-                open_store(_settings(database_url="postgresql://u:p@127.0.0.1:1/db"))
+            with self.assertLogs("ardoise_api.db", level="ERROR") as logged:
+                with self.assertRaises(RuntimeError) as ctx:
+                    open_store(_settings(database_url="postgresql://u:p@127.0.0.1:1/db"))
+        self.assertTrue(
+            any("refusing silent SQLite fallback" in line for line in logged.output)
+        )
         msg = str(ctx.exception)
         self.assertIn("DATABASE_URL", msg)
         self.assertIn("unreachable", msg)
@@ -152,8 +156,9 @@ class OpenStoreTests(unittest.TestCase):
             "ardoise_api.db._psycopg_connect",
             side_effect=RuntimeError("psycopg package is not installed"),
         ):
-            with self.assertRaises(RuntimeError) as ctx:
-                open_store(_settings(database_url="postgresql://u:p@h/db"))
+            with self.assertLogs("ardoise_api.db", level="ERROR"):
+                with self.assertRaises(RuntimeError) as ctx:
+                    open_store(_settings(database_url="postgresql://u:p@h/db"))
         self.assertIn("DATABASE_URL", str(ctx.exception))
 
     def test_successful_postgres_open(self) -> None:
