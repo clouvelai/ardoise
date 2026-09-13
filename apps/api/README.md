@@ -8,7 +8,7 @@ Follows [`docs/saas-scaffold.md`](../../docs/saas-scaffold.md):
 | Concern | Pattern |
 |---|---|
 | Auth | **Account first.** Supabase **email OTP** via Gotrue HTTP (`POST /v1/auth/otp` + `/verify`). API verifies `Authorization: Bearer` JWT (HS256 `SUPABASE_JWT_SECRET` when it is a raw secret, otherwise JWKS). Email/`sub` → `ops.accounts.external_key`. No card at signup. No passwords. No supabase-js. |
-| Billing | Stripe **Checkout Sessions** `mode=subscription` for Team ($39/mo) / Business ($149/mo). `POST /v1/billing/checkout` + `/v1/billing/webhook`. Not Connect. Invoice-grade claims are **Business+**. Legacy `mode=payment` credits stay on `/v1/checkout/sessions`. |
+| Billing | Stripe **Checkout Sessions** `mode=subscription` for Pro ($20/mo) / Team ($49/mo). `POST /v1/billing/checkout` + `/v1/billing/webhook`. Not Connect. Invoice-grade claims are **Pro+**. Legacy `mode=payment` credits stay on `/v1/checkout/sessions`. |
 | Mock | Missing Supabase URL or publishable/anon key → OTP mock (verify mints a JWT when `SUPABASE_JWT_SECRET` is a raw HMAC secret). `STRIPE_MOCK=true` **or** missing `STRIPE_SECRET_KEY` → local mock Checkout. |
 | Sync | Stub only. Future `POST /v1/usage/sync` accepts already-priced JSONL (`bin/ardoise export`) after OTP. Never upload `ledger.db`. |
 
@@ -77,8 +77,8 @@ Open the mock URL and click **Pay (mock)**, or `POST /v1/stripe/webhook` with
 | `GET` | `/health` | no | `store` (`sqlite` / `postgres`), `store_ok`, `database_url_configured`, `stripe_mock`, `lab_auth_bypass`, `supabase_otp_configured` (no secrets, no DSN) |
 | `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the publishable/anon (or server-only secret) key. Accepts legacy `eyJ…` JWTs and `sb_publishable_…` / `sb_secret_…`. Mocked if URL or key unset. |
 | `POST` | `/v1/auth/otp/verify` | no | Forwards to `{SUPABASE_URL}/auth/v1/verify`. Creates a **free** account (no card). Mock: mints HS256 JWT when a raw `SUPABASE_JWT_SECRET` is set; otherwise returns “not configured”. |
-| `GET` | `/v1/me` | Bearer JWT | Account + `plan` + `invoice_grade` (Business+) + credit balance |
-| `POST` | `/v1/billing/checkout` | Bearer JWT | Team/Business Checkout Session (`mode=subscription`). Price IDs: `STRIPE_PRICE_TEAM` / `STRIPE_PRICE_BUSINESS`. |
+| `GET` | `/v1/me` | Bearer JWT | Account + `plan` + `invoice_grade` (Pro+) + credit balance |
+| `POST` | `/v1/billing/checkout` | Bearer JWT | Pro/Team Checkout Session (`mode=subscription`). Price IDs: `STRIPE_PRICE_PRO` / `STRIPE_PRICE_TEAM`. |
 | `POST` | `/v1/billing/webhook` | Stripe signature (live) | Idempotent `checkout.session.completed` (sets plan) |
 | `POST` | `/v1/checkout/sessions` | Bearer JWT | Legacy Checkout Session (`mode=payment`) |
 | `GET` | `/v1/checkout/mock/{id}` | no | Local stand-in for Stripe Checkout |
@@ -116,7 +116,7 @@ API does not try to HS256-verify with an API key.
 ## Web CTA
 
 `apps/web` `/signup` is email OTP (no card). `/pricing` Free stays signup-only;
-Team/Business call `/v1/billing/checkout` when a session exists, otherwise
+Pro/Team call `/v1/billing/checkout` when a session exists, otherwise
 `/signup?plan=`. Helpers: [`apps/web/lib/saas-otp.ts`](../web/lib/saas-otp.ts),
 [`saas-billing.ts`](../web/lib/saas-billing.ts). No Stripe secrets in the client.
 

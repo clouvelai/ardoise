@@ -81,7 +81,7 @@ def create_app(
         version=__version__,
         description=(
             "Hosted companion. Auth: Supabase email OTP + JWT (account first). "
-            "Billing: Stripe Checkout Sessions mode=subscription for Team/Business."
+            "Billing: Stripe Checkout Sessions mode=subscription for Pro/Team."
         ),
     )
     app.state.settings = settings

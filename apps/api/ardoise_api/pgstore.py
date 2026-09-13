@@ -291,7 +291,7 @@ class PostgresStore:
                             now,
                         ),
                     )
-            if session_plan in {"team", "business"} and row["account_id"]:
+            if session_plan in {"pro", "team"} and row["account_id"]:
                 conn.execute(
                     """
                     UPDATE ops.accounts

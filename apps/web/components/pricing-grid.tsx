@@ -1,4 +1,3 @@
-import { ENTERPRISE_MAILTO } from "@/lib/saas-otp";
 import { PricingCta } from "./pricing-cta";
 import type { PaidPlan } from "@/lib/saas-billing";
 
@@ -23,25 +22,25 @@ const tiers: {
     featured: false,
   },
   {
-    name: "Team",
-    price: "$39",
+    name: "Pro",
+    price: "$20",
     period: "/mo",
-    badge: "Most teams",
-    items: ["Cloud sync", "Multi-seat", "Shared reports"],
-    cta: "Start for free",
+    badge: "Most popular",
+    items: ["Invoice-grade statements", "Cloud sync", "One seat"],
+    cta: "Get Pro",
     href: "/signup?next=/pricing",
     featured: true,
-    plan: "team",
+    plan: "pro",
   },
   {
-    name: "Business",
-    price: "$149",
+    name: "Team",
+    price: "$49",
     period: "/mo",
-    items: ["Invoice-grade statements", "Audit trail"],
-    cta: "Get started",
+    items: ["Multi-seat", "Shared reports", "Org rollup"],
+    cta: "Get Team",
     href: "/signup?next=/pricing",
     featured: false,
-    plan: "business",
+    plan: "team",
   },
 ];
 
@@ -88,22 +87,6 @@ export function PricingGrid() {
           </article>
         ))}
       </div>
-
-      <a
-        href={ENTERPRISE_MAILTO}
-        className="mt-6 flex items-center justify-between gap-6 rounded-[28px] bg-white/70 px-7 py-5 ring-1 ring-black/[0.04] transition hover:bg-white"
-      >
-        <span className="text-[15px] font-semibold text-ink">
-          Enterprise
-          <span className="ml-3 font-medium text-muted">Custom</span>
-        </span>
-        <span className="text-[15px] font-semibold text-grape">
-          Talk to us
-          <span aria-hidden className="ml-1.5">
-            →
-          </span>
-        </span>
-      </a>
     </div>
   );
 }

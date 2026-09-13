@@ -28,4 +28,4 @@ tests/fresh-box.sh   # must print FRESH-BOX-OK offline
 - Never persist prompts or credentials
 - Soft caps and `ardoise estimate` never block the editor
 - Do not add third-party Python deps to `ardoise/`
-- Hosted companion: `apps/api` (FastAPI + its own requirements). **Account first, card later** — OTP signup is free; Stripe Checkout (`mode=subscription`) only for Team/Business. Keep Stripe/JWT secrets server-side. Never add third-party Python deps to `ardoise/`.
+- Hosted companion: `apps/api` (FastAPI + its own requirements). **Account first, card later** — OTP signup is free; Stripe Checkout (`mode=subscription`) only for Pro/Team. Keep Stripe/JWT secrets server-side. Never add third-party Python deps to `ardoise/`.

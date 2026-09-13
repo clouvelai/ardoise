@@ -408,7 +408,7 @@ class Store:
                             now,
                         ),
                     )
-            if session_plan in {"team", "business"} and row["account_id"]:
+            if session_plan in {"pro", "team"} and row["account_id"]:
                 conn.execute(
                     "UPDATE accounts SET plan = ?, updated_at = ? WHERE id = ?",
                     (session_plan, now, row["account_id"]),

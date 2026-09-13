@@ -11,6 +11,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import jwt
 from fastapi.testclient import TestClient
@@ -252,6 +253,25 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(ok.status_code, 200)
         self.assertTrue(ok.json()["ok"])
 
+    def test_settings_reads_stripe_price_pro_and_team(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "STRIPE_PRICE_PRO": "price_1UFItuLXeKVxcTxwwvakV7CI",
+                "STRIPE_PRICE_TEAM": "price_1UFIu0LXeKVxcTxwN5l52Fzf",
+                "STRIPE_PRICE_BUSINESS": "price_should_be_ignored",
+            },
+            clear=False,
+        ):
+            settings = Settings.from_env()
+        self.assertEqual(
+            settings.stripe_price_pro, "price_1UFItuLXeKVxcTxwwvakV7CI"
+        )
+        self.assertEqual(
+            settings.stripe_price_team, "price_1UFIu0LXeKVxcTxwN5l52Fzf"
+        )
+        self.assertFalse(hasattr(settings, "stripe_price_business"))
+
     def test_billing_checkout_requires_auth(self) -> None:
         client = self._cli()
         res = client.post("/v1/billing/checkout", json={"plan": "team"})
@@ -277,7 +297,7 @@ class ScaffoldTests(unittest.TestCase):
         self.assertTrue(session["mock"])
         self.assertEqual(session["mode"], "subscription")
         self.assertEqual(session["plan"], "team")
-        self.assertEqual(session["amount_cents"], 3900)
+        self.assertEqual(session["amount_cents"], 4900)
         sid = session["stripe_session_id"]
 
         page = client.get(f"/v1/checkout/mock/{sid}")
@@ -302,21 +322,22 @@ class ScaffoldTests(unittest.TestCase):
 
         me = client.get("/v1/me", headers=headers).json()
         self.assertEqual(me["account"]["plan"], "team")
-        self.assertFalse(me["account"]["invoice_grade"])
+        self.assertTrue(me["account"]["invoice_grade"])
         self.assertEqual(me["credits"], 0)
 
         again = client.post("/v1/billing/webhook", content=json.dumps(event))
         self.assertEqual(again.status_code, 200)
         self.assertTrue(again.json()["already_fulfilled"])
 
-    def test_business_plan_is_invoice_grade(self) -> None:
+    def test_pro_plan_is_invoice_grade(self) -> None:
         client = self._cli()
         headers = {"Authorization": f"Bearer {_token()}"}
         created = client.post(
-            "/v1/billing/checkout", json={"plan": "business"}, headers=headers
+            "/v1/billing/checkout", json={"plan": "pro"}, headers=headers
         )
         self.assertEqual(created.status_code, 200, created.text)
-        self.assertEqual(created.json()["amount_cents"], 14900)
+        self.assertEqual(created.json()["plan"], "pro")
+        self.assertEqual(created.json()["amount_cents"], 2000)
         sid = created.json()["stripe_session_id"]
         hook = client.post(
             "/v1/billing/webhook",
@@ -326,8 +347,8 @@ class ScaffoldTests(unittest.TestCase):
                     "data": {
                         "object": {
                             "id": sid,
-                            "customer": "cus_biz",
-                            "metadata": {"plan": "business"},
+                            "customer": "cus_pro",
+                            "metadata": {"plan": "pro"},
                         }
                     },
                 }
@@ -335,8 +356,18 @@ class ScaffoldTests(unittest.TestCase):
         )
         self.assertEqual(hook.status_code, 200)
         me = client.get("/v1/me", headers=headers).json()
-        self.assertEqual(me["account"]["plan"], "business")
+        self.assertEqual(me["account"]["plan"], "pro")
         self.assertTrue(me["account"]["invoice_grade"])
+
+    def test_billing_checkout_rejects_business(self) -> None:
+        client = self._cli()
+        res = client.post(
+            "/v1/billing/checkout",
+            json={"plan": "business"},
+            headers={"Authorization": f"Bearer {_token()}"},
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("pro or team", res.json()["detail"])
 
     def test_usage_sync_is_stub(self) -> None:
         client = self._cli()
