@@ -185,4 +185,4 @@ apps/api/scripts/smoke.sh   # SMOKE-OK health+mock-checkout+otp+billing
 
 ## License
 
-[MIT](LICENSE) © 2026 clouvelai.
+[MIT](LICENSE) © 2026 clouvelai. Vulnerability reports: [SECURITY.md](SECURITY.md).
