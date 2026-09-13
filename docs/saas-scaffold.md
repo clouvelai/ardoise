@@ -52,5 +52,7 @@ Implementation (not the Phase 1 CLI): [`apps/api`](../apps/api) — FastAPI,
 Postgres migrations under `apps/api/migrations/`, local mock when
 `STRIPE_MOCK=true` or `STRIPE_SECRET_KEY` is unset. Marketing CTAs on
 `apps/web` hit `/signup` and `/pricing`. OTP is API-backed via
-`apps/web/lib/saas-otp.ts`; paid CTAs call `lib/saas-billing.ts` only when a
-session exists. If the API is down the form stays a polished stub.
+`apps/web/lib/saas-otp.ts` (`NEXT_PUBLIC_ARDOISE_API_URL`, production default
+`https://api-production-ea055.up.railway.app`; localhost in `next dev`);
+paid CTAs call `lib/saas-billing.ts` only when a session exists. If the API
+is down the form stays a polished stub.

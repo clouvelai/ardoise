@@ -10,7 +10,9 @@
  * Stripe Checkout Sessions stay server-side (apps/api). Never put
  * STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / SUPABASE_JWT_SECRET here.
  *
- * See apps/api/README.md and docs/saas-scaffold.md.
+ * Production default is the public Railway API. Local `next dev` keeps
+ * localhost unless NEXT_PUBLIC_ARDOISE_API_URL is set. See
+ * apps/api/README.md and docs/saas-scaffold.md.
  */
 
 export const EARLY_ACCESS_MAILTO =
@@ -19,8 +21,12 @@ export const EARLY_ACCESS_MAILTO =
 export const ENTERPRISE_MAILTO =
   "mailto:hello@ardoise.ai?subject=Ardoise%20Enterprise";
 
+const PRODUCTION_API_URL = "https://api-production-ea055.up.railway.app";
+const LOCAL_API_URL = "http://127.0.0.1:8787";
+
 export const API_BASE =
-  process.env.NEXT_PUBLIC_ARDOISE_API_URL ?? "http://127.0.0.1:8787";
+  process.env.NEXT_PUBLIC_ARDOISE_API_URL ??
+  (process.env.NODE_ENV === "development" ? LOCAL_API_URL : PRODUCTION_API_URL);
 
 export class OtpNotWiredError extends Error {
   readonly code = "OTP_NOT_WIRED" as const;
