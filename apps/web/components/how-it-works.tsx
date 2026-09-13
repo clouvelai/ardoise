@@ -85,7 +85,7 @@ export function HowItWorks() {
           })}
         </ol>
 
-        <div className="pt-[7.25rem]">
+        <div className="pt-20 lg:pt-[7.25rem]">
           <WorkflowCard
             view={view}
             className="relative mx-auto w-full max-w-[440px]"
