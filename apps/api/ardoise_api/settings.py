@@ -17,6 +17,39 @@ def _int(name: str, default: int) -> int:
     return int(raw)
 
 
+def _env(*names: str) -> str:
+    """First non-empty environment value among *names* (aliases)."""
+    for name in names:
+        raw = os.environ.get(name)
+        if raw is None:
+            continue
+        value = raw.strip()
+        if value:
+            return value
+    return ""
+
+
+def is_legacy_jwt_api_key(value: str) -> bool:
+    """Legacy anon / service_role keys are long-lived HS256 JWTs (`eyJ…`)."""
+    if not value.startswith("eyJ"):
+        return False
+    return value.count(".") == 2
+
+
+def is_sb_api_key(value: str) -> bool:
+    """Newer Dashboard keys: `sb_publishable_…` / `sb_secret_…` (not JWTs)."""
+    return value.startswith("sb_publishable_") or value.startswith("sb_secret_")
+
+
+def is_usable_hs256_secret(value: str) -> bool:
+    """True when *value* is a raw HMAC secret, not an API key or JWT."""
+    if not value:
+        return False
+    if is_sb_api_key(value) or is_legacy_jwt_api_key(value):
+        return False
+    return True
+
+
 @dataclass(frozen=True)
 class Settings:
     env: str
@@ -53,9 +86,11 @@ class Settings:
             env=os.environ.get("ARDOISE_ENV", "development").strip() or "development",
             public_url=public_url,
             web_origin=web_origin,
-            supabase_url=os.environ.get("SUPABASE_URL", "").rstrip("/"),
-            supabase_anon_key=os.environ.get("SUPABASE_ANON_KEY", ""),
-            supabase_jwt_secret=os.environ.get("SUPABASE_JWT_SECRET", ""),
+            supabase_url=_env("SUPABASE_URL").rstrip("/"),
+            supabase_anon_key=_env(
+                "SUPABASE_ANON_KEY", "SUPABASE_PUBLISHABLE_KEY"
+            ),
+            supabase_jwt_secret=_env("SUPABASE_JWT_SECRET"),
             database_url=os.environ.get("DATABASE_URL", ""),
             sqlite_path=os.environ.get("ARDOISE_API_SQLITE", ""),
             stripe_secret_key=os.environ.get("STRIPE_SECRET_KEY", ""),
@@ -74,8 +109,8 @@ class Settings:
             checkout_cancel_url=os.environ.get(
                 "CHECKOUT_CANCEL_URL", f"{web_origin}/billing/cancel"
             ),
-            supabase_service_role_key=os.environ.get(
-                "SUPABASE_SERVICE_ROLE_KEY", ""
+            supabase_service_role_key=_env(
+                "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"
             ),
             stripe_price_team=os.environ.get("STRIPE_PRICE_TEAM", ""),
             stripe_price_business=os.environ.get("STRIPE_PRICE_BUSINESS", ""),
@@ -121,9 +156,14 @@ class Settings:
 
     @property
     def supabase_auth_key(self) -> str:
-        """Anon key preferred; service role is server-only fallback."""
+        """Publishable/anon preferred; secret/service_role is server-only fallback."""
         return self.supabase_anon_key or self.supabase_service_role_key
 
     @property
     def supabase_otp_configured(self) -> bool:
         return bool(self.supabase_url and self.supabase_auth_key)
+
+    @property
+    def has_hs256_secret(self) -> bool:
+        """Legacy JWT Secret from the Dashboard — not an API key or JWT."""
+        return is_usable_hs256_secret(self.supabase_jwt_secret)

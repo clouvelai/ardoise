@@ -9,12 +9,16 @@ to import Arbusteia product code.
 
 Arbusteia humans sign in with **Supabase Auth email OTP**:
 
-1. Browser calls `POST {SUPABASE_URL}/auth/v1/otp` with the public anon key.
+1. Browser calls `POST {SUPABASE_URL}/auth/v1/otp` with the public
+   publishable/anon key (`sb_publishable_…` or legacy `eyJ…` JWT).
 2. User types the one-time code; Supabase returns an access JWT.
 3. The API verifies `Authorization: Bearer <access_token>` (HS256
-   `SUPABASE_JWT_SECRET`, or JWKS from `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`).
+   `SUPABASE_JWT_SECRET` when it is a raw secret; otherwise JWKS from
+   `{SUPABASE_URL}/auth/v1/.well-known/jwks.json` — use JWKS when the
+   Dashboard only shows a signing key id).
 4. Email (or `sub`) becomes the account `external_key`. Customer rows and the
-   credit ledger live in **Postgres** (Supabase primary, not a replica).
+   credit ledger live in **Postgres** (Supabase primary, not a replica) when
+   `DATABASE_URL` is set. Auth OTP itself does not need the database password.
 
 A hosted Ardoise does the same: OTP through `apps/api` (`POST /v1/auth/otp`
 and `/v1/auth/otp/verify`), JWT on later calls, Postgres as the system of
