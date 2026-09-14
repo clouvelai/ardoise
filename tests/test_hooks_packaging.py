@@ -77,7 +77,14 @@ class SourceTreeTests(unittest.TestCase):
             ROOT / "plugins" / "shared" / "hook_enqueue.py",
             ROOT / "plugins" / "claude" / "hooks" / "capture.sh",
             ROOT / "plugins" / "claude" / "hooks" / "snapshot.sh",
+            ROOT / "plugins" / "claude" / "hooks" / "hooks.json",
+            ROOT / "plugins" / "claude" / ".claude-plugin" / "plugin.json",
             ROOT / "plugins" / "cursor" / "capture.sh",
+            ROOT / "plugins" / "cursor" / "hooks.json",
+            ROOT / "plugins" / "cursor" / "hooks" / "hooks.json",
+            ROOT / "plugins" / "cursor" / ".cursor-plugin" / "plugin.json",
+            ROOT / ".claude-plugin" / "marketplace.json",
+            ROOT / ".cursor-plugin" / "plugin.json",
         ]
         for path in paths:
             _assert_no_shared_path(self, path)

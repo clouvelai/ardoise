@@ -60,12 +60,55 @@ if [ -e "$BOX/marketplace/shared" ]; then
   echo "marketplace copy must not include plugins/shared" >&2
   exit 1
 fi
-for stub in "$MKT_PLUGIN/hooks/capture.sh" "$MKT_PLUGIN/hooks/snapshot.sh"; do
+for stub in "$MKT_PLUGIN/hooks/capture.sh" "$MKT_PLUGIN/hooks/snapshot.sh" \
+  "$MKT_PLUGIN/.claude-plugin/plugin.json" "$MKT_PLUGIN/hooks/hooks.json"; do
   if grep -E '\.\./shared|plugins/shared' "$stub" >/dev/null; then
     echo "plugin stub still references plugins/shared: $stub" >&2
     exit 1
   fi
 done
+# In-repo Claude marketplace catalog + Cursor plugin scaffold.
+python3 - "$ROOT" <<'PY'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+catalog = json.loads((root / ".claude-plugin" / "marketplace.json").read_text())
+if catalog.get("name") != "ardoise":
+    raise SystemExit(f"marketplace name={catalog.get('name')!r}")
+plugin = (catalog.get("plugins") or [None])[0]
+if not plugin or plugin.get("source") != "./plugins/claude":
+    raise SystemExit(f"marketplace source={plugin}")
+if not (root / "plugins" / "claude" / ".claude-plugin" / "plugin.json").is_file():
+    raise SystemExit("missing plugins/claude/.claude-plugin/plugin.json")
+cursor_root = json.loads((root / ".cursor-plugin" / "plugin.json").read_text())
+cursor_plugin = json.loads(
+    (root / "plugins" / "cursor" / ".cursor-plugin" / "plugin.json").read_text()
+)
+if cursor_root.get("name") != "ardoise" or cursor_plugin.get("name") != "ardoise":
+    raise SystemExit("cursor plugin name mismatch")
+hooks = json.loads((root / "plugins" / "cursor" / "hooks" / "hooks.json").read_text())
+blob = json.dumps(hooks) + json.dumps(cursor_root) + json.dumps(catalog)
+if "../shared" in blob or "plugins/shared" in blob:
+    raise SystemExit("catalog/plugin still references plugins/shared")
+print("catalog=ok")
+PY
+# Isolated Cursor plugin copy (dogfood layout) must not need plugins/shared.
+CUR_PLUGIN="$BOX/local/ardoise"
+mkdir -p "$BOX/local"
+cp -R "$ROOT/plugins/cursor/." "$CUR_PLUGIN/"
+if [ -e "$BOX/local/shared" ]; then
+  echo "cursor local copy must not include plugins/shared" >&2
+  exit 1
+fi
+if [ ! -f "$CUR_PLUGIN/.cursor-plugin/plugin.json" ] || [ ! -f "$CUR_PLUGIN/hooks/hooks.json" ]; then
+  echo "cursor local copy missing plugin.json or hooks/hooks.json" >&2
+  exit 1
+fi
+if grep -E '\.\./shared|plugins/shared' "$CUR_PLUGIN/capture.sh" \
+  "$CUR_PLUGIN/hooks/hooks.json" "$CUR_PLUGIN/.cursor-plugin/plugin.json" >/dev/null; then
+  echo "cursor local copy still references plugins/shared" >&2
+  exit 1
+fi
 MKT_HOME="$BOX/mkt-home"
 mkdir -p "$MKT_HOME"
 # No installed hooks in this HOME — stub must call ARDOISE_BIN (the linked CLI).
@@ -75,6 +118,9 @@ printf '%s\n' '{"hook_event_name":"Stop"}' | \
   "$MKT_PLUGIN/hooks/capture.sh"
 HOME="$MKT_HOME" ARDOISE_HOME="$MKT_HOME/.ardoise" ARDOISE_BIN="$LAUNCHER" \
   "$MKT_PLUGIN/hooks/snapshot.sh" </dev/null
+printf '%s\n' '{"hook_event_name":"stop"}' | \
+  HOME="$MKT_HOME" ARDOISE_HOME="$MKT_HOME/.ardoise" ARDOISE_BIN="$LAUNCHER" \
+  "$CUR_PLUGIN/capture.sh"
 
 # Fail-open: a crashing CLI must not block the editor.
 BOOM="$BOX/boom-ardoise"
@@ -82,6 +128,8 @@ printf '%s\n' '#!/bin/sh' 'exit 7' >"$BOOM"
 chmod +x "$BOOM"
 HOME="$MKT_HOME" ARDOISE_HOME="$MKT_HOME/.ardoise" ARDOISE_BIN="$BOOM" \
   "$MKT_PLUGIN/hooks/capture.sh" </dev/null
+HOME="$MKT_HOME" ARDOISE_HOME="$MKT_HOME/.ardoise" ARDOISE_BIN="$BOOM" \
+  "$CUR_PLUGIN/capture.sh" </dev/null
 ARDOISE_BIN="$BOOM" "$HOME/.ardoise/hooks/capture.sh" </dev/null
 ARDOISE_BIN="$BOOM" "$HOME/.ardoise/hooks/snapshot.sh" </dev/null
 

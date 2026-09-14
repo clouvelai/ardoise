@@ -35,16 +35,57 @@ manager — no sibling `plugins/shared` directory is required.
 `hook_enqueue.py` is copy-safe (import `ardoise` or exit 0). It does not
 walk up to a repo root.
 
-## Plugin manager
+## Plugin manager (additive)
 
-Phase 1 does not invoke a marketplace. If a user later installs the Claude
-plugin via a plugin manager, the bundled stubs still resolve the
-`install.sh` hooks or `ardoise` on PATH. Keep shipping the CLI via
-`install.sh` (or a later tagged `curl | sh`).
+Canonical install remains `./install.sh`. Marketplace / plugin-manager
+paths are additive and never required. They ship **zero credentials**.
+
+### Claude Code marketplace
+
+In-repo catalog: [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json)
+(plugin source `./plugins/claude`).
+
+```
+/plugin marketplace add clouvelai/ardoise
+/plugin install ardoise@ardoise
+```
+
+Bundled stubs still resolve the `install.sh` hooks or `ardoise` on PATH.
+
+When the Claude Code CLI is available, validate the catalog and plugin:
+
+```
+claude plugin validate .
+claude plugin validate ./plugins/claude
+```
+
+The first checks `marketplace.json` (and each local plugin source). The
+second checks that plugin's `plugin.json` and `hooks/hooks.json`.
+
+### Cursor local plugin (dogfood)
+
+First-class layout lives under `plugins/cursor/`
+(`.cursor-plugin/plugin.json` + `hooks/hooks.json`). Copy or symlink it
+into `~/.cursor/plugins/local` and reload the window:
+
+```
+mkdir -p ~/.cursor/plugins/local
+cp -R plugins/cursor ~/.cursor/plugins/local/ardoise
+# or: ln -s "$(pwd)/plugins/cursor" ~/.cursor/plugins/local/ardoise
+```
+
+Whole-checkout dogfood also works: repo-root
+[`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json) points hooks
+at `plugins/cursor/capture.sh`.
+
+```
+ln -s "$(pwd)" ~/.cursor/plugins/local/ardoise
+```
+
+This scaffold does **not** replace `install.sh`'s merge into
+`~/.cursor/hooks.json`. Keep using `./install.sh` as the secure user path.
 
 ## Follow-ups (not this change)
 
-- Claude `.claude-plugin/marketplace.json` catalog
-- Cursor `.cursor-plugin/plugin.json` scaffold
 - Tagged release + checksummed `curl | sh` one-liner
-- Marketing Install surface (Encre)
+- Marketing Install surface (Encre) — user-facing one-liner after the tag
