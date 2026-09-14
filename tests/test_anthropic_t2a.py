@@ -142,7 +142,11 @@ class AnthropicT2aTests(IsolatedHomeTest):
         self.assertTrue(data["ok"])
         self.assertTrue(data["skipped"])
         self.assertEqual(data["reason"], "missing_cred")
-        self.assertIn("missing ANTHROPIC_ANALYTICS_API_KEY", data["message"])
+        self.assertIn("Analytics T2a skipped", data["message"])
+        self.assertIn("Free is T0", data["message"])
+        self.assertIn("Team/Enterprise", data["message"])
+        self.assertNotIn("ANTHROPIC_ANALYTICS_API_KEY", data["message"])
+        self.assertNotIn("missing ", data["message"])
         self.assertIn("T2a skipped", t2a.render_test(data))
 
     def test_vendor_test_fixture_summaries_and_usage(self) -> None:
@@ -299,14 +303,56 @@ class AnthropicT2aTests(IsolatedHomeTest):
             code = cli_main(["vendor", "test", "anthropic"])
         self.assertEqual(code, 0)
         out = buf.getvalue()
-        self.assertIn("ANTHROPIC_ANALYTICS_API_KEY", out)
-        self.assertIn("T2a skipped", out)
+        self.assertIn("Analytics T2a skipped", out)
+        self.assertIn("Free is T0", out)
+        self.assertIn("Team/Enterprise", out)
+        self.assertNotIn("missing ANTHROPIC", out)
+        self.assertNotIn("ANTHROPIC_ANALYTICS_API_KEY", out)
+        self.assertNotIn("ANTHROPIC_ADMIN_API_KEY", out)
+        self.assertNotIn("unresolved", out)
+
+        buf_json = StringIO()
+        with redirect_stdout(buf_json):
+            code_json = cli_main(["vendor", "test", "anthropic", "--json"])
+        self.assertEqual(code_json, 0)
+        payload = json.loads(buf_json.getvalue())
+        creds = payload.get("credentials") or []
+        self.assertTrue(any(item.get("env") == "ANTHROPIC_ANALYTICS_API_KEY" for item in creds))
+        self.assertIn("Analytics T2a skipped", str(payload.get("detail") or ""))
+        self.assertNotIn("ANTHROPIC_ANALYTICS_API_KEY", str(payload.get("detail") or ""))
+
+        buf_verbose = StringIO()
+        with redirect_stdout(buf_verbose):
+            code_verbose = cli_main(["vendor", "test", "anthropic", "--verbose"])
+        self.assertEqual(code_verbose, 0)
+        verbose = buf_verbose.getvalue()
+        self.assertIn("ANTHROPIC_ADMIN_API_KEY", verbose)
+        self.assertIn("ANTHROPIC_ANALYTICS_API_KEY", verbose)
+        self.assertIn("unresolved", verbose)
 
         buf2 = StringIO()
         with redirect_stdout(buf2):
             code2 = cli_main(["vendor", "pull", "anthropic"])
         self.assertEqual(code2, 0)
-        self.assertIn("T2a skipped", buf2.getvalue())
+        pull = buf2.getvalue()
+        self.assertIn("T2a skipped", pull)
+        self.assertNotIn("ANTHROPIC_ANALYTICS_API_KEY", pull)
+        self.assertNotIn("missing ", pull)
+
+    def test_cli_vendor_test_stays_quiet_with_oauth(self) -> None:
+        from contextlib import redirect_stdout
+        from io import StringIO
+
+        os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = "sk-ant-oat01-not-used"
+        buf = StringIO()
+        with redirect_stdout(buf):
+            code = cli_main(["vendor", "test", "anthropic"])
+        self.assertEqual(code, 0)
+        out = buf.getvalue()
+        self.assertIn("Analytics T2a skipped", out)
+        self.assertNotIn("ANTHROPIC_ADMIN_API_KEY", out)
+        self.assertNotIn("CLAUDE_CODE_OAUTH_TOKEN", out)
+        self.assertNotIn("unresolved", out)
 
 
 if __name__ == "__main__":

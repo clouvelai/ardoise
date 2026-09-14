@@ -16,6 +16,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, ROOT)
 
 from ardoise import backfill as backfill_mod  # noqa: E402
+from ardoise.cli import main as cli_main  # noqa: E402
+from ardoise.status import render_text as render_status, summarize  # noqa: E402
 from ardoise.project import (  # noqa: E402
     clear_project_cache,
     git_remote_url,
@@ -80,6 +82,55 @@ class BackfillSkipTests(IsolatedHome):
         self.assertEqual(forced["skipped_files"], 0)
         self.assertGreaterEqual(forced["files"], 1)
         self.assertGreaterEqual(forced["skipped"], 1)
+
+    def test_empty_ledger_tip_distinguishes_already_vs_never(self) -> None:
+        self.assertIsNone(
+            backfill_mod.empty_ledger_tip({"inserted": 2, "updated": 0, "files": 1, "skipped_files": 0})
+        )
+        self.assertEqual(
+            backfill_mod.empty_ledger_tip({"inserted": 0, "updated": 0, "files": 0, "skipped_files": 3}),
+            "already backfilled, no usage rows",
+        )
+        self.assertEqual(
+            backfill_mod.empty_ledger_tip(
+                {"inserted": 0, "updated": 0, "files": 0, "skipped_files": 0},
+                prior_capture=True,
+            ),
+            "already backfilled, no usage rows",
+        )
+        self.assertEqual(
+            backfill_mod.empty_ledger_tip({"inserted": 0, "updated": 0, "files": 2, "skipped_files": 0}),
+            "no usage rows in scanned logs (prompt-only trees stay empty)",
+        )
+        self.assertEqual(
+            backfill_mod.empty_ledger_tip({"inserted": 0, "updated": 0, "files": 0, "skipped_files": 0}),
+            "no local logs found to ingest",
+        )
+
+    def test_status_after_empty_backfill_is_already_backfilled(self) -> None:
+        from contextlib import redirect_stdout
+        from io import StringIO
+
+        empty_claude = Path(self.tmp.name) / ".claude-empty"
+        empty_cursor = Path(self.tmp.name) / ".cursor-empty"
+        empty_claude.mkdir()
+        empty_cursor.mkdir()
+        first = backfill_mod.backfill(claude=empty_claude, cursor=empty_cursor)
+        self.assertEqual(first["inserted"], 0)
+        self.assertFalse(first.get("prior_capture"))
+        self.assertEqual(backfill_mod.empty_ledger_tip(first), "no local logs found to ingest")
+        data = summarize()
+        self.assertTrue(data.get("backfilled"))
+        self.assertEqual(data.get("entries"), 0)
+        text = render_status(data)
+        self.assertIn("already backfilled, no usage rows", text)
+        self.assertNotIn("ingest local Claude Code", text)
+
+        buf = StringIO()
+        with redirect_stdout(buf):
+            rc = cli_main(["backfill", "--claude-root", str(empty_claude), "--cursor-root", str(empty_cursor)])
+        self.assertEqual(rc, 0)
+        self.assertIn("already backfilled, no usage rows", buf.getvalue())
 
 
 class ProjectCacheTests(unittest.TestCase):

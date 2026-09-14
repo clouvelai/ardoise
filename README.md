@@ -68,8 +68,6 @@ ardoise status --person alice
 ardoise statement 2026-09 --seat alice   # YYYY-MM--alice.{md,html,csv}
 ardoise export                  # JSONL of usage rows
 ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
-ardoise vendor test anthropic   # T2a probe; skip if no Analytics API key
-ardoise vendor pull anthropic   # ingest Analytics usage/cost when key is set
 ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
 ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
 ardoise estimate --model claude-sonnet-4-6 --input-tokens 1000 --output-tokens 400
@@ -79,8 +77,10 @@ ardoise estimate --stdin --json # hook-friendly ask on stdin
 Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
 
 **Team / Enterprise only (not Free):** `vendor test cursor` /
-`vendor pull cursor` → [docs/meter-shape.md](docs/meter-shape.md).
-Individual Cursor plans have no Team Admin API key.
+`vendor pull cursor` and `vendor test anthropic` /
+`vendor pull anthropic` → [docs/meter-shape.md](docs/meter-shape.md).
+Individual Cursor plans have no Team Admin API key. Anthropic Analytics
+is Enterprise-only. Free stays T0.
 
 **Section A** is one vendor line per scope: pasted invoice, else T2, else T1 snapshot — each line prints its tier. **Section B** uses T0 token weights only to allocate that billed total across projects.
 

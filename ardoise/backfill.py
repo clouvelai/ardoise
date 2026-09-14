@@ -92,7 +92,7 @@ def backfill(
     transcripts: Path | list[Path] | None = None,
     force: bool = False,
     progress: Progress | None = None,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     paths.ensure_home()
     clear_project_cache()
     totals = {
@@ -129,6 +129,10 @@ def backfill(
     n = len(jobs)
 
     with db.session() as conn, without_process_cwd():
+        prior = conn.execute(
+            "SELECT 1 FROM sync_state WHERE kind = 'capture' LIMIT 1"
+        ).fetchone()
+        totals["prior_capture"] = bool(prior)
         since_commit = 0
         for i, (vendor, path, parse_line) in enumerate(jobs, 1):
             if vendor == "cloud_agent":
@@ -158,6 +162,25 @@ def backfill(
         db.set_sync_state(conn, vendor="cursor", kind="capture", ok=True)
 
     return totals
+
+
+def empty_ledger_tip(totals: dict[str, Any], *, prior_capture: bool | None = None) -> str | None:
+    """Text tip when backfill wrote no usage rows.
+
+    Distinguishes already-ingested prompt-only trees from a first run
+    that never found local logs. Returns None when rows were written.
+    """
+    if int(totals.get("inserted") or 0) or int(totals.get("updated") or 0):
+        return None
+    skipped_files = int(totals.get("skipped_files") or 0)
+    files = int(totals.get("files") or 0)
+    if prior_capture is None:
+        prior_capture = bool(totals.get("prior_capture"))
+    if skipped_files or prior_capture:
+        return "already backfilled, no usage rows"
+    if files:
+        return "no usage rows in scanned logs (prompt-only trees stay empty)"
+    return "no local logs found to ingest"
 
 
 def tty_progress(i: int, n: int, path: Path, totals: dict[str, int]) -> None:

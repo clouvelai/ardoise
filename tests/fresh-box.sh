@@ -296,11 +296,17 @@ if vendor_a.get("capabilities", {}).get("pull") != "yes":
 anth_detail = str(vendor_a.get("detail") or "")
 anth_txt = (box / "vendor-anthropic.txt").read_text()
 anth_pull = (box / "vendor-pull-anthropic.txt").read_text()
-if "ANTHROPIC_ANALYTICS_API_KEY" not in anth_detail and "ANTHROPIC_ANALYTICS_API_KEY" not in anth_txt:
-    raise SystemExit(f"anthropic vendor test missing Analytics key line: {anth_detail!r} {anth_txt!r}")
 if "T2a skipped" not in anth_detail and "T2a skipped" not in anth_txt:
     raise SystemExit(f"anthropic vendor test should skip T2a, got {anth_detail!r} {anth_txt!r}")
-if "ANTHROPIC_ANALYTICS_API_KEY" not in anth_pull or "T2a skipped" not in anth_pull:
+if "Free is T0" not in anth_detail and "Free is T0" not in anth_txt:
+    raise SystemExit(f"anthropic vendor test should say Free is T0, got {anth_detail!r} {anth_txt!r}")
+if "missing ANTHROPIC" in anth_detail or "missing ANTHROPIC" in anth_txt:
+    raise SystemExit(f"anthropic vendor test should not nag missing Analytics key: {anth_detail!r} {anth_txt!r}")
+if "ANTHROPIC_ANALYTICS_API_KEY" in anth_txt or "ANTHROPIC_ADMIN_API_KEY" in anth_txt or "unresolved" in anth_txt:
+    raise SystemExit(f"default vendor test anthropic should stay quiet, got {anth_txt!r}")
+if "ANTHROPIC_ANALYTICS_API_KEY" in anth_pull or "missing " in anth_pull:
+    raise SystemExit(f"anthropic vendor pull should stay quiet, got {anth_pull!r}")
+if "T2a skipped" not in anth_pull:
     raise SystemExit(f"anthropic vendor pull should skip without key, got {anth_pull!r}")
 vendor_c = json.loads((box / "vendor-cursor.json").read_text())
 if vendor_c.get("cred_resolved"):

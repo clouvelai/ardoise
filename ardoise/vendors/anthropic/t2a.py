@@ -6,9 +6,9 @@ alias). Mint a key at claude.ai → Organization settings → API
 (``read:analytics``). This is **not** an Admin API key
 (``sk-ant-admin01-…``) and **not** ``ANTHROPIC_API_KEY``.
 
-When the key is missing, ``vendor test`` / ``vendor pull`` skip with a
-clear message and exit success — install, status, statement, and
-fresh-box stay T0/T1-only.
+When the key is missing, ``vendor test`` / ``vendor pull`` soft-skip
+(Team/Enterprise only; Free stays T0) and exit success — install,
+status, statement, and fresh-box stay T0/T1-only.
 
 Events join T0 anthropic/hook rows on ``session_id`` / ``conversation_id``
 when an Analytics payload exposes them (or a ``project`` slug that looks
@@ -41,6 +41,8 @@ SOURCE = "anthropic_t2a"
 STREAM = "analytics_usage"
 UNATTRIBUTED = "unattributed"
 ENV_KEYS = ("ANTHROPIC_ANALYTICS_API_KEY", "ANTHROPIC_ANALYTICS_KEY")
+# Explicit vendor test/pull only. Do not surface this as a post-install next step.
+_MISSING_CRED = "anthropic: Analytics T2a skipped (Team/Enterprise only; Free is T0)"
 DEFAULT_BASE = "https://api.anthropic.com"
 ANTHROPIC_VERSION = "2023-06-01"
 PAGE_LIMIT = 31
@@ -613,7 +615,7 @@ def _missing_cred_result(*, action: str) -> dict[str, Any]:
         "skipped": True,
         "reason": "missing_cred",
         "action": action,
-        "message": "anthropic: missing ANTHROPIC_ANALYTICS_API_KEY (T2a skipped)",
+        "message": _MISSING_CRED,
     }
 
 
@@ -751,7 +753,7 @@ def render_test(data: dict[str, Any]) -> str:
     if data.get("message"):
         return str(data["message"]).rstrip() + "\n"
     if not data.get("has_cred"):
-        return "anthropic: missing ANTHROPIC_ANALYTICS_API_KEY (T2a skipped)\n"
+        return f"{_MISSING_CRED}\n"
     return (
         "anthropic: t2a summaries={summaries} usage_rows={usage_rows}\n".format(
             summaries=data.get("summaries", 0),
@@ -762,7 +764,7 @@ def render_test(data: dict[str, Any]) -> str:
 
 def render_pull(data: dict[str, Any]) -> str:
     if data.get("skipped") and data.get("reason") == "missing_cred":
-        return "anthropic: missing ANTHROPIC_ANALYTICS_API_KEY (T2a skipped)\n"
+        return str(data.get("message") or _MISSING_CRED).rstrip() + "\n"
     if not data.get("ok"):
         return f"anthropic: error: {data.get('error') or 'pull failed'}\n"
     return (
