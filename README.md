@@ -49,10 +49,11 @@ Install once → local ledger → when usage meters (hooks, usage-shaped
 transcripts, or optional Admin T2), `status` shows captain / Craie /
 Encre chips. **No keys required for Free.**
 
-Admin T2 (`CURSOR_ADMIN_API_KEY` / `vendor pull cursor`) is optional and
-may return Cursor `401 Invalid Team API Key` unless the plan exposes
-Team Admin API. Solo / personal keys often fail. Free stays zero-key —
-never required at install. Box / cloud-agent chats can be prompt-shaped
+Admin T2 (`CURSOR_ADMIN_API_KEY` / `vendor pull cursor`) is **advanced /
+optional** (Team/Enterprise) and may return Cursor `401 Invalid Team API
+Key` unless the plan exposes Team Admin API. Solo / personal keys often
+fail. Free stays zero-key — never required at install, and not a
+post-install next step. Box / cloud-agent chats can be prompt-shaped
 with no token objects until meters land.
 
 [docs/grok-bot.md](docs/grok-bot.md) · [docs/meter-shape.md](docs/meter-shape.md)
@@ -73,8 +74,6 @@ ardoise export                  # JSONL of usage rows
 ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
 ardoise vendor test anthropic   # T2a probe; skip if no Analytics API key
 ardoise vendor pull anthropic   # ingest Analytics usage/cost when key is set
-ardoise vendor test cursor      # T2 probe; T0-only if no Admin API key
-ardoise vendor pull cursor      # ingest team usage events when key is set
 ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
 ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
 ardoise estimate --model claude-sonnet-4-6 --input-tokens 1000 --output-tokens 400
@@ -82,6 +81,13 @@ ardoise estimate --stdin --json # hook-friendly ask on stdin
 ```
 
 Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
+
+**Advanced (optional Team/Enterprise — not a post-install step):** Cursor
+Admin T2 is not part of the default product story. Individual Cursor
+plans have no Team Admin API key. Discover `vendor test cursor` /
+`vendor pull cursor` under `ardoise vendor --help` or
+[docs/meter-shape.md](docs/meter-shape.md) only when
+`CURSOR_ADMIN_API_KEY` is already set.
 
 **Section A** is one vendor line per scope: pasted invoice, else T2, else T1 snapshot — each line prints its tier. **Section B** uses T0 token weights only to allocate that billed total across projects.
 

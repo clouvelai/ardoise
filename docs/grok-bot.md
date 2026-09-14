@@ -22,10 +22,11 @@ Box and cloud-agent chats are often prompt-shaped JSON — no `usage` /
 estimate-from-prompt. Empty ledger after install → backfill on those
 trees is correct.
 
-## Optional Admin T2
+## Optional Admin T2 (advanced)
 
 `vendor pull cursor` can join team usage to a named agent when
 `cloudAgentId` / `bcId` or `conversationId` is already known.
+This is not a post-install next step.
 
 That join path is fine. The key often is not. Solo / personal keys
 commonly get Cursor `401 Invalid Team API Key`. Admin T2 needs a real

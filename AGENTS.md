@@ -13,8 +13,6 @@ bin/ardoise status --json --seat alice
 bin/ardoise status --json --person Craie
 bin/ardoise vendor test anthropic  # T2a probe; missing Analytics key skips T2a
 bin/ardoise vendor pull anthropic  # T2a Analytics when ANTHROPIC_ANALYTICS_API_KEY is set
-bin/ardoise vendor test cursor  # T2 probe; missing cred stays T0-only
-bin/ardoise vendor pull cursor  # T2 Admin usage; joins agent on bcId/conversation when known
 bin/ardoise snapshot anthropic   # T1 seat snapshot when OAuth cred resolves
 bin/ardoise invoice add --vendor anthropic --cycle YYYY-MM --usd-cents N
 bin/ardoise invoice paste --file invoices.jsonl
@@ -29,7 +27,7 @@ tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/
 - Dedupe: `message.id` + `requestId` (keep highest `output_tokens`)
 - Project: `git remote` `owner/repo`
 - Attribution: persist `agent` / `skill` / `effort` when a T0 transcript or hook already names them; never invent; missing stays unattributed
-- Meter-shape: prompt-only cloud/box transcripts do not meter (empty ledger is expected). Optional Cursor Admin T2 (`CURSOR_ADMIN_API_KEY`) joins usage to a named agent only when `cloudAgentId`/`bcId` or `conversationId` is already known. See [docs/meter-shape.md](docs/meter-shape.md). Install/backfill/dogfood never require keys.
+- Meter-shape: prompt-only cloud/box transcripts do not meter (empty ledger is expected). Cursor Admin T2 is **advanced/optional (Team/Enterprise)** — individual plans have no Admin API key. Not required for Grok Bot / Free, and not a post-install next step. When `CURSOR_ADMIN_API_KEY` is set and the user explicitly runs `vendor pull cursor`, T2 joins a named agent only if `cloudAgentId`/`bcId` or `conversationId` is already known. See [docs/meter-shape.md](docs/meter-shape.md). Install/backfill/dogfood never require keys.
 - Never persist prompts or credentials
 - Soft caps and `ardoise estimate` never block the editor
 - Do not add third-party Python deps to `ardoise/`

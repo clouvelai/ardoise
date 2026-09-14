@@ -18,10 +18,18 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, ROOT)
 
 from ardoise import db  # noqa: E402
-from ardoise.cli import main as cli_main  # noqa: E402
-from ardoise.install_hooks import render_text  # noqa: E402
+from ardoise.cli import build_parser, main as cli_main  # noqa: E402
+from ardoise.install_hooks import install, render_text  # noqa: E402
 from ardoise.status import render_text as render_status, summarize  # noqa: E402
 from ardoise.vendors.cursor import discover_cursor_files  # noqa: E402
+
+_HAPPY_PATH_FORBIDDEN = (
+    "vendor pull cursor",
+    "vendor test cursor",
+    "CURSOR_ADMIN_API_KEY",
+    "Admin T2",
+    "Admin API",
+)
 
 
 class IsolatedHome(unittest.TestCase):
@@ -75,6 +83,11 @@ class DefaultStatusTests(IsolatedHome):
         self.assertIn("Ardoise", text)
         self.assertIn("ledger is empty", text)
         self.assertIn("ardoise backfill", text)
+        self.assertIn("ardoise status", text)
+        self.assertIn("invoice add (Free)", text)
+        self.assertIn("T2 is Team/Enterprise", text)
+        for needle in _HAPPY_PATH_FORBIDDEN:
+            self.assertNotIn(needle, text)
 
     def test_empty_status_json_still_ok(self) -> None:
         buf = io.StringIO()
@@ -96,7 +109,11 @@ class InstallCopyTests(unittest.TestCase):
         )
         self.assertIn("Installed Ardoise", text)
         self.assertIn("ardoise backfill", text)
+        self.assertIn("ardoise status", text)
         self.assertIn("not on PATH", text)
+        self.assertNotIn("vendor pull", text)
+        for needle in _HAPPY_PATH_FORBIDDEN:
+            self.assertNotIn(needle, text)
 
     def test_status_empty_hint_helper(self) -> None:
         text = render_status(
@@ -118,6 +135,25 @@ class InstallCopyTests(unittest.TestCase):
         )
         self.assertIn("ledger is empty", text)
         self.assertIn("ardoise backfill", text)
+        self.assertIn("ardoise status", text)
+        self.assertIn("invoice add (Free)", text)
+        self.assertIn("T2 is Team/Enterprise", text)
+        for needle in _HAPPY_PATH_FORBIDDEN:
+            self.assertNotIn(needle, text)
+
+
+class InstallNextTests(IsolatedHome):
+    def test_install_next_is_backfill_status(self) -> None:
+        result = install(no_plugin_manager=True)
+        self.assertEqual(result["next"], "ardoise backfill && ardoise status")
+        text = render_text(result)
+        self.assertIn("ardoise backfill", text)
+        self.assertIn("ardoise status", text)
+        for needle in _HAPPY_PATH_FORBIDDEN:
+            self.assertNotIn(needle, text)
+        install_sh = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.assertNotIn("vendor pull cursor", install_sh)
+        self.assertNotIn("CURSOR_ADMIN_API_KEY", install_sh)
 
 
 class LatestMonthTests(IsolatedHome):
@@ -174,6 +210,38 @@ class LatestMonthTests(IsolatedHome):
         self.assertNotIn("lines", payload)
         self.assertEqual(payload["month_entries"], 1)
         self.assertIn("by_project", payload)
+
+
+def _help_text(*argv: str) -> str:
+    buf = io.StringIO()
+    err = io.StringIO()
+    with redirect_stdout(buf):
+        try:
+            build_parser().parse_args(list(argv))
+        except SystemExit as exc:
+            if exc.code not in (0, None):
+                raise
+    return " ".join((buf.getvalue() + err.getvalue()).split())
+
+
+class HappyPathHelpTests(unittest.TestCase):
+    def test_top_level_help_does_not_push_admin_t2(self) -> None:
+        text = _help_text("--help")
+        self.assertNotIn("vendor pull cursor", text)
+        self.assertNotIn("CURSOR_ADMIN_API_KEY", text)
+        self.assertIn("T0 needs no keys", text)
+
+    def test_vendor_help_marks_admin_t2_advanced(self) -> None:
+        text = _help_text("vendor", "--help")
+        self.assertIn("Advanced", text)
+        self.assertIn("Team/Enterprise", text)
+        self.assertIn("docs/meter-shape.md", text)
+        self.assertIn("not a post-install step", text)
+        pull = _help_text("vendor", "pull", "--help")
+        self.assertIn("Advanced", pull)
+        self.assertIn("Team/Enterprise", pull)
+        test = _help_text("vendor", "test", "--help")
+        self.assertIn("advanced", test.lower())
 
 
 class CursorDiscoverTests(unittest.TestCase):

@@ -1,11 +1,12 @@
 """Cursor vendor adapter — T0 transcripts plus T2 Admin API pull.
 
-T0 capture works with no credentials. T2 pull is gated on
-CURSOR_ADMIN_API_KEY (CURSOR_API_KEY accepted as alias). Events join T0
-hook/transcript rows on conversation_id (session_id) for project, and on
-conversation_id / cloudAgentId (bcId) for ``agent=`` when a T0 row or local
-sidecar already names that run. Unmatched project → ``unattributed``.
-Unknown agent ids stay unset. Never invents agent names.
+T0 capture works with no credentials. Live Admin T2 probe/pull is gated
+on CURSOR_ADMIN_API_KEY only. CURSOR_API_KEY is not accepted (personal
+keys 401). Events join T0 hook/transcript rows on conversation_id
+(session_id) for project, and on conversation_id / cloudAgentId (bcId)
+for ``agent=`` when a T0 row or local sidecar already names that run.
+Unmatched project → ``unattributed``. Unknown agent ids stay unset.
+Never invents agent names.
 """
 
 from __future__ import annotations
@@ -42,19 +43,20 @@ VENDOR = "cursor"
 SOURCE = "cursor_t2"
 STREAM_EVENTS = "usage_events"
 UNATTRIBUTED = "unattributed"
-ENV_KEYS = ("CURSOR_ADMIN_API_KEY", "CURSOR_API_KEY")
+ADMIN_ENV = "CURSOR_ADMIN_API_KEY"
+ALIAS_ENV = "CURSOR_API_KEY"  # personal/solo; not a live Admin probe
+ENV_KEYS = (ADMIN_ENV,)
 DEFAULT_BASE = "https://api.cursor.com"
 PAGE_SIZE = 100
 DEFAULT_LOOKBACK = timedelta(days=7)
 OVERLAP = timedelta(hours=1)
 T0_SOURCES = ("cursor", "hook", "anthropic_t0")
 # Fail-open copy for vendor test 401 / Invalid Team API Key. Never interpolates the key.
-_AUTH_REJECTED = (
-    "cursor: Team Admin API key rejected (401). "
-    "Needs a Team/Enterprise Admin API key from cursor.com/dashboard → API Keys "
-    "with admin:* scope when available. Personal/solo keys often fail this way. "
-    "Install, backfill, and hooks still work with no keys — this is optional T2 only."
-)
+# Minting path stays in docs/meter-shape.md only — no dashboard / admin:* hunt here.
+_AUTH_REJECTED = "cursor: not a Team Admin key — T0 unchanged"
+# Explicit vendor test/pull only. Do not surface this as a post-install next step.
+_MISSING_CRED = "cursor: Admin T2 skipped (Team/Enterprise only; Free is T0)"
+_ALIAS_REJECTED = "cursor: CURSOR_API_KEY is not a Team Admin key — T0 unchanged"
 
 Transport = Callable[[str, str, dict[str, Any] | None], dict[str, Any]]
 
@@ -129,12 +131,17 @@ def iter_cursor(root: Path) -> Iterator[tuple[Path, dict[str, Any]]]:
 
 
 def admin_api_key(environ: dict[str, str] | None = None) -> str | None:
+    """Live Admin probe/pull. CURSOR_API_KEY is ignored (accidental 401s)."""
     env = environ if environ is not None else os.environ
-    for name in ENV_KEYS:
-        value = str(env.get(name) or "").strip()
-        if value:
-            return value
-    return None
+    value = str(env.get(ADMIN_ENV) or "").strip()
+    return value or None
+
+
+def _personal_alias_set(environ: dict[str, str] | None = None) -> bool:
+    env = environ if environ is not None else os.environ
+    if admin_api_key(environ):
+        return False
+    return bool(str(env.get(ALIAS_ENV) or "").strip())
 
 
 def api_base(environ: dict[str, str] | None = None) -> str:
@@ -581,7 +588,7 @@ def _window_ms(*, conn: Any, now: datetime, since_ms: int | None) -> tuple[int, 
     return int((now - DEFAULT_LOOKBACK).timestamp() * 1000), end_ms
 
 
-def _missing_cred_result(*, action: str) -> dict[str, Any]:
+def _skip_result(*, action: str, reason: str, message: str) -> dict[str, Any]:
     return {
         "vendor": VENDOR,
         "ok": True,
@@ -589,10 +596,16 @@ def _missing_cred_result(*, action: str) -> dict[str, Any]:
         "t0": True,
         "t2": False,
         "skipped": True,
-        "reason": "missing_cred",
+        "reason": reason,
         "action": action,
-        "message": "cursor: missing CURSOR_ADMIN_API_KEY (T0-only)",
+        "message": message,
     }
+
+
+def _missing_cred_result(*, action: str, environ: dict[str, str] | None = None) -> dict[str, Any]:
+    if _personal_alias_set(environ):
+        return _skip_result(action=action, reason="alias_not_admin", message=_ALIAS_REJECTED)
+    return _skip_result(action=action, reason="missing_cred", message=_MISSING_CRED)
 
 
 def pull(
@@ -609,7 +622,7 @@ def pull(
     key = admin_api_key(environ)
     if transport is None:
         if not key:
-            return _missing_cred_result(action="pull")
+            return _missing_cred_result(action="pull", environ=environ)
         transport = make_transport(key, api_base(environ))
     stamp = now or datetime.now(timezone.utc)
     if stamp.tzinfo is None:
@@ -698,7 +711,7 @@ def test_vendor(
     key = admin_api_key(environ)
     if transport is None:
         if not key:
-            return _missing_cred_result(action="test")
+            return _missing_cred_result(action="test", environ=environ)
         transport = make_transport(key, api_base(environ))
     stamp = now or datetime.now(timezone.utc)
     if stamp.tzinfo is None:
@@ -751,7 +764,7 @@ def render_test(data: dict[str, Any]) -> str:
     if data.get("message"):
         return str(data["message"]).rstrip() + "\n"
     if not data.get("has_cred"):
-        return "cursor: missing CURSOR_ADMIN_API_KEY (T0-only)\n"
+        return f"{_MISSING_CRED}\n"
     return (
         "cursor: roster={roster} role={role} events_7d={events_7d}\n".format(
             roster=data.get("roster", 0),
@@ -762,8 +775,8 @@ def render_test(data: dict[str, Any]) -> str:
 
 
 def render_pull(data: dict[str, Any]) -> str:
-    if data.get("skipped") and data.get("reason") == "missing_cred":
-        return "cursor: missing CURSOR_ADMIN_API_KEY (T0-only)\n"
+    if data.get("skipped") and data.get("reason") in {"missing_cred", "alias_not_admin"}:
+        return str(data.get("message") or _MISSING_CRED).rstrip() + "\n"
     if not data.get("ok"):
         return f"cursor: error: {data.get('error') or 'pull failed'}\n"
     return (
@@ -786,9 +799,8 @@ class CursorAdapter:
             CredentialField(
                 key="api_key",
                 env="CURSOR_ADMIN_API_KEY",
-                purpose="T2 usage event pull",
+                purpose="advanced Team/Enterprise Admin T2 pull",
                 optional=True,
-                alt_envs=("CURSOR_API_KEY",),
             ),
         )
     )

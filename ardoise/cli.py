@@ -108,12 +108,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inst.add_argument("--json", action="store_true")
 
-    vendor = sub.add_parser("vendor", help="Vendor adapter tools")
+    vendor = sub.add_parser(
+        "vendor",
+        help="Vendor adapter tools (T0 needs no keys)",
+        description=(
+            "Vendor adapter tools. T0 capture needs no keys. "
+            "Admin T2 and Analytics T2a are advanced (Team/Enterprise) "
+            "and stay skipped without a key — not a post-install step."
+        ),
+        epilog=(
+            "Advanced (optional, Team/Enterprise only): "
+            "vendor test cursor / vendor pull cursor use CURSOR_ADMIN_API_KEY only. "
+            "CURSOR_API_KEY is not an Admin key. Individual Cursor plans have no "
+            "Team Admin API. Skipped probe stays T0 (exit 0). See docs/meter-shape.md."
+        ),
+    )
     vsub = vendor.add_subparsers(dest="vendor_cmd", required=True)
-    vt = vsub.add_parser("test", help="Print capabilities and whether credentials resolve")
+    vt = vsub.add_parser(
+        "test",
+        help="Print T0 capabilities (advanced: probe optional T2/T2a if a key is set)",
+        description=(
+            "Print T0 capabilities. Advanced: probe optional T2/T2a if a "
+            "Team/Enterprise key is set. Missing key stays T0-only."
+        ),
+    )
     vt.add_argument("name", help="Vendor name (anthropic, cursor)")
     vt.add_argument("--json", action="store_true")
-    vp = vsub.add_parser("pull", help="Pull T2 / T2a usage events into the ledger")
+    vt.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Include unresolved optional credentials (default text stays quiet)",
+    )
+    vp = vsub.add_parser(
+        "pull",
+        help="Advanced: pull optional T2/T2a billed events when a Team/Enterprise key is set",
+        description=(
+            "Advanced: pull optional T2/T2a billed events when a "
+            "Team/Enterprise key is set. Individual Cursor plans have no "
+            "Team Admin API. Missing key stays T0-only."
+        ),
+    )
     vp.add_argument("name", help="Vendor name (anthropic, cursor)")
     vp.add_argument("--json", action="store_true")
 
@@ -284,6 +318,13 @@ def main(argv: list[str] | None = None) -> int:
                 result = adapter.test()
                 if args.json:
                     print(json.dumps(result.as_dict(), indent=2, ensure_ascii=True))
+                elif (
+                    adapter.name == "cursor"
+                    and not result.cred_resolved
+                    and not getattr(args, "verbose", False)
+                ):
+                    detail = str(result.detail or "").rstrip()
+                    sys.stdout.write((detail + "\n") if detail else "")
                 else:
                     sys.stdout.write(result_text(result))
                 return 0
