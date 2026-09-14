@@ -9,26 +9,37 @@ machine. Prompts and credentials are never stored.
 
 ## Install
 
-Phase 1 is clone-then-run. Requires **Python 3** (standard library only).
+Requires **Python 3** (standard library only). Pin
+[v0.3.1](https://github.com/clouvelai/ardoise/releases/tag/v0.3.1):
 
 ```bash
-git clone https://github.com/clouvelai/ardoise.git
-cd ardoise
-./install.sh --no-plugin-manager
-bin/ardoise backfill
-bin/ardoise status
+curl -fsSL https://raw.githubusercontent.com/clouvelai/ardoise/v0.3.1/install.sh | sh
 ```
 
-That copies **self-contained** capture/snapshot scripts into
-`~/.ardoise/hooks/` (they call `ardoise` on `PATH` or `~/.local/bin/ardoise`,
-never a monorepo `../shared` path), merges them into `~/.claude/settings.json`
-and `~/.cursor/hooks.json` (no plugin marketplace), and links `bin/ardoise` to
-`~/.local/bin/ardoise`. `--no-plugin-manager` is accepted and is the default.
-If `~/.local/bin` is not on `PATH`, keep using `bin/ardoise` from the clone.
+Or verify the SHA-256 first:
 
-A marketplace copy of `plugins/claude` works the same way: its hook stubs
-resolve the installed scripts or the CLI. Maintainer notes:
-[docs/install.md](docs/install.md).
+```bash
+curl -fsSL https://raw.githubusercontent.com/clouvelai/ardoise/v0.3.1/install.sh -o install.sh
+echo "36a4d5f90da173a6ba7285f0bfb49bf9d80964bb91222745bd82ef2ceef878a8  install.sh" | shasum -a 256 -c -
+chmod +x install.sh && ./install.sh
+```
+
+**SHA-256** of `install.sh` at that tag: `36a4d5f90da173a6ba7285f0bfb49bf9d80964bb91222745bd82ef2ceef878a8`
+
+Then verify:
+
+1. `ardoise backfill`
+2. `ardoise status`
+3. Open Claude Code or Cursor once
+
+No API keys required for capture. Signup is optional later for Pro/Team.
+
+That copies self-contained hooks into `~/.ardoise/hooks/` and links
+`bin/ardoise` to `~/.local/bin/ardoise`. If `~/.local/bin` is not on `PATH`,
+add it. From a clone, `./install.sh` is the same default.
+
+Claude marketplace add / Cursor local plugin are additive — see
+[docs/install.md](docs/install.md). They are not the primary path.
 
 Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 
