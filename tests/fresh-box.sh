@@ -28,12 +28,25 @@ chmod +x "$ROOT/bin/ardoise" \
 
 "$ROOT/install.sh" >/dev/null
 
-# ~/.local/bin/ardoise is a symlink; it must still find the package from /
+# ~/.local/bin/ardoise must resolve into the staged prefix, not the clone.
 LAUNCHER="$HOME/.local/bin/ardoise"
+PREFIX="$HOME/.local/share/ardoise"
 if [ ! -x "$LAUNCHER" ]; then
   echo "install did not link $LAUNCHER" >&2
   exit 1
 fi
+if [ ! -x "$PREFIX/bin/ardoise" ]; then
+  echo "install did not stage $PREFIX/bin/ardoise" >&2
+  exit 1
+fi
+python3 - "$LAUNCHER" "$PREFIX" <<'PY'
+import os, sys
+launcher, prefix = sys.argv[1], sys.argv[2]
+resolved = os.path.realpath(launcher)
+root = os.path.realpath(prefix)
+if resolved != os.path.join(root, "bin", "ardoise") and not resolved.startswith(root + os.sep):
+    raise SystemExit(f"launcher is not in prefix: {resolved} (prefix={root})")
+PY
 ( cd / && "$LAUNCHER" --version >/dev/null )
 
 # Installed hooks must be self-contained (no ../shared, no checkout sibling).
@@ -600,5 +613,23 @@ if "roster table" in html.lower():
     raise SystemExit("agent statement grew a roster table")
 print("grok-bot=ok agent=Craie chips=spend")
 PY
+
+# curl | sh failure mode: only install.sh on disk + a local tarball.
+ALT="$BOX/curl-home"
+ONLY="$BOX/curl-only"
+PACK="$BOX/pack/ardoise-src"
+mkdir -p "$ALT" "$ONLY" "$PACK"
+cp "$ROOT/install.sh" "$ONLY/install.sh"
+cp -R "$ROOT/ardoise" "$ROOT/data" "$ROOT/bin" "$ROOT/plugins" "$PACK/"
+TARBALL="$BOX/ardoise-src.tar.gz"
+tar -czf "$TARBALL" -C "$BOX/pack" ardoise-src
+HOME="$ALT" ARDOISE_TARBALL="$TARBALL" sh "$ONLY/install.sh" >/dev/null
+ALT_BIN="$ALT/.local/bin/ardoise"
+if [ ! -x "$ALT_BIN" ]; then
+  echo "tarball install did not link $ALT_BIN" >&2
+  exit 1
+fi
+HOME="$ALT" "$ALT_BIN" --version >/dev/null
+echo "tarball-install=ok"
 
 echo "FRESH-BOX-OK"

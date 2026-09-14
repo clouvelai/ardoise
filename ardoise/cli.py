@@ -10,8 +10,8 @@ from pathlib import Path
 
 from ardoise import __version__, backfill as backfill_mod, capture as capture_mod
 from ardoise import estimate as estimate_mod, export as export_mod
-from ardoise import install_hooks, invoice as invoice_mod, paths, snapshot as snapshot_mod
-from ardoise import statement, status as status_mod
+from ardoise import install_hooks, invoice as invoice_mod, paths, session as session_mod
+from ardoise import snapshot as snapshot_mod, statement, status as status_mod, sync as sync_mod
 from ardoise.vendors import get_adapter, list_adapters, result_text
 
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
@@ -194,6 +194,18 @@ def build_parser() -> argparse.ArgumentParser:
     ip = isub.add_parser("paste", help="Bulk ingest JSON / JSONL / CSV (same upsert as add)")
     ip.add_argument("--file", help="Invoice file (otherwise stdin)")
     ip.add_argument("--json", action="store_true")
+
+    login = sub.add_parser("login", help="Store a hosted companion CLI token (not in the ledger)")
+    login.add_argument("token", nargs="?", help="Token from /app/settings")
+    login.add_argument("--token", dest="token_flag", help="CLI token (same as positional)")
+    login.add_argument("--api-url", help="API origin (default: ARDOISE_API_URL or production)")
+    login.add_argument("--json", action="store_true")
+
+    sub.add_parser("logout", help="Remove the hosted companion session file")
+
+    sy = sub.add_parser("sync", help="Upload already-priced usage to the hosted companion")
+    sy.add_argument("--month", help="YYYY-MM (default: all rows)")
+    sy.add_argument("--json", action="store_true")
     return parser
 
 
@@ -412,6 +424,49 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 return 0
             return _die(f"unknown invoice command: {args.invoice_cmd}")
+
+        if args.cmd == "login":
+            token = (getattr(args, "token_flag", None) or args.token or "").strip()
+            if not token:
+                if sys.stdin.isatty():
+                    try:
+                        token = input("CLI token from /app/settings: ").strip()
+                    except EOFError:
+                        token = ""
+                else:
+                    token = sys.stdin.read().strip()
+            if not token:
+                return _die("login needs a token from /app/settings")
+            path = session_mod.save(token=token, api_url=getattr(args, "api_url", None))
+            if args.json:
+                print(json.dumps({"ok": True, "session": str(path)}, indent=2))
+            else:
+                print(f"logged in  session={path}")
+            return 0
+
+        if args.cmd == "logout":
+            removed = session_mod.clear()
+            print("logged out" if removed else "not logged in")
+            return 0
+
+        if args.cmd == "sync":
+            month = _check_month(getattr(args, "month", None))
+            try:
+                result = sync_mod.sync(month=month)
+            except sync_mod.SyncError as exc:
+                return _die(exc.detail)
+            if args.json:
+                print(json.dumps(result, indent=2, ensure_ascii=True))
+            else:
+                print(
+                    "sync ok={ok} rows={rows} invoices={invoices} snapshots={snapshots}".format(
+                        ok=result.get("ok"),
+                        rows=result.get("upserted", result.get("rows", 0)),
+                        invoices=result.get("invoices_upserted", result.get("invoices", 0)),
+                        snapshots=result.get("snapshots_upserted", result.get("snapshots", 0)),
+                    )
+                )
+            return 0
     except ValueError as exc:
         return _die(str(exc))
     return _die(f"unknown command: {args.cmd}")

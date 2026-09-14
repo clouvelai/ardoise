@@ -184,6 +184,20 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
     filter_note = roster.note_for(filt, matched_rows=len(section_a) + len(lines))
     if filter_note:
         notes.append(filter_note)
+    cursor_join = sum(
+        1
+        for row in lines
+        if str(row.get("vendor") or "") == "cursor"
+        and int(row.get("input_tokens") or 0) == 0
+        and int(row.get("output_tokens") or 0) == 0
+        and float(row.get("estimated_usd") or row.get("cost_usd") or 0) == 0
+    )
+    data["cursor_join_sessions"] = cursor_join
+    if cursor_join:
+        notes.append(
+            f"Cursor: {cursor_join} session(s), $0 — Team Admin or usage-shaped "
+            "events needed for cents"
+        )
     data["notes"] = [item for item in notes if item]
     return data
 

@@ -1,15 +1,15 @@
 const items = [
   {
-    title: "Local first",
-    body: "The ledger lives at ~/.ardoise/ledger.db. Phase 1 never opens a port or calls a network.",
+    title: "Your ledger",
+    body: "A hosted dashboard of already-priced usage. Prompts and keys never leave the laptop.",
   },
   {
     title: "Deduped",
     body: "Streaming rows share message.id and requestId. Ardoise keeps the highest output_tokens.",
   },
   {
-    title: "Statements",
-    body: "One month becomes Markdown, HTML, and CSV. Project is the git remote owner/repo.",
+    title: "Upgrade in place",
+    body: "Free shows estimates. Pro unlocks invoice-grade statements on the same screen.",
   },
 ];
 

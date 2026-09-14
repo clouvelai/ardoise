@@ -322,6 +322,14 @@ def require_account(
     token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(status_code=401, detail="empty bearer token")
+    if token.startswith("ard_"):
+        import hashlib
+
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        account = store.account_for_cli_hash(digest)
+        if account is None:
+            raise HTTPException(status_code=401, detail="invalid CLI token")
+        return account
     try:
         claims = decode_access_token(settings, token)
         external_key, email, sub = identity_from_claims(claims)

@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS synced_usage (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES accounts (id),
     source TEXT,
+    vendor TEXT,
     message_id TEXT,
     request_id TEXT,
     project TEXT,
@@ -62,11 +63,54 @@ CREATE TABLE IF NOT EXISTS synced_usage (
     output_tokens INTEGER,
     cache_read_tokens INTEGER,
     cache_creation_tokens INTEGER,
+    cache_creation_5m_tokens INTEGER,
+    cache_creation_1h_tokens INTEGER,
     cost_usd REAL,
+    billed_cents INTEGER,
+    tier TEXT,
+    person TEXT,
+    cycle TEXT,
     session_id TEXT,
+    agent TEXT,
+    skill TEXT,
+    effort TEXT,
     payload TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL,
     UNIQUE (account_id, message_id, request_id)
+);
+CREATE TABLE IF NOT EXISTS cli_tokens (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts (id),
+    token_hash TEXT NOT NULL UNIQUE,
+    prefix TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT
+);
+CREATE TABLE IF NOT EXISTS synced_invoices (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts (id),
+    vendor TEXT NOT NULL,
+    cycle TEXT NOT NULL,
+    person TEXT NOT NULL DEFAULT '',
+    usd_cents INTEGER NOT NULL,
+    source TEXT NOT NULL DEFAULT 'paste',
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (account_id, vendor, cycle, person)
+);
+CREATE TABLE IF NOT EXISTS synced_snapshots (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts (id),
+    vendor TEXT NOT NULL,
+    person TEXT NOT NULL DEFAULT '',
+    cycle TEXT NOT NULL,
+    as_of TEXT NOT NULL,
+    billed_cents INTEGER,
+    cost_usd REAL,
+    tier TEXT NOT NULL DEFAULT 'T1',
+    created_at TEXT NOT NULL,
+    UNIQUE (account_id, vendor, person, cycle, as_of)
 );
 """
 
@@ -132,6 +176,24 @@ class AccountStore(Protocol):
         stripe_subscription_id: str | None = None,
         plan: str | None = None,
     ) -> dict[str, Any]: ...
+
+    def get_account(self, account_id: str) -> dict[str, Any] | None: ...
+
+    def create_cli_token(self, account_id: str, *, raw_token: str, token_hash: str) -> dict[str, Any]: ...
+
+    def account_for_cli_hash(self, token_hash: str) -> dict[str, Any] | None: ...
+
+    def upsert_usage_rows(self, account_id: str, rows: list[dict[str, Any]]) -> int: ...
+
+    def upsert_invoices(self, account_id: str, rows: list[dict[str, Any]]) -> int: ...
+
+    def upsert_snapshots(self, account_id: str, rows: list[dict[str, Any]]) -> int: ...
+
+    def list_usage(self, account_id: str, *, month: str | None = None) -> list[dict[str, Any]]: ...
+
+    def list_invoices(self, account_id: str, *, month: str | None = None) -> list[dict[str, Any]]: ...
+
+    def list_snapshots(self, account_id: str, *, month: str | None = None) -> list[dict[str, Any]]: ...
 
 
 class UnavailableStore:
@@ -202,6 +264,16 @@ class Store:
             ("checkout_sessions", "mode", "TEXT NOT NULL DEFAULT 'payment'"),
             ("checkout_sessions", "plan", "TEXT"),
             ("checkout_sessions", "stripe_subscription_id", "TEXT"),
+            ("synced_usage", "vendor", "TEXT"),
+            ("synced_usage", "tier", "TEXT"),
+            ("synced_usage", "person", "TEXT"),
+            ("synced_usage", "cycle", "TEXT"),
+            ("synced_usage", "billed_cents", "INTEGER"),
+            ("synced_usage", "cache_creation_5m_tokens", "INTEGER"),
+            ("synced_usage", "cache_creation_1h_tokens", "INTEGER"),
+            ("synced_usage", "agent", "TEXT"),
+            ("synced_usage", "skill", "TEXT"),
+            ("synced_usage", "effort", "TEXT"),
         )
         for table, name, ddl in patches:
             cols = {
@@ -431,3 +503,222 @@ class Store:
             "mode": session_mode,
             "stripe_session_id": stripe_session_id,
         }
+
+    def get_account(self, account_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            return _row(
+                conn.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)).fetchone()
+            )
+
+    def create_cli_token(
+        self, account_id: str, *, raw_token: str, token_hash: str
+    ) -> dict[str, Any]:
+        del raw_token
+        now = _now()
+        token_id = str(uuid.uuid4())
+        prefix = "ard_"
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO cli_tokens (id, account_id, token_hash, prefix, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (token_id, account_id, token_hash, prefix, now),
+            )
+        return {"id": token_id, "prefix": prefix, "created_at": now}
+
+    def account_for_cli_hash(self, token_hash: str) -> dict[str, Any] | None:
+        now = _now()
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT a.* FROM accounts a
+                JOIN cli_tokens t ON t.account_id = a.id
+                WHERE t.token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute(
+                "UPDATE cli_tokens SET last_used_at = ? WHERE token_hash = ?",
+                (now, token_hash),
+            )
+            return dict(row)
+
+    def upsert_usage_rows(self, account_id: str, rows: list[dict[str, Any]]) -> int:
+        now = _now()
+        count = 0
+        with self.connect() as conn:
+            for row in rows:
+                message_id = str(row.get("message_id") or "").strip()
+                request_id = str(row.get("request_id") or "").strip()
+                if not message_id or not request_id:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO synced_usage (
+                        id, account_id, source, vendor, message_id, request_id,
+                        project, model, occurred_at, input_tokens, output_tokens,
+                        cache_read_tokens, cache_creation_tokens,
+                        cache_creation_5m_tokens, cache_creation_1h_tokens,
+                        cost_usd, billed_cents, tier, person, cycle, session_id,
+                        agent, skill, effort, payload, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?)
+                    ON CONFLICT(account_id, message_id, request_id) DO UPDATE SET
+                        source = excluded.source,
+                        vendor = excluded.vendor,
+                        project = excluded.project,
+                        model = excluded.model,
+                        occurred_at = excluded.occurred_at,
+                        input_tokens = excluded.input_tokens,
+                        output_tokens = excluded.output_tokens,
+                        cache_read_tokens = excluded.cache_read_tokens,
+                        cache_creation_tokens = excluded.cache_creation_tokens,
+                        cache_creation_5m_tokens = excluded.cache_creation_5m_tokens,
+                        cache_creation_1h_tokens = excluded.cache_creation_1h_tokens,
+                        cost_usd = excluded.cost_usd,
+                        billed_cents = excluded.billed_cents,
+                        tier = excluded.tier,
+                        person = excluded.person,
+                        cycle = excluded.cycle,
+                        session_id = excluded.session_id,
+                        agent = excluded.agent,
+                        skill = excluded.skill,
+                        effort = excluded.effort
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        account_id,
+                        row.get("source"),
+                        row.get("vendor"),
+                        message_id,
+                        request_id,
+                        row.get("project"),
+                        row.get("model"),
+                        row.get("occurred_at"),
+                        row.get("input_tokens") or 0,
+                        row.get("output_tokens") or 0,
+                        row.get("cache_read_tokens") or 0,
+                        row.get("cache_creation_tokens") or 0,
+                        row.get("cache_creation_5m_tokens") or 0,
+                        row.get("cache_creation_1h_tokens") or 0,
+                        row.get("cost_usd") or 0,
+                        row.get("billed_cents"),
+                        row.get("tier"),
+                        row.get("person") or "",
+                        row.get("cycle") or "",
+                        row.get("session_id"),
+                        row.get("agent"),
+                        row.get("skill"),
+                        row.get("effort"),
+                        now,
+                    ),
+                )
+                count += 1
+        return count
+
+    def upsert_invoices(self, account_id: str, rows: list[dict[str, Any]]) -> int:
+        now = _now()
+        count = 0
+        with self.connect() as conn:
+            for row in rows:
+                vendor = str(row.get("vendor") or "").strip()
+                cycle = str(row.get("cycle") or "")[:7]
+                if not vendor or len(cycle) != 7:
+                    continue
+                person = str(row.get("person") or "")
+                cents = int(row.get("usd_cents") or row.get("billed_cents") or 0)
+                conn.execute(
+                    """
+                    INSERT INTO synced_invoices (
+                        id, account_id, vendor, cycle, person, usd_cents, source,
+                        notes, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(account_id, vendor, cycle, person) DO UPDATE SET
+                        usd_cents = excluded.usd_cents,
+                        source = excluded.source,
+                        notes = excluded.notes,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        account_id,
+                        vendor,
+                        cycle,
+                        person,
+                        cents,
+                        str(row.get("source") or "paste"),
+                        row.get("notes"),
+                        now,
+                        now,
+                    ),
+                )
+                count += 1
+        return count
+
+    def upsert_snapshots(self, account_id: str, rows: list[dict[str, Any]]) -> int:
+        now = _now()
+        count = 0
+        with self.connect() as conn:
+            for row in rows:
+                vendor = str(row.get("vendor") or "").strip()
+                cycle = str(row.get("cycle") or "")[:7]
+                as_of = str(row.get("as_of") or "").strip()
+                if not vendor or not cycle or not as_of:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO synced_snapshots (
+                        id, account_id, vendor, person, cycle, as_of, billed_cents,
+                        cost_usd, tier, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(account_id, vendor, person, cycle, as_of) DO UPDATE SET
+                        billed_cents = excluded.billed_cents,
+                        cost_usd = excluded.cost_usd,
+                        tier = excluded.tier
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        account_id,
+                        vendor,
+                        str(row.get("person") or ""),
+                        cycle,
+                        as_of,
+                        row.get("billed_cents"),
+                        row.get("cost_usd"),
+                        str(row.get("tier") or "T1"),
+                        now,
+                    ),
+                )
+                count += 1
+        return count
+
+    def list_usage(self, account_id: str, *, month: str | None = None) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM synced_usage WHERE account_id = ?"
+        args: list[Any] = [account_id]
+        if month:
+            sql += " AND (cycle = ? OR substr(COALESCE(occurred_at, ''), 1, 7) = ?)"
+            args.extend([month, month])
+        sql += " ORDER BY occurred_at ASC"
+        with self.connect() as conn:
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+    def list_invoices(self, account_id: str, *, month: str | None = None) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM synced_invoices WHERE account_id = ?"
+        args: list[Any] = [account_id]
+        if month:
+            sql += " AND cycle = ?"
+            args.append(month)
+        with self.connect() as conn:
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+    def list_snapshots(self, account_id: str, *, month: str | None = None) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM synced_snapshots WHERE account_id = ?"
+        args: list[Any] = [account_id]
+        if month:
+            sql += " AND cycle = ?"
+            args.append(month)
+        with self.connect() as conn:
+            return [dict(r) for r in conn.execute(sql, args).fetchall()]
+

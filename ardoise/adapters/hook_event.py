@@ -49,7 +49,23 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
     cache_creation, t5, t1h = _cache_splits(usage)
 
     has_usage = any([input_tokens, output_tokens, cache_read, cache_creation, t5, t1h])
-    if not has_usage:
+    hook = str(event.get("hook_event_name") or raw.get("source") or "")
+    model = str(event.get("model") or raw.get("model") or "").lower()
+    cursor_hook = hook in {
+        "stop",
+        "sessionEnd",
+        "afterAgentResponse",
+        "sessionStart",
+    } or hook.startswith("cursor")
+    looks_cursor = (
+        default_source == "cursor"
+        or cursor_hook
+        or "composer" in model
+        or "grok" in model
+    )
+    session_id = event.get("session_id")
+    join_row = looks_cursor and (not has_usage) and bool(session_id)
+    if not has_usage and not join_row:
         return None
 
     message_id = event.get("message_id")
@@ -64,9 +80,7 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
     project = infer_project(cwd=str(cwd) if cwd else None, workspace_roots=roots)
 
     source = default_source
-    hook = str(event.get("hook_event_name") or raw.get("source") or "")
-    model = str(event.get("model") or raw.get("model") or "").lower()
-    if hook.startswith("cursor") or default_source == "cursor" or "composer" in model or "grok" in model:
+    if looks_cursor:
         source = "cursor"
     elif (
         default_source == "anthropic_t0"
@@ -104,7 +118,7 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
         "cache_read_tokens": cache_read,
         "cache_creation_5m_tokens": t5,
         "cache_creation_1h_tokens": t1h,
-        "session_id": event.get("session_id"),
+        "session_id": session_id,
         "cwd": str(cwd) if cwd else None,
         "transcript_path": event.get("transcript_path"),
         "agent": attrs.get("agent"),

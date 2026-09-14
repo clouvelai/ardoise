@@ -1,6 +1,6 @@
 /**
  * Browser session for OTP + checkout. Access JWT only — no Stripe secrets.
- * sessionStorage so a tab refresh keeps the account; closing the tab signs out.
+ * localStorage so a tab close keeps the account; sign out clears it.
  */
 
 const KEY = "ardoise.session";
@@ -18,7 +18,7 @@ export function saveSession(session: SaasSession): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.sessionStorage.setItem(KEY, JSON.stringify(session));
+  window.localStorage.setItem(KEY, JSON.stringify(session));
 }
 
 export function getSession(): SaasSession | null {
@@ -26,7 +26,7 @@ export function getSession(): SaasSession | null {
     return null;
   }
   try {
-    const raw = window.sessionStorage.getItem(KEY);
+    const raw = window.localStorage.getItem(KEY);
     if (!raw) {
       return null;
     }
@@ -49,5 +49,5 @@ export function clearSession(): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.sessionStorage.removeItem(KEY);
+  window.localStorage.removeItem(KEY);
 }

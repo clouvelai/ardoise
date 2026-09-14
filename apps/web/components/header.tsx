@@ -20,6 +20,12 @@ export function Header() {
           GitHub
         </a>
         <Link
+          href="/app"
+          className="hidden text-[15px] font-medium text-ink/80 transition hover:text-ink sm:inline"
+        >
+          Ledger
+        </Link>
+        <Link
           href="/pricing"
           className="hidden text-[15px] font-medium text-ink/80 transition hover:text-ink sm:inline"
         >

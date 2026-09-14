@@ -10,7 +10,7 @@ Follows [`docs/saas-scaffold.md`](../../docs/saas-scaffold.md):
 | Auth | **Account first.** Supabase **email OTP** via Gotrue HTTP (`POST /v1/auth/otp` + `/verify`). API verifies `Authorization: Bearer` JWT (HS256 `SUPABASE_JWT_SECRET` when it is a raw secret, otherwise JWKS). Email/`sub` → `ops.accounts.external_key`. No card at signup. No passwords. No supabase-js. |
 | Billing | Stripe **Checkout Sessions** `mode=subscription` for Pro ($20/mo) / Team ($49/mo). `POST /v1/billing/checkout` + `/v1/billing/webhook`. Not Connect. Invoice-grade claims are **Pro+**. Legacy `mode=payment` credits stay on `/v1/checkout/sessions`. |
 | Mock | Missing Supabase URL or publishable/anon key → OTP mock (verify mints a JWT when `SUPABASE_JWT_SECRET` is a raw HMAC secret). `STRIPE_MOCK=true` **or** missing `STRIPE_SECRET_KEY` → local mock Checkout. |
-| Sync | Stub only. Future `POST /v1/usage/sync` accepts already-priced JSONL (`bin/ardoise export`) after OTP. Never upload `ledger.db`. |
+| Sync | `POST /v1/usage/sync` upserts already-priced `bin/ardoise export` rows plus invoices/snapshots. Never upload `ledger.db`. |
 
 ## Run locally with mocks
 
@@ -77,14 +77,18 @@ Open the mock URL and click **Pay (mock)**, or `POST /v1/stripe/webhook` with
 | `GET` | `/health` | no | `store` (`sqlite` / `postgres`), `store_ok`, `database_url_configured`, `stripe_mock`, `lab_auth_bypass`, `supabase_otp_configured` (no secrets, no DSN) |
 | `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the publishable/anon (or server-only secret) key. Accepts legacy `eyJ…` JWTs and `sb_publishable_…` / `sb_secret_…`. Mocked if URL or key unset. |
 | `POST` | `/v1/auth/otp/verify` | no | Forwards to `{SUPABASE_URL}/auth/v1/verify`. Creates a **free** account (no card). Mock: mints HS256 JWT when a raw `SUPABASE_JWT_SECRET` is set; otherwise returns “not configured”. |
-| `GET` | `/v1/me` | Bearer JWT | Account + `plan` + `invoice_grade` (Pro+) + credit balance |
+| `GET` | `/v1/me` | Bearer JWT or `ard_` CLI token | Account + `plan` + `invoice_grade` (Pro+) + credit balance |
+| `POST` | `/v1/cli/tokens` | Bearer JWT | Mint opaque `ard_…` token (shown once) |
+| `POST` | `/v1/usage/sync` | Bearer JWT or CLI token | Upsert usage / invoices / snapshots. Rejects prompt/credential keys. |
+| `GET` | `/v1/usage/status` | Bearer JWT or CLI token | Month summary. Free: estimates. Pro: billed Section A. |
+| `GET` | `/v1/usage/statement` | Bearer JWT or CLI token | Markdown + CSV. Invoice-grade on Pro+. |
+| `POST` | `/v1/invoices` | Bearer JWT or CLI token | Pro paste-in vendor total |
 | `POST` | `/v1/billing/checkout` | Bearer JWT | Pro/Team Checkout Session (`mode=subscription`). Price IDs: `STRIPE_PRICE_PRO` / `STRIPE_PRICE_TEAM`. |
 | `POST` | `/v1/billing/webhook` | Stripe signature (live) | Idempotent `checkout.session.completed` (sets plan) |
 | `POST` | `/v1/checkout/sessions` | Bearer JWT | Legacy Checkout Session (`mode=payment`) |
 | `GET` | `/v1/checkout/mock/{id}` | no | Local stand-in for Stripe Checkout |
 | `POST` | `/v1/checkout/mock/{id}/complete` | no | Mock fulfill |
 | `POST` | `/v1/stripe/webhook` | Stripe signature (live) | Same fulfill as `/v1/billing/webhook` |
-| `POST` | `/v1/usage/sync` | Bearer JWT | **501 stub** |
 
 Lab bypass (`ARDOISE_LAB_AUTH_BYPASS=true` + `X-Ardoise-Lab-User: email`) is
 **off by default** and ignored when `ARDOISE_ENV=production`.

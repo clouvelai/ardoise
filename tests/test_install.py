@@ -39,7 +39,7 @@ class IsolatedHome(unittest.TestCase):
         self._old_ardoise = os.environ.get("ARDOISE_HOME")
         os.environ["HOME"] = self.tmp.name
         os.environ["ARDOISE_HOME"] = str(Path(self.tmp.name) / ".ardoise")
-        for key in ("ARDOISE_LEDGER", "ARDOISE_QUEUE", "ARDOISE_STATEMENTS", "ARDOISE_CONFIG"):
+        for key in ("ARDOISE_LEDGER", "ARDOISE_QUEUE", "ARDOISE_STATEMENTS", "ARDOISE_CONFIG", "ARDOISE_PREFIX", "ARDOISE_SESSION"):
             os.environ.pop(key, None)
 
     def tearDown(self) -> None:
@@ -143,9 +143,15 @@ class InstallCopyTests(unittest.TestCase):
 
 
 class InstallNextTests(IsolatedHome):
-    def test_install_next_is_backfill_status(self) -> None:
+    def test_install_stages_prefix_not_clone(self) -> None:
         result = install(no_plugin_manager=True)
         self.assertEqual(result["next"], "ardoise backfill && ardoise status")
+        bound = Path(result["bin"])
+        self.assertTrue(bound.exists())
+        prefix = Path(self.tmp.name) / ".local" / "share" / "ardoise"
+        self.assertTrue((prefix / "bin" / "ardoise").is_file())
+        self.assertEqual(bound.resolve(), (prefix / "bin" / "ardoise").resolve())
+        self.assertNotEqual(bound.resolve(), (ROOT / "bin" / "ardoise").resolve())
         text = render_text(result)
         self.assertIn("ardoise backfill", text)
         self.assertIn("ardoise status", text)

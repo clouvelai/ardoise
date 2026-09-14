@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
+import secrets
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from ardoise_api import __version__
 from ardoise_api.auth import AuthError, kickoff_otp, require_account, verify_email_otp
+from ardoise_api.ledger import current_month, render_csv, render_markdown, summarize as summarize_usage
+from ardoise_api.privacy import reject_secrets
 from ardoise_api.settings import Settings
 from ardoise_api.store import AccountStore, open_store
 from ardoise_api.stripeutil import (
@@ -24,6 +29,7 @@ from ardoise_api.stripeutil import (
 
 EXPORT_FIELDS = [
     "source",
+    "vendor",
     "message_id",
     "request_id",
     "project",
@@ -36,7 +42,14 @@ EXPORT_FIELDS = [
     "cache_creation_5m_tokens",
     "cache_creation_1h_tokens",
     "cost_usd",
+    "billed_cents",
+    "tier",
+    "person",
+    "cycle",
     "session_id",
+    "agent",
+    "skill",
+    "effort",
 ]
 
 
@@ -62,6 +75,18 @@ class BillingCheckoutBody(BaseModel):
 
 class UsageSyncBody(BaseModel):
     rows: list[dict[str, Any]] = Field(default_factory=list)
+    invoices: list[dict[str, Any]] = Field(default_factory=list)
+    snapshots: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class InvoicePasteBody(BaseModel):
+    vendor: str
+    cycle: str
+    usd_cents: int | None = None
+    usd: float | None = None
+    person: str = ""
+    notes: str | None = None
+    source: str = "paste"
 
 
 def _store_error_name(exc: BaseException) -> str:
@@ -120,6 +145,11 @@ def create_app(
                 "otp": "/v1/auth/otp",
                 "otp_verify": "/v1/auth/otp/verify",
                 "me": "/v1/me",
+                "cli_tokens": "/v1/cli/tokens",
+                "usage_sync": "/v1/usage/sync",
+                "usage_status": "/v1/usage/status",
+                "usage_statement": "/v1/usage/statement",
+                "invoices": "/v1/invoices",
                 "checkout": "/v1/checkout/sessions",
                 "billing_checkout": "/v1/billing/checkout",
                 "billing_webhook": "/v1/billing/webhook",
@@ -305,13 +335,20 @@ def create_app(
   </form>
 </body></html>"""
 
-    @app.post("/v1/checkout/mock/{stripe_session_id}/complete")
-    def checkout_mock_complete(stripe_session_id: str) -> dict[str, Any]:
+    @app.post("/v1/checkout/mock/{stripe_session_id}/complete", response_model=None)
+    def checkout_mock_complete(
+        request: Request, stripe_session_id: str
+    ) -> dict[str, Any] | RedirectResponse:
         if not settings.stripe_mock:
             raise HTTPException(status_code=404, detail="stripe mock is off")
         result = store.fulfill_checkout(stripe_session_id)
         if not result.get("ok"):
             raise HTTPException(status_code=404, detail=result.get("reason"))
+        accept = (request.headers.get("accept") or "").lower()
+        if "text/html" in accept:
+            return RedirectResponse(
+                url=settings.checkout_success_url, status_code=303
+            )
         return result
 
     @app.post("/v1/stripe/webhook")
@@ -322,25 +359,107 @@ def create_app(
     async def billing_webhook(request: Request) -> dict[str, Any]:
         return await _stripe_event(request)
 
+    @app.post("/v1/cli/tokens")
+    def create_cli_token(account: dict[str, Any] = Depends(require_account)) -> dict[str, Any]:
+        raw = "ard_" + secrets.token_urlsafe(32)
+        digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        meta = store.create_cli_token(account["id"], raw_token=raw, token_hash=digest)
+        return {
+            "ok": True,
+            "token": raw,
+            "id": meta["id"],
+            "prefix": meta["prefix"],
+            "created_at": meta["created_at"],
+        }
+
     @app.post("/v1/usage/sync")
     def usage_sync(
         body: UsageSyncBody,
         account: dict[str, Any] = Depends(require_account),
-    ) -> JSONResponse:
-        del body, account
-        return JSONResponse(
-            {
-                "ok": False,
-                "scaffold": True,
-                "detail": (
-                    "Usage sync is not implemented. A future endpoint will accept "
-                    "already-priced usage rows (the same JSONL as `bin/ardoise export`) "
-                    "after OTP. Never send prompts, API keys, or ~/.ardoise/ledger.db."
-                ),
-                "expected_fields": EXPORT_FIELDS,
-            },
-            status_code=501,
+    ) -> dict[str, Any]:
+        payload = body.model_dump()
+        try:
+            reject_secrets(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        upserted = store.upsert_usage_rows(account["id"], body.rows)
+        invoices_n = store.upsert_invoices(account["id"], body.invoices)
+        snapshots_n = store.upsert_snapshots(account["id"], body.snapshots)
+        return {
+            "ok": True,
+            "upserted": upserted,
+            "invoices_upserted": invoices_n,
+            "snapshots_upserted": snapshots_n,
+            "rows": upserted,
+            "invoices": invoices_n,
+            "snapshots": snapshots_n,
+            "expected_fields": EXPORT_FIELDS,
+        }
+
+    def _month_or_400(month: str | None) -> str:
+        value = month or current_month()
+        if not re.match(r"^\d{4}-\d{2}$", value):
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+        return value
+
+    def _usage_summary(account: dict[str, Any], month: str) -> dict[str, Any]:
+        plan = account.get("plan") or "free"
+        return summarize_usage(
+            rows=store.list_usage(account["id"], month=month),
+            invoices=store.list_invoices(account["id"], month=month),
+            snapshots=store.list_snapshots(account["id"], month=month),
+            month=month,
+            invoice_grade=invoice_grade(plan),
         )
+
+    @app.get("/v1/usage/status")
+    def usage_status(
+        month: str | None = Query(default=None),
+        account: dict[str, Any] = Depends(require_account),
+    ) -> dict[str, Any]:
+        return _usage_summary(account, _month_or_400(month))
+
+    @app.get("/v1/usage/statement")
+    def usage_statement(
+        month: str | None = Query(default=None),
+        account: dict[str, Any] = Depends(require_account),
+    ) -> dict[str, Any]:
+        summary = _usage_summary(account, _month_or_400(month))
+        return {
+            "ok": True,
+            "month": summary["month"],
+            "invoice_grade": summary["invoice_grade"],
+            "markdown": render_markdown(summary),
+            "csv": render_csv(summary),
+            "summary": summary,
+        }
+
+    @app.post("/v1/invoices")
+    def paste_invoice(
+        body: InvoicePasteBody,
+        account: dict[str, Any] = Depends(require_account),
+    ) -> dict[str, Any]:
+        if not invoice_grade(account.get("plan")):
+            raise HTTPException(status_code=403, detail="invoice paste is a Pro feature")
+        cents = body.usd_cents
+        if cents is None and body.usd is not None:
+            cents = int(round(float(body.usd) * 100))
+        if cents is None:
+            raise HTTPException(status_code=400, detail="usd_cents or usd required")
+        n = store.upsert_invoices(
+            account["id"],
+            [
+                {
+                    "vendor": body.vendor,
+                    "cycle": body.cycle,
+                    "person": body.person,
+                    "usd_cents": cents,
+                    "source": body.source or "paste",
+                    "notes": body.notes,
+                }
+            ],
+        )
+        return {"ok": True, "upserted": n}
 
     return app
 

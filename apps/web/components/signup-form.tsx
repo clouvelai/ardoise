@@ -41,7 +41,7 @@ export function SignupForm() {
       const result = await requestEmailOtp(email);
       setEmail(result.email);
       setStep("code");
-      setStatus(result.mocked ? COPY.notWired : null);
+      setStatus(null);
     } catch (caught) {
       if (isOtpNotWired(caught)) {
         setStatus(COPY.notWired);
@@ -64,8 +64,7 @@ export function SignupForm() {
         router.replace(nextPath);
         return;
       }
-      setStep("done");
-      setStatus(null);
+      router.replace("/app");
     } catch (caught) {
       if (isOtpNotWired(caught)) {
         setStatus(COPY.notWired);
@@ -189,10 +188,10 @@ export function SignupForm() {
               Local ledger stays on your machine.
             </p>
             <Link
-              href="/pricing"
+              href="/app"
               className="mt-6 inline-block text-[13px] font-medium text-muted transition hover:text-ink"
             >
-              See pricing
+              Open ledger
             </Link>
           </div>
         ) : null}

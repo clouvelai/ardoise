@@ -205,8 +205,42 @@ def merge_cursor_hooks(hooks_path: Path, script: Path) -> None:
     _dump_json(hooks_path, data)
 
 
+_STAGE_DIRS = (
+    ("ardoise", "ardoise"),
+    ("data", "data"),
+    ("bin", "bin"),
+    ("plugins/shared", "plugins/shared"),
+)
+
+
+def stage_prefix(src_root: Path | None = None) -> Path:
+    """Copy the engine into ``~/.local/share/ardoise`` so a clone is not required."""
+    src = (src_root or paths.repo_root()).resolve()
+    dest = paths.install_prefix().resolve()
+    dest.mkdir(parents=True, exist_ok=True)
+    if src != dest:
+        ignore = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store")
+        for rel_src, rel_dest in _STAGE_DIRS:
+            origin = src / rel_src
+            target = dest / rel_dest
+            if not origin.exists():
+                continue
+            if origin.is_file():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(origin, target)
+                continue
+            shutil.copytree(origin, target, dirs_exist_ok=True, ignore=ignore)
+    launcher = dest / "bin" / "ardoise"
+    if launcher.is_file():
+        launcher.chmod(0o755)
+    for hook in (dest / "plugins" / "shared").glob("*.sh"):
+        hook.chmod(0o755)
+    return dest
+
+
 def link_bin() -> Path | None:
-    src = paths.repo_root() / "bin" / "ardoise"
+    prefix = stage_prefix()
+    src = prefix / "bin" / "ardoise"
     if not src.is_file():
         return None
     dest_dir = Path.home() / ".local" / "bin"

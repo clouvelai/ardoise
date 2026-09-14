@@ -59,6 +59,14 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def install_prefix() -> Path:
+    """Staged engine copy. Independent of a git checkout."""
+    override = os.environ.get("ARDOISE_PREFIX")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".local" / "share" / "ardoise"
+
+
 def bundled_prices() -> Path:
     return repo_root() / "data" / "prices.fallback.json"
 

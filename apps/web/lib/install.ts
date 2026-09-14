@@ -1,6 +1,6 @@
-export const INSTALL_TAG = "v0.3.1";
+export const INSTALL_TAG = "v0.3.2";
 export const INSTALL_SHA256 =
-  "36a4d5f90da173a6ba7285f0bfb49bf9d80964bb91222745bd82ef2ceef878a8";
+  "fabc5874b1befdc3e1fe0e9edbb70f82bdbffcbf9297d2df39a1866361e0ff88";
 export const INSTALL_SCRIPT_URL = `https://raw.githubusercontent.com/clouvelai/ardoise/${INSTALL_TAG}/install.sh`;
 export const INSTALL_RELEASE_URL = `https://github.com/clouvelai/ardoise/releases/tag/${INSTALL_TAG}`;
 export const INSTALL_ONE_LINER = `curl -fsSL ${INSTALL_SCRIPT_URL} | sh`;

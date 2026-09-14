@@ -12,8 +12,8 @@ export function Hero() {
             every <span className="text-grape">token</span> went.
           </h1>
           <p className="mt-6 max-w-md text-[17px] leading-relaxed text-muted sm:text-[18px]">
-            Claude Code and Cursor spend, attributable per project.
-            Local ledger first — invoice-grade later.
+            Claude Code and Cursor spend, per project. Sign up free, then
+            upgrade to invoice-grade when you need billed totals.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link

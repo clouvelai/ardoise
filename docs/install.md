@@ -1,11 +1,21 @@
 # Install (maintainers)
 
-Canonical Phase 1 install is still clone-then-`./install.sh`. That path:
+Customer install is `curl | sh` (or a verified copy of `install.sh`). That
+fetches a tagged archive unless `ARDOISE_TARBALL` is set, stages the engine
+at `~/.local/share/ardoise`, and links `~/.local/bin/ardoise`. Deleting a
+git clone afterwards is fine.
 
-1. Links `bin/ardoise` → `~/.local/bin/ardoise`
-2. Copies **self-contained** capture/snapshot scripts (plus `hook_enqueue.py`)
+From a clone, `./install.sh` is the same: it still copies into the prefix
+so runtime does not depend on the checkout.
+
+That path:
+
+1. Stages `ardoise/`, `data/`, `bin/`, `plugins/shared/` under
+   `~/.local/share/ardoise`
+2. Links `~/.local/bin/ardoise` → that prefix
+3. Copies **self-contained** capture/snapshot scripts (plus `hook_enqueue.py`)
    into `~/.ardoise/hooks/`
-3. Merges those absolute paths into `~/.claude/settings.json` and
+4. Merges those absolute paths into `~/.claude/settings.json` and
    `~/.cursor/hooks.json`
 
 `--no-plugin-manager` is accepted and is the default. Hooks never store
@@ -85,7 +95,5 @@ ln -s "$(pwd)" ~/.cursor/plugins/local/ardoise
 This scaffold does **not** replace `install.sh`'s merge into
 `~/.cursor/hooks.json`. Keep using `./install.sh` as the secure user path.
 
-## Follow-ups (not this change)
-
-- Tagged release + checksummed `curl | sh` one-liner
-- Marketing Install surface (Encre) — user-facing one-liner after the tag
+Env for the lone-script path: `ARDOISE_TAG` (default `v0.3.2`),
+`ARDOISE_TARBALL` (offline tests), `ARDOISE_PREFIX`.

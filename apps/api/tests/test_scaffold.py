@@ -359,6 +359,23 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(me["account"]["plan"], "pro")
         self.assertTrue(me["account"]["invoice_grade"])
 
+    def test_mock_complete_html_redirects_to_success(self) -> None:
+        client = self._cli()
+        headers = {"Authorization": f"Bearer {_token()}"}
+        created = client.post(
+            "/v1/billing/checkout", json={"plan": "pro"}, headers=headers
+        )
+        sid = created.json()["stripe_session_id"]
+        res = client.post(
+            f"/v1/checkout/mock/{sid}/complete",
+            headers={"accept": "text/html"},
+            follow_redirects=False,
+        )
+        self.assertEqual(res.status_code, 303)
+        self.assertTrue(res.headers["location"].endswith("/billing/success"))
+        me = client.get("/v1/me", headers=headers).json()
+        self.assertEqual(me["account"]["plan"], "pro")
+
     def test_billing_checkout_rejects_business(self) -> None:
         client = self._cli()
         res = client.post(
@@ -369,15 +386,146 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(res.status_code, 400)
         self.assertIn("pro or team", res.json()["detail"])
 
-    def test_usage_sync_is_stub(self) -> None:
+    def test_usage_sync_and_status(self) -> None:
         client = self._cli()
+        headers = {"Authorization": f"Bearer {_token()}"}
+        secret = client.post(
+            "/v1/usage/sync",
+            json={"rows": [{"message_id": "m1", "prompt": "nope"}]},
+            headers=headers,
+        )
+        self.assertEqual(secret.status_code, 400)
+
         res = client.post(
             "/v1/usage/sync",
-            json={"rows": []},
-            headers={"Authorization": f"Bearer {_token()}"},
+            json={
+                "rows": [
+                    {
+                        "source": "anthropic_t0",
+                        "vendor": "anthropic",
+                        "message_id": "m1",
+                        "request_id": "r1",
+                        "project": "acme/one",
+                        "model": "claude-sonnet-4-6",
+                        "occurred_at": "2026-09-02T12:00:00Z",
+                        "input_tokens": 10,
+                        "output_tokens": 4,
+                        "cost_usd": 0.02,
+                        "tier": "T0",
+                        "cycle": "2026-09",
+                    }
+                ]
+            },
+            headers=headers,
         )
-        self.assertEqual(res.status_code, 501)
-        self.assertTrue(res.json()["scaffold"])
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertTrue(res.json()["ok"])
+        self.assertEqual(res.json()["upserted"], 1)
+
+        again = client.post(
+            "/v1/usage/sync",
+            json={
+                "rows": [
+                    {
+                        "message_id": "m1",
+                        "request_id": "r1",
+                        "source": "anthropic_t0",
+                        "vendor": "anthropic",
+                        "project": "acme/one",
+                        "occurred_at": "2026-09-02T12:00:00Z",
+                        "cost_usd": 0.03,
+                        "tier": "T0",
+                        "cycle": "2026-09",
+                    }
+                ]
+            },
+            headers=headers,
+        )
+        self.assertEqual(again.status_code, 200)
+        self.assertEqual(again.json()["upserted"], 1)
+
+        status = client.get("/v1/usage/status?month=2026-09", headers=headers)
+        self.assertEqual(status.status_code, 200)
+        body = status.json()
+        self.assertEqual(body["month_entries"], 1)
+        self.assertFalse(body["invoice_grade"])
+        self.assertEqual(body["section_a"], [])
+        self.assertIn("Free", " ".join(body.get("notes") or []))
+
+        stmt = client.get("/v1/usage/statement?month=2026-09", headers=headers)
+        self.assertEqual(stmt.status_code, 200)
+        self.assertIn("Estimated", stmt.json()["markdown"])
+
+        minted = client.post("/v1/cli/tokens", headers=headers)
+        self.assertEqual(minted.status_code, 200)
+        token = minted.json()["token"]
+        self.assertTrue(token.startswith("ard_"))
+        cli_status = client.get(
+            "/v1/usage/status?month=2026-09",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(cli_status.status_code, 200)
+        self.assertEqual(cli_status.json()["month_entries"], 1)
+
+        forbidden = client.post(
+            "/v1/invoices",
+            json={"vendor": "anthropic", "cycle": "2026-09", "usd_cents": 1200},
+            headers=headers,
+        )
+        self.assertEqual(forbidden.status_code, 403)
+
+    def test_pro_invoice_grade_statement(self) -> None:
+        client = self._cli()
+        headers = {"Authorization": f"Bearer {_token('pro@example.com', 'user-pro')}"}
+        checkout = client.post(
+            "/v1/billing/checkout",
+            json={"plan": "pro"},
+            headers=headers,
+        )
+        self.assertEqual(checkout.status_code, 200)
+        sid = checkout.json()["stripe_session_id"]
+        client.post(f"/v1/checkout/mock/{sid}/complete")
+        client.post(
+            "/v1/usage/sync",
+            json={
+                "rows": [
+                    {
+                        "message_id": "p1",
+                        "request_id": "p1",
+                        "vendor": "anthropic",
+                        "source": "anthropic_t0",
+                        "project": "acme/one",
+                        "occurred_at": "2026-09-02T12:00:00Z",
+                        "input_tokens": 100,
+                        "output_tokens": 20,
+                        "cost_usd": 1.5,
+                        "tier": "T0",
+                        "cycle": "2026-09",
+                    }
+                ],
+                "invoices": [
+                    {
+                        "vendor": "anthropic",
+                        "cycle": "2026-09",
+                        "usd_cents": 1950,
+                        "source": "paste",
+                    }
+                ],
+            },
+            headers=headers,
+        )
+        status = client.get("/v1/usage/status?month=2026-09", headers=headers)
+        self.assertTrue(status.json()["invoice_grade"])
+        self.assertEqual(status.json()["billed_usd"], 19.5)
+        self.assertEqual(status.json()["section_a"][0]["tier_of_truth"], "invoice")
+        stmt = client.get("/v1/usage/statement?month=2026-09", headers=headers)
+        self.assertIn("19.50", stmt.json()["markdown"])
+        pasted = client.post(
+            "/v1/invoices",
+            json={"vendor": "cursor", "cycle": "2026-09", "usd_cents": 400},
+            headers=headers,
+        )
+        self.assertEqual(pasted.status_code, 200)
 
 
 if __name__ == "__main__":

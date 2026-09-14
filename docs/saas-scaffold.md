@@ -43,9 +43,9 @@ Pro ($20/mo) and Team ($49/mo) use **Stripe Checkout Sessions**
 
 Legacy PAYG credits remain on `POST /v1/checkout/sessions` (`mode=payment`).
 
-Do not store Stripe secrets in the Ardoise client. A future sync endpoint would
-accept **already-priced usage rows** (the same JSONL `export` shape) after OTP,
-never prompts or API keys.
+Do not store Stripe secrets in the Ardoise client. `POST /v1/usage/sync`
+accepts already-priced usage rows (the same JSONL `export` shape) after OTP,
+never prompts or API keys. Free dashboards show estimates; Pro is invoice-grade.
 
 ## What stays local
 

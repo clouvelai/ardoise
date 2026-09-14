@@ -15,6 +15,8 @@ bin/ardoise snapshot anthropic   # T1 seat snapshot when OAuth cred resolves
 bin/ardoise invoice add --vendor anthropic --cycle YYYY-MM --usd-cents N
 bin/ardoise invoice paste --file invoices.jsonl
 bin/ardoise estimate --model MODEL --input-tokens N --output-tokens N
+bin/ardoise login --token TOKEN   # from hosted /app/settings
+bin/ardoise sync
 tests/fresh-box.sh   # must print FRESH-BOX-OK offline
 tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/captain spend
 ```
@@ -29,4 +31,4 @@ tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/
 - Never persist prompts or credentials
 - Soft caps and `ardoise estimate` never block the editor
 - Do not add third-party Python deps to `ardoise/`
-- Hosted companion: `apps/api` (FastAPI + its own requirements). **Account first, card later** — OTP signup is free; Stripe Checkout (`mode=subscription`) only for Pro/Team. Keep Stripe/JWT secrets server-side. Never add third-party Python deps to `ardoise/`.
+- Hosted companion: `apps/api` (FastAPI + its own requirements). **Account first, card later** — OTP signup is free; Stripe Checkout (`mode=subscription`) only for Pro/Team. `ardoise login` / `ardoise sync` upload already-priced export rows. Keep Stripe/JWT secrets server-side. Never add third-party Python deps to `ardoise/`.

@@ -139,8 +139,15 @@ export function sparseMessage(error: unknown, fallback = COPY.generic): string {
 }
 
 export function safeNextPath(value: string | null | undefined): string | null {
-  if (value === "/pricing") {
-    return "/pricing";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return null;
+  }
+  if (value.includes("://") || value.includes("\\")) {
+    return null;
+  }
+  const allowed = ["/pricing", "/app", "/app/settings", "/app/statement"];
+  if (allowed.includes(value)) {
+    return value;
   }
   return null;
 }

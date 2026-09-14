@@ -665,6 +665,33 @@ def latest_snapshot(
     return dict(row) if row else None
 
 
+def list_snapshots(
+    conn: sqlite3.Connection,
+    *,
+    cycle: str | None = None,
+    vendor: str | None = None,
+    person: str | None = None,
+) -> list[dict[str, Any]]:
+    sql = """
+        SELECT vendor, person, cycle, as_of, billed_cents, cost_usd, tier,
+               input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+        FROM snapshots
+        WHERE 1=1
+    """
+    args: list[Any] = []
+    if cycle:
+        sql += " AND cycle = ?"
+        args.append(cycle)
+    if vendor:
+        sql += " AND vendor = ?"
+        args.append(vendor)
+    if person is not None:
+        sql += " AND person = ?"
+        args.append(person)
+    sql += " ORDER BY vendor, person, cycle, as_of"
+    return [dict(r) for r in conn.execute(sql, args).fetchall()]
+
+
 def get_sync_state(
     conn: sqlite3.Connection,
     *,
