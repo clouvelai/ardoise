@@ -107,7 +107,8 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
         section_a = reconcile.section_a(conn, month)
         cycles = [item.as_dict() for item in reconcile.reconcile_month(conn, month)]
         members = roster.collect(conn, month=month, config=cfg)
-        filt = roster.resolve(person, roster=members)
+        named_agents = roster.collect_agents(conn, month=month)
+        filt = roster.resolve(person, roster=members, agents=named_agents)
         if filt:
             lines = roster.apply_rows(lines, filt)
             section_a = roster.apply_rows(section_a, filt)
@@ -157,6 +158,7 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
         ],
         "anomalies": anomalies,
         "roster": members,
+        "agents": named_agents,
         "filter": filt,
         "latest_month": latest,
     }
@@ -182,6 +184,7 @@ def render_text(data: dict[str, Any]) -> str:
         billed_line = "billed    (none)  — invoice add or T1/T2; T0 vendor lines are estimated"
     filt = data.get("filter") or {}
     roster_rows = data.get("roster") or []
+    agent_rows = data.get("agents") or []
     header = [
         f"Ardoise  {data['month']}",
         f"ledger   {data['ledger']}",
@@ -196,9 +199,14 @@ def render_text(data: dict[str, Any]) -> str:
             f"filter   {roster.display(filt.get('canonical') or filt.get('query'))}  "
             "(view only — ledger unchanged)"
         )
-    elif len(roster_rows) > 1:
-        names = [roster.display(row.get("person")) for row in roster_rows]
-        header.append("roster   " + ", ".join(names))
+    else:
+        if len(roster_rows) > 1:
+            names = [roster.display(row.get("person")) for row in roster_rows]
+            header.append("roster   " + ", ".join(names))
+        agent_names = [str(row.get("agent") or "").strip() for row in agent_rows]
+        agent_names = [name for name in agent_names if name]
+        if agent_names:
+            header.append("agents   " + ", ".join(agent_names))
     lines = header + ["", "section A — vendor lines"]
     if not section_a:
         lines.append("  (empty)")

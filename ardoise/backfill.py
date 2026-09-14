@@ -6,7 +6,14 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from ardoise import db, paths
+from ardoise import config as config_mod, db, paths
+from ardoise.adapters.cloud_agent import (
+    discover_transcript_files,
+    iter_transcript_objects,
+    parse_line as parse_cloud_line,
+    sidecar_meta,
+    transcript_roots,
+)
 from ardoise.capture import drain_queue
 from ardoise.project import (
     clear_project_cache,
@@ -52,10 +59,37 @@ def _ingest_file(
     totals["files"] = totals.get("files", 0) + 1
 
 
+def _ingest_transcript_file(
+    conn: Any,
+    path: Path,
+    totals: dict[str, int],
+    *,
+    force: bool,
+) -> None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return
+    if not force and db.source_unchanged(conn, path, bytes_=stat.st_size, mtime=stat.st_mtime):
+        totals["skipped_files"] = totals.get("skipped_files", 0) + 1
+        return
+    inherited = sidecar_meta(path)
+    for obj in iter_transcript_objects(path):
+        entry = parse_cloud_line(obj, inherited=inherited)
+        if not entry:
+            continue
+        _touch_project(entry)
+        kind = db.upsert_entry(conn, entry)
+        totals[kind] = totals.get(kind, 0) + 1
+    db.mark_source(conn, path, bytes_=stat.st_size, mtime=stat.st_mtime)
+    totals["files"] = totals.get("files", 0) + 1
+
+
 def backfill(
     *,
     claude: Path | None = None,
     cursor: Path | None = None,
+    transcripts: Path | list[Path] | None = None,
     force: bool = False,
     progress: Progress | None = None,
 ) -> dict[str, int]:
@@ -69,24 +103,43 @@ def backfill(
         "files": 0,
         "claude_files": 0,
         "cursor_files": 0,
+        "transcript_files": 0,
         "skipped_files": 0,
     }
     claude_root = claude or paths.claude_root()
     cursor_root = cursor or paths.cursor_root()
-    jobs: list[tuple[str, Path, Callable]] = [
+    extra: list[Path] = []
+    if transcripts is None:
+        extra = []
+    elif isinstance(transcripts, (list, tuple)):
+        extra = [Path(item) for item in transcripts]
+    else:
+        extra = [Path(transcripts)]
+    cfg = config_mod.load()
+    roots = transcript_roots(extra=extra, config=cfg)
+    jobs: list[tuple[str, Path, Callable | None]] = [
         ("anthropic", path, parse_t0_line) for path in discover_t0_files(claude_root)
     ]
     jobs.extend(("cursor", path, parse_cursor_line) for path in discover_cursor_files(cursor_root))
+    jobs.extend(
+        ("cloud_agent", path, None)
+        for root in roots
+        for path in discover_transcript_files(root)
+    )
     n = len(jobs)
 
     with db.session() as conn, without_process_cwd():
         since_commit = 0
         for i, (vendor, path, parse_line) in enumerate(jobs, 1):
-            _ingest_file(conn, path, parse_line, totals, force=force)
-            if vendor == "anthropic":
-                totals["claude_files"] += 1
+            if vendor == "cloud_agent":
+                _ingest_transcript_file(conn, path, totals, force=force)
+                totals["transcript_files"] += 1
             else:
-                totals["cursor_files"] += 1
+                _ingest_file(conn, path, parse_line, totals, force=force)
+                if vendor == "anthropic":
+                    totals["claude_files"] += 1
+                else:
+                    totals["cursor_files"] += 1
             since_commit += 1
             if since_commit >= COMMIT_EVERY:
                 conn.commit()

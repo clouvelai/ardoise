@@ -6,9 +6,11 @@ Local AI spend ledger. Core is **Python 3 stdlib only**.
 ./install.sh
 bin/ardoise status --json
 bin/ardoise backfill
+bin/ardoise backfill --cloud-agent-root ~/exports/cloud-agents
 bin/ardoise statement YYYY-MM
 bin/ardoise statement YYYY-MM --person alice
 bin/ardoise status --json --seat alice
+bin/ardoise status --json --person Craie
 bin/ardoise vendor test anthropic  # T2a probe; missing Analytics key skips T2a
 bin/ardoise vendor pull anthropic  # T2a Analytics when ANTHROPIC_ANALYTICS_API_KEY is set
 bin/ardoise vendor test cursor  # T2 probe; missing cred stays T0-only
@@ -20,8 +22,8 @@ tests/fresh-box.sh   # must print FRESH-BOX-OK offline
 ```
 
 - Ledger: `~/.ardoise/ledger.db`
-- Config: `~/.ardoise/config.json` — optional `budgets.monthly_usd` / `budgets.person` / `budgets.project` (soft caps, warn only), `anomalies.*` knobs, and `roster` (name list or `{canonical: [aliases]}`)
-- Roster filters on `status` / `statement` (`--person` / `--seat` / `--roster`) are view-only and never block
+- Config: `~/.ardoise/config.json` — optional `budgets.monthly_usd` / `budgets.person` / `budgets.project` (soft caps, warn only), `anomalies.*` knobs, `roster` (name list or `{canonical: [aliases]}`), and `transcripts.paths` (extra Grok Bot / cloud-agent dirs)
+- Roster filters on `status` / `statement` (`--person` / `--seat` / `--roster`) are view-only and never block. Named `events.agent` values are first-class on the same flags.
 - Dedupe: `message.id` + `requestId` (keep highest `output_tokens`)
 - Project: `git remote` `owner/repo`
 - Attribution: persist `agent` / `skill` / `effort` when a T0 transcript or hook already names them; never invent; missing stays unattributed

@@ -2,7 +2,7 @@
 
 from ardoise.adapters.hook_event import event_to_entry
 
-__all__ = ["iter_anthropic_t0", "iter_cursor", "event_to_entry"]
+__all__ = ["iter_anthropic_t0", "iter_cursor", "iter_cloud_agent", "event_to_entry"]
 
 
 def __getattr__(name: str):
@@ -14,4 +14,8 @@ def __getattr__(name: str):
         from ardoise.vendors.cursor import iter_cursor
 
         return iter_cursor
+    if name == "iter_cloud_agent":
+        from ardoise.adapters.cloud_agent import iter_cloud_agent
+
+        return iter_cloud_agent
     raise AttributeError(name)

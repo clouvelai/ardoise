@@ -1,0 +1,1 @@
+{"botName":"captain","model":"cursor-grok-4.6-high","timestamp":"2026-09-13T14:00:00.000Z","requestId":"req_box_captain","message":{"id":"msg_box_captain","model":"cursor-grok-4.6-high","usage":{"input_tokens":220,"output_tokens":44}},"prompt":"SECRET_BOX_PROMPT"}

@@ -1,4 +1,4 @@
-"""Optional ~/.ardoise/config.json (soft caps, anomaly knobs, roster aliases).
+"""Optional ~/.ardoise/config.json (soft caps, anomaly knobs, roster, transcript roots).
 
 Never stores prompts or credentials. Unknown keys are ignored.
 A missing or invalid file is a no-op: status still prints, estimate still prices.
@@ -28,6 +28,7 @@ def empty() -> dict[str, Any]:
         "budgets": {"monthly_usd": None, "person": {}, "project": {}},
         "anomalies": dict(DEFAULT_ANOMALIES),
         "roster": {},
+        "transcripts": {"paths": []},
         "path": None,
         "loaded": False,
         "load_error": None,
@@ -111,6 +112,37 @@ def _anomalies(raw: Any) -> dict[str, float | int]:
     return merged
 
 
+def _transcript_paths(raw: Any) -> list[str]:
+    """Optional extra transcript roots (Grok Bot / cloud-agent exports)."""
+    items: list[Any]
+    if raw is None or raw is False:
+        return []
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, str):
+        items = [raw]
+    elif isinstance(raw, dict):
+        items = []
+        if isinstance(raw.get("path"), str):
+            items.append(raw.get("path"))
+        extra = raw.get("paths") or raw.get("roots") or []
+        if isinstance(extra, list):
+            items.extend(extra)
+        elif isinstance(extra, str):
+            items.append(extra)
+    else:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
 def _parse(raw: dict[str, Any], path: Path) -> dict[str, Any]:
     budgets_raw = raw.get("budgets")
     if not isinstance(budgets_raw, dict):
@@ -125,6 +157,7 @@ def _parse(raw: dict[str, Any], path: Path) -> dict[str, Any]:
     }
     cfg["anomalies"] = _anomalies(raw.get("anomalies"))
     cfg["roster"] = _roster(raw.get("roster"))
+    cfg["transcripts"] = {"paths": _transcript_paths(raw.get("transcripts"))}
     return cfg
 
 

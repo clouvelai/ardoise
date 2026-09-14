@@ -1,0 +1,13 @@
+{
+  "id": "bc-00000000-0000-0000-0000-000000000099",
+  "name": "Fix the billing success page",
+  "status": "FINISHED",
+  "model": "cursor-grok-4.6-high",
+  "createdAt": "2026-09-13T08:00:00.000Z",
+  "agent": {
+    "id": "bc-00000000-0000-0000-0000-000000000099",
+    "name": "Fix the billing success page",
+    "status": "FINISHED",
+    "env": {"type": "cloud"}
+  }
+}
