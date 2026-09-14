@@ -9,19 +9,34 @@ from pathlib import Path
 from typing import Any
 
 from ardoise import paths
+from ardoise.model import UNKNOWN, is_placeholder
 
 _DATE_SUFFIX = re.compile(r"-\d{8}$")
+_PROVIDER_PREFIXES = (
+    "anthropic/",
+    "cursor/",
+    "openai/",
+    "google/",
+    "xai/",
+    "spacexai/",
+    "meta/",
+)
+_CURSOR_PREFIX = "cursor-"
+_PEEL = frozenset({"fast", "xhigh", "high", "medium", "low", "max", "thinking"})
+_SENTINELS = frozenset({UNKNOWN, "default"})
 
 
 def normalize_model(name: str | None) -> str:
-    if not name:
-        return "default"
+    if is_placeholder(name):
+        return UNKNOWN
     n = str(name).strip().lower()
     n = n.replace(".", "-")
-    n = n.removeprefix("anthropic/")
-    n = n.removeprefix("cursor/")
+    for prefix in _PROVIDER_PREFIXES:
+        n = n.removeprefix(prefix)
     n = _DATE_SUFFIX.sub("", n)
-    return n or "default"
+    if n.startswith(_CURSOR_PREFIX):
+        n = n[len(_CURSOR_PREFIX) :]
+    return n or UNKNOWN
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -35,47 +50,86 @@ def _load_json(path: Path) -> dict[str, Any]:
 @lru_cache(maxsize=4)
 def load_pricebook(user_mtime: float | None = None, bundled_mtime: float | None = None) -> dict[str, Any]:
     bundled = paths.bundled_prices()
-    book = _load_json(bundled) if bundled.is_file() else {"models": {"default": _default_rates()}}
+    book = _load_json(bundled) if bundled.is_file() else {"models": {UNKNOWN: _zero_rates()}}
     user = paths.user_prices()
     if user.is_file():
         override = _load_json(user)
         models = dict(book.get("models") or {})
         models.update(override.get("models") or {})
         book = {**book, **override, "models": models}
+    models = book.setdefault("models", {})
+    if UNKNOWN not in models:
+        models[UNKNOWN] = _zero_rates()
     return book
 
 
-def _default_rates() -> dict[str, float]:
+def _zero_rates() -> dict[str, float]:
     return {
-        "input": 3.0,
-        "output": 15.0,
-        "cache_read": 0.3,
-        "cache_write_5m": 3.75,
-        "cache_write_1h": 6.0,
+        "input": 0.0,
+        "output": 0.0,
+        "cache_read": 0.0,
+        "cache_write_5m": 0.0,
+        "cache_write_1h": 0.0,
     }
 
 
-def rates_for(model: str | None) -> dict[str, float]:
+def _fill(rates: dict[str, Any] | None) -> dict[str, float]:
+    return {**_zero_rates(), **(rates or {})}
+
+
+def _book() -> dict[str, Any]:
     user = paths.user_prices()
     bundled = paths.bundled_prices()
-    book = load_pricebook(
+    return load_pricebook(
         user.stat().st_mtime if user.is_file() else None,
         bundled.stat().st_mtime if bundled.is_file() else None,
     )
-    models = book.get("models") or {}
-    key = normalize_model(model)
-    if key in models:
-        return {**_default_rates(), **(models[key] or {})}
-    parts = key.split("-")
-    while len(parts) > 1:
-        parts.pop()
-        cand = "-".join(parts)
+
+
+def _resolve_key(key: str, models: dict[str, Any]) -> str:
+    if key in models and key not in _SENTINELS:
+        return key
+    tokens = key.split("-")
+    fast = False
+    peeled = list(tokens)
+    while peeled and peeled[-1] in _PEEL:
+        if peeled[-1] == "fast":
+            fast = True
+        peeled.pop()
+    base = "-".join(peeled)
+    if fast and base:
+        cand = f"{base}-fast"
         if cand in models:
-            return {**_default_rates(), **(models[cand] or {})}
-    for known in sorted((k for k in models if k != "default"), key=len, reverse=True):
-        if key.startswith(known) or known in key:
-            return {**_default_rates(), **(models[known] or {})}
-    return {**_default_rates(), **(models.get("default") or {})}
+            return cand
+    if base and base in models and base not in _SENTINELS:
+        return base
+    for source in (key, base):
+        if not source:
+            continue
+        parts = source.split("-")
+        while len(parts) > 1:
+            parts.pop()
+            cand = "-".join(parts)
+            if cand in models and cand not in _SENTINELS:
+                return cand
+    for known in sorted((k for k in models if k not in _SENTINELS), key=len, reverse=True):
+        if key.startswith(known) or (len(known) >= 8 and known in key):
+            return known
+    return UNKNOWN
+
+
+def lookup(model: str | None) -> dict[str, Any]:
+    """Resolve list-price rates. Unknown / default never inherit Sonnet."""
+    models = (_book().get("models") or {})
+    key = _resolve_key(normalize_model(model), models)
+    unknown = key == UNKNOWN or key not in models
+    if unknown:
+        return {"key": UNKNOWN, "rates": _fill(models.get(UNKNOWN)), "unknown": True}
+    return {"key": key, "rates": _fill(models.get(key)), "unknown": False}
+
+
+def rates_for(model: str | None) -> dict[str, float]:
+    return lookup(model)["rates"]
 
 
 def price_usd(

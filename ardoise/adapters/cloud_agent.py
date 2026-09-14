@@ -19,6 +19,7 @@ from typing import Any, Iterator
 
 from ardoise.adapters.hook_event import event_to_entry
 from ardoise.attribution import DIMENSIONS, extract
+from ardoise.model import extract_model, is_placeholder
 from ardoise.vendors.anthropic import parse_t0_line
 from ardoise.vendors.cursor import parse_cursor_line
 from ardoise.vendors.jsonl import iter_jsonl
@@ -187,7 +188,7 @@ def _meta_from(data: dict[str, Any]) -> dict[str, Any]:
     ids = _run_id_values(data)
     if ids:
         out["session_id"] = ids[0]
-    model = data.get("model") or data.get("model_id") or data.get("modelId")
+    model = extract_model(data)
     if model:
         out["model"] = model
     for key in ("createdAt", "created_at", "timestamp", "occurred_at"):
@@ -255,9 +256,11 @@ def _from_usage_shaped(obj: dict[str, Any]) -> dict[str, Any] | None:
     if not any(usage.values()):
         return None
     message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
+    model = extract_model(obj, message)
     wrapped = {
         "type": obj.get("type") or "assistant",
-        "model": obj.get("model") or message.get("model"),
+        "model": model,
+        "model_id": obj.get("model_id") or obj.get("modelId") or message.get("model_id") or message.get("modelId"),
         "cwd": obj.get("cwd"),
         "timestamp": obj.get("timestamp") or obj.get("ts") or obj.get("occurred_at"),
         "sessionId": obj.get("sessionId") or obj.get("session_id") or obj.get("conversationId"),
@@ -267,7 +270,7 @@ def _from_usage_shaped(obj: dict[str, Any]) -> dict[str, Any] | None:
         "usage": usage,
         "message": {
             "id": message.get("id") or obj.get("message_id") or obj.get("id"),
-            "model": obj.get("model") or message.get("model"),
+            "model": model or message.get("model"),
             "role": message.get("role") or "assistant",
             "usage": usage,
         },
@@ -315,7 +318,9 @@ def parse_line(obj: dict[str, Any] | None, *, inherited: dict[str, Any] | None =
         if inherited:
             if not entry.get("session_id") and inherited.get("session_id"):
                 entry["session_id"] = inherited.get("session_id")
-            if not entry.get("model") and inherited.get("model"):
+            if is_placeholder(entry.get("model")) and inherited.get("model") and not is_placeholder(
+                inherited.get("model")
+            ):
                 entry["model"] = inherited.get("model")
             if not entry.get("cwd") and inherited.get("cwd"):
                 entry["cwd"] = inherited.get("cwd")

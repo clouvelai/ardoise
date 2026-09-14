@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 from ardoise.attribution import extract
+from ardoise.model import persist_model
 from ardoise.privacy import _int, usage_only_event
 from ardoise.project import infer_project
 from ardoise.vendors.contract import cycle_of, vendor_for_source
@@ -50,7 +51,8 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
 
     has_usage = any([input_tokens, output_tokens, cache_read, cache_creation, t5, t1h])
     hook = str(event.get("hook_event_name") or raw.get("source") or "")
-    model = str(event.get("model") or raw.get("model") or "").lower()
+    stored_model = persist_model(event, raw)
+    model = stored_model.lower()
     cursor_hook = hook in {
         "stop",
         "sessionEnd",
@@ -110,7 +112,7 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
         "message_id": str(message_id),
         "request_id": str(request_id),
         "project": project,
-        "model": event.get("model"),
+        "model": stored_model,
         "occurred_at": occurred,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,

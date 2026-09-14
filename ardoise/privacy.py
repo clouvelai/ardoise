@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from ardoise.attribution import extract
+from ardoise.model import persist_model
 
 # Exact keys dropped from any captured JSON (case-insensitive).
 _DROP_KEYS = frozenset(
@@ -99,13 +100,7 @@ def usage_only_event(event: dict[str, Any]) -> dict[str, Any]:
                 return event.get(key)
         return 0
 
-    model = (
-        event.get("model")
-        or (message.get("model") if isinstance(message, dict) else None)
-        or event.get("model_name")
-        or event.get("model_id")
-        or event.get("modelId")
-    )
+    model = persist_model(event, message if isinstance(message, dict) else {})
     message_id = event.get("message_id") or event.get("messageId")
     if not message_id and isinstance(message, dict):
         message_id = message.get("id")
@@ -131,6 +126,11 @@ def usage_only_event(event: dict[str, Any]) -> dict[str, Any]:
         "uuid": event.get("uuid"),
         "version": event.get("version"),
         "model": model,
+        "model_id": event.get("model_id")
+        or event.get("modelId")
+        or (message.get("model_id") if isinstance(message, dict) else None)
+        or (message.get("modelId") if isinstance(message, dict) else None),
+        "model_params": event.get("model_params") or event.get("modelParams"),
         "message_id": message_id,
         "request_id": request_id,
         "usage": {

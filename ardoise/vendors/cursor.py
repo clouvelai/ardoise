@@ -24,6 +24,7 @@ from typing import Any, Callable, Iterator
 from ardoise import db, paths, prices
 from ardoise.adapters.hook_event import event_to_entry
 from ardoise.attribution import DIMENSIONS, bind, clean_id, extract
+from ardoise.model import persist_model
 from ardoise.privacy import scrub
 from ardoise.vendors.anthropic import parse_t0_line
 from ardoise.vendors.contract import (
@@ -105,6 +106,10 @@ def parse_cursor_line(obj: dict[str, Any]) -> dict[str, Any] | None:
         safe["usage"] = obj["usage"]
     if obj.get("model"):
         safe["model"] = obj.get("model")
+    if obj.get("model_id") or obj.get("modelId"):
+        safe["model_id"] = obj.get("model_id") or obj.get("modelId")
+    if obj.get("model_params") or obj.get("modelParams"):
+        safe["model_params"] = obj.get("model_params") or obj.get("modelParams")
     if obj.get("requestId") or obj.get("request_id"):
         safe["requestId"] = obj.get("requestId") or obj.get("request_id")
     if obj.get("message_id") or (isinstance(obj.get("message"), dict) and obj["message"].get("id")):
@@ -253,7 +258,7 @@ def parse_event(event: dict[str, Any]) -> dict[str, Any] | None:
         billed = int(round(charged_f))
     else:
         cost = prices.price_usd(
-            model=event.get("model"),
+            model=persist_model(event),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cache_read_tokens=cache_read,
@@ -270,7 +275,7 @@ def parse_event(event: dict[str, Any]) -> dict[str, Any] | None:
         "conversation_id": str(conversation) if conversation else None,
         "bc_id": str(bc) if bc else None,
         "session_id": str(conversation or bc) if (conversation or bc) else None,
-        "model": event.get("model"),
+        "model": persist_model(event),
         "agent": attrs.get("agent"),
         "skill": attrs.get("skill"),
         "effort": attrs.get("effort"),
