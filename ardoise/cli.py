@@ -118,9 +118,9 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Advanced (optional, Team/Enterprise only): "
-            "vendor test cursor / vendor pull cursor need CURSOR_ADMIN_API_KEY. "
-            "Individual Cursor plans have no Team Admin API. "
-            "Missing key stays T0-only (exit 0). See docs/meter-shape.md."
+            "vendor test cursor / vendor pull cursor use CURSOR_ADMIN_API_KEY only. "
+            "CURSOR_API_KEY is not an Admin key. Individual Cursor plans have no "
+            "Team Admin API. Skipped probe stays T0 (exit 0). See docs/meter-shape.md."
         ),
     )
     vsub = vendor.add_subparsers(dest="vendor_cmd", required=True)
@@ -134,6 +134,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     vt.add_argument("name", help="Vendor name (anthropic, cursor)")
     vt.add_argument("--json", action="store_true")
+    vt.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Include unresolved optional credentials (default text stays quiet)",
+    )
     vp = vsub.add_parser(
         "pull",
         help="Advanced: pull optional T2/T2a billed events when a Team/Enterprise key is set",
@@ -313,6 +318,13 @@ def main(argv: list[str] | None = None) -> int:
                 result = adapter.test()
                 if args.json:
                     print(json.dumps(result.as_dict(), indent=2, ensure_ascii=True))
+                elif (
+                    adapter.name == "cursor"
+                    and not result.cred_resolved
+                    and not getattr(args, "verbose", False)
+                ):
+                    detail = str(result.detail or "").rstrip()
+                    sys.stdout.write((detail + "\n") if detail else "")
                 else:
                     sys.stdout.write(result_text(result))
                 return 0

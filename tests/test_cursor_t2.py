@@ -79,6 +79,12 @@ class CursorT2Tests(unittest.TestCase):
         self.assertTrue(caps["t2"])
         self.assertTrue(caps["has_cred"])
 
+    def test_capabilities_cursor_api_key_is_not_admin(self) -> None:
+        caps = cursor_t2.capabilities(environ={"CURSOR_API_KEY": "key_personal"})
+        self.assertTrue(caps["t0"])
+        self.assertFalse(caps["t2"])
+        self.assertFalse(caps["has_cred"])
+
     def test_parse_fixture_event_id_and_cost(self) -> None:
         raw = _load("cursor_t2_events.json")["usageEvents"][0]
         parsed = cursor_t2.parse_event(raw)
@@ -117,10 +123,12 @@ class CursorT2Tests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertTrue(data["skipped"])
         self.assertEqual(data["reason"], "missing_cred")
-        self.assertIn("missing CURSOR_ADMIN_API_KEY", data["message"])
-        self.assertIn("T0-only", cursor_t2.render_test(data))
-        self.assertIn("advanced", data["message"].lower())
+        self.assertIn("Admin T2 skipped", data["message"])
+        self.assertIn("Free is T0", data["message"])
         self.assertIn("Team/Enterprise", data["message"])
+        self.assertNotIn("CURSOR_ADMIN_API_KEY", data["message"])
+        self.assertNotIn("missing ", data["message"])
+        self.assertIn("Admin T2 skipped", cursor_t2.render_test(data))
 
     def test_vendor_test_fixture_roster_role_events(self) -> None:
         transport = FixtureTransport()
@@ -151,9 +159,11 @@ class CursorT2Tests(unittest.TestCase):
         )
         text = cursor_t2.render_test(data)
         self.assertFalse(data["ok"])
-        self.assertIn("Team Admin API key rejected (401)", text)
-        self.assertIn("optional T2", text)
-        self.assertIn("Personal/solo", text)
+        self.assertIn("not a Team Admin key", text)
+        self.assertIn("T0 unchanged", text)
+        self.assertNotIn("dashboard", text)
+        self.assertNotIn("admin:*", text)
+        self.assertNotIn("API Keys", text)
         self.assertNotIn("key_test", text)
 
     def test_pull_without_cred_is_noop(self) -> None:
@@ -163,6 +173,26 @@ class CursorT2Tests(unittest.TestCase):
             self.assertTrue(result["skipped"])
             self.assertEqual(result["reason"], "missing_cred")
             self.assertFalse(ledger.exists())
+
+    def test_cursor_api_key_is_rejected_without_mint_cta(self) -> None:
+        data = cursor_t2.test_vendor(environ={"CURSOR_API_KEY": "key_personal"})
+        self.assertTrue(data["ok"])
+        self.assertTrue(data["skipped"])
+        self.assertEqual(data["reason"], "alias_not_admin")
+        self.assertIn("CURSOR_API_KEY is not a Team Admin key", data["message"])
+        self.assertIn("T0 unchanged", data["message"])
+        self.assertNotIn("dashboard", data["message"])
+        self.assertNotIn("admin:*", data["message"])
+        self.assertNotIn("API Keys", data["message"])
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.db"
+            pulled = cursor_t2.pull(
+                db_path=ledger, environ={"CURSOR_API_KEY": "key_personal"}
+            )
+            self.assertTrue(pulled["skipped"])
+            self.assertEqual(pulled["reason"], "alias_not_admin")
+            self.assertFalse(ledger.exists())
+            self.assertIn("not a Team Admin key", cursor_t2.render_pull(pulled))
 
     def test_pull_joins_conversation_and_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -280,10 +310,29 @@ class CursorT2Tests(unittest.TestCase):
                 code = cli_main(["vendor", "test", "cursor"])
             self.assertEqual(code, 0)
             out = buf.getvalue()
-            self.assertIn("missing CURSOR_ADMIN_API_KEY", out)
-            self.assertIn("T0-only", out)
-            self.assertIn("advanced", out.lower())
+            self.assertIn("Admin T2 skipped", out)
+            self.assertIn("Free is T0", out)
             self.assertIn("Team/Enterprise", out)
+            self.assertNotIn("missing CURSOR_ADMIN_API_KEY", out)
+            self.assertNotIn("unresolved", out)
+            self.assertNotIn("CURSOR_ADMIN_API_KEY", out)
+
+            buf_json = StringIO()
+            with redirect_stdout(buf_json):
+                code_json = cli_main(["vendor", "test", "cursor", "--json"])
+            self.assertEqual(code_json, 0)
+            payload = json.loads(buf_json.getvalue())
+            creds = payload.get("credentials") or []
+            self.assertTrue(any(item.get("env") == "CURSOR_ADMIN_API_KEY" for item in creds))
+            self.assertIn("Admin T2 skipped", str(payload.get("detail") or ""))
+
+            buf_verbose = StringIO()
+            with redirect_stdout(buf_verbose):
+                code_verbose = cli_main(["vendor", "test", "cursor", "--verbose"])
+            self.assertEqual(code_verbose, 0)
+            verbose = buf_verbose.getvalue()
+            self.assertIn("CURSOR_ADMIN_API_KEY", verbose)
+            self.assertIn("unresolved", verbose)
         finally:
             env_home.cleanup()
 

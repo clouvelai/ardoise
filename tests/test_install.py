@@ -84,6 +84,8 @@ class DefaultStatusTests(IsolatedHome):
         self.assertIn("ledger is empty", text)
         self.assertIn("ardoise backfill", text)
         self.assertIn("ardoise status", text)
+        self.assertIn("invoice add (Free)", text)
+        self.assertIn("T2 is Team/Enterprise", text)
         for needle in _HAPPY_PATH_FORBIDDEN:
             self.assertNotIn(needle, text)
 
@@ -134,6 +136,8 @@ class InstallCopyTests(unittest.TestCase):
         self.assertIn("ledger is empty", text)
         self.assertIn("ardoise backfill", text)
         self.assertIn("ardoise status", text)
+        self.assertIn("invoice add (Free)", text)
+        self.assertIn("T2 is Team/Enterprise", text)
         for needle in _HAPPY_PATH_FORBIDDEN:
             self.assertNotIn(needle, text)
 

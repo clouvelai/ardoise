@@ -181,7 +181,7 @@ def render_text(data: dict[str, Any]) -> str:
     if any(row.get("invoice_grade") for row in section_a):
         billed_line = f"billed    ${float(billed or 0):.2f}  (invoice / T1 / T2)"
     else:
-        billed_line = "billed    (none)  — invoice add or T1/T2; T0 vendor lines are estimated"
+        billed_line = "billed    (none)  — invoice add (Free); T2 is Team/Enterprise"
     filt = data.get("filter") or {}
     roster_rows = data.get("roster") or []
     header = [

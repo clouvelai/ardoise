@@ -309,10 +309,14 @@ if vendor_c.get("capabilities", {}).get("capture") != "yes":
     raise SystemExit(f"cursor capture cap {vendor_c.get('capabilities')}")
 detail = str(vendor_c.get("detail") or "")
 vendor_txt = (box / "vendor-test.txt").read_text()
-if "missing CURSOR_ADMIN_API_KEY" not in detail and "missing CURSOR_ADMIN_API_KEY" not in vendor_txt:
-    raise SystemExit(f"cursor vendor test missing cred line: {detail!r} {vendor_txt!r}")
-if "T0-only" not in detail and "T0-only" not in vendor_txt:
-    raise SystemExit(f"cursor vendor test should say T0-only, got {detail!r} {vendor_txt!r}")
+if "Admin T2 skipped" not in detail and "Admin T2 skipped" not in vendor_txt:
+    raise SystemExit(f"cursor vendor test should skip Admin T2, got {detail!r} {vendor_txt!r}")
+if "Free is T0" not in detail and "Free is T0" not in vendor_txt:
+    raise SystemExit(f"cursor vendor test should say Free is T0, got {detail!r} {vendor_txt!r}")
+if "missing CURSOR_ADMIN_API_KEY" in detail or "missing CURSOR_ADMIN_API_KEY" in vendor_txt:
+    raise SystemExit(f"cursor vendor test should not nag missing Admin key: {detail!r} {vendor_txt!r}")
+if "CURSOR_ADMIN_API_KEY" in vendor_txt or "unresolved" in vendor_txt:
+    raise SystemExit(f"default vendor test cursor should stay quiet, got {vendor_txt!r}")
 
 # T1 snapshot is a no-op without OAuth (capabilities stay T0)
 snap = json.loads((box / "snapshot.json").read_text())
