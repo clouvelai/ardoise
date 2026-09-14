@@ -55,8 +55,8 @@ suffixes peeled).
 These rows stay `unknown` (or have no usage row at all):
 
 - Cursor Auto / `model=default` with no `model_id` and no nested real slug
-- Prompt-only cloud / box transcripts (no `usage` — not metered)
-- sessionStart / sessionEnd join rows that carry a session id but no model
+- Prompt-only cloud / box transcripts (no `usage` — not metered; not turned into zero-token join rows)
+- sessionStart / sessionEnd hook join rows that carry a session id but no model
 - SKUs not in the bundled book and not a prefix of one (priced $0, not Sonnet)
 - Cache-write tokens on Cursor first-party SKUs (rate unpublished → $0)
 
