@@ -412,6 +412,12 @@ if "Amount due" in md or "Amount due" in html:
     raise SystemExit("spend statement must not say Amount due")
 if "@media print" not in html:
     raise SystemExit("html missing print stylesheet")
+if "@page" not in html or "table-header-group" not in html:
+    raise SystemExit("html missing print page / repeating header rules")
+if "group-period" not in html:
+    raise SystemExit("html missing section period row")
+if "List price" not in html:
+    raise SystemExit("html missing list-price totals footer")
 
 conn = sqlite3.connect(home / ".ardoise" / "ledger.db")
 n_inv = conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]

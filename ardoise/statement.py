@@ -119,9 +119,12 @@ def _md(summary: dict[str, Any]) -> str:
     for group in groups:
         vendor = group.get("label") or group.get("vendor") or "vendor"
         lines.append(
-            f"| **{vendor}** · {group.get('period_label') or period} |  |  | "
-            f"**{_money(group.get('subtotal_usd'))}** |"
+            f"| **{vendor}** |  |  | **{_money(group.get('subtotal_usd'))}** |"
         )
+        period_bits = [group.get("period_label") or period]
+        if group.get("tier"):
+            period_bits.append(str(group.get("tier")))
+        lines.append(f"| {' · '.join(bit for bit in period_bits if bit)} |  |  |  |")
         for model in group.get("models") or []:
             model_name = model.get("model") or "(none)"
             lines.append(f"| {model_name} |  |  | {_money(model.get('subtotal_usd'), places=4)} |")
@@ -142,6 +145,16 @@ def _md(summary: dict[str, Any]) -> str:
                     amt=_money(adj.get("amount_usd"), places=4),
                 )
             )
+
+    totals = doc.get("totals") or {}
+    if totals.get("show_reconciliation"):
+        lines += [
+            f"| List price |  |  | {_money(totals.get('list_usd'), places=4)} |",
+            f"| Reconciling adjustment |  |  | {_money(totals.get('adjustment_usd'), places=4)} |",
+        ]
+    lines.append(
+        f"| **Total** |  |  | **{_money(total, places=2 if grade else 4)}** |"
+    )
 
     lines += ["", "## Memo", ""]
     for item in doc.get("memo") or []:
@@ -214,20 +227,23 @@ def _html_page(summary: dict[str, Any]) -> str:
     grade = bool(doc.get("invoice_grade"))
     total = doc.get("total_usd")
     total_s = _money(total, places=2 if grade else 4)
-    seat = _filter_label(summary)
+    totals = doc.get("totals") or {}
 
     group_blocks: list[str] = []
     for group in doc.get("groups") or []:
         vendor = cell(group.get("label") or group.get("vendor") or "vendor")
         sub = _money(group.get("subtotal_usd"))
         tier = cell(group.get("tier") or "T0")
+        period_label = cell(group.get("period_label") or "")
         rows_html: list[str] = [
             "<tr class=\"group\">"
-            f"<td colspan=\"3\"><strong>{vendor}</strong>"
-            f'<span class="period"> · {cell(group.get("period_label") or "")}</span>'
-            f'<span class="tier"> · {tier}</span></td>'
+            f"<td colspan=\"3\"><strong>{vendor}</strong></td>"
             f'<td class="num"><strong>{sub}</strong></td>'
-            "</tr>"
+            "</tr>",
+            "<tr class=\"group-period\">"
+            f'<td colspan="4"><span class="period">{period_label}</span>'
+            f'<span class="tier"> · {tier}</span></td>'
+            "</tr>",
         ]
         for model in group.get("models") or []:
             model_name = cell(model.get("model") or "(none)")
@@ -250,16 +266,41 @@ def _html_page(summary: dict[str, Any]) -> str:
         if adj:
             rows_html.append(
                 "<tr class=\"adj\">"
-                f"<td colspan=\"3\">{cell(adj.get('description'))}</td>"
+                f"<td class=\"indent\">{cell(adj.get('description'))}</td>"
+                '<td class="num">—</td>'
+                '<td class="num">—</td>'
                 f'<td class="num">{_money(adj.get("amount_usd"), places=4)}</td>'
                 "</tr>"
             )
-        group_blocks.append("".join(rows_html))
+        group_blocks.append(f'<tbody class="section">{"".join(rows_html)}</tbody>')
 
     if not group_blocks:
-        table_body = '<tr><td colspan="4" class="empty-row">No usage this period.</td></tr>'
+        table_body = (
+            '<tbody><tr><td colspan="4" class="empty-row">'
+            "No usage this period.</td></tr></tbody>"
+        )
     else:
         table_body = "".join(group_blocks)
+
+    foot_rows: list[str] = []
+    if totals.get("show_reconciliation"):
+        foot_rows += [
+            "<tr class=\"tot-sub\">"
+            '<td colspan="3">List price</td>'
+            f'<td class="num">{_money(totals.get("list_usd"), places=4)}</td>'
+            "</tr>",
+            "<tr class=\"tot-adj\">"
+            '<td colspan="3">Reconciling adjustment</td>'
+            f'<td class="num">{_money(totals.get("adjustment_usd"), places=4)}</td>'
+            "</tr>",
+        ]
+    foot_rows.append(
+        "<tr class=\"tot-grand\">"
+        "<td colspan=\"3\"><strong>Total</strong></td>"
+        f'<td class="num"><strong>{total_s}</strong></td>'
+        "</tr>"
+    )
+    table_foot = f"<tfoot>{''.join(foot_rows)}</tfoot>"
 
     memo_items = "".join(f"<li>{cell(item)}</li>" for item in (doc.get("memo") or []))
     notes = [str(item) for item in (doc.get("notes") or summary.get("notes") or []) if item]
@@ -321,13 +362,15 @@ def _html_page(summary: dict[str, Any]) -> str:
 <title>Statement {number}</title>
 <style>
 :root {{
-  --ink: #111827;
-  --muted: #6b7280;
-  --hair: #e5e7eb;
+  --ink: #17141f;
+  --muted: #6d6778;
+  --hair: #ece8f2;
+  --rule: #17141f;
   --paper: #ffffff;
+  --mist: #f7f3fb;
 }}
 * {{ box-sizing: border-box; }}
-html, body {{ background: #f3f4f6; }}
+html, body {{ background: #f4f0fb; }}
 body {{
   margin: 0;
   color: var(--ink);
@@ -338,29 +381,44 @@ body {{
 .wrap {{
   max-width: 52rem;
   margin: 1.5rem auto 3rem;
-  padding: 2rem 2.25rem 2.5rem;
+  padding: 2rem 2.35rem 2.4rem;
   background: var(--paper);
-  border: 1px solid var(--hair);
+  border: 1px solid #e9e1f6;
 }}
-.top {{
+.letterhead {{
   display: grid;
-  grid-template-columns: 1.2fr 0.9fr;
-  gap: 1.5rem 2rem;
+  grid-template-columns: 1fr auto;
+  gap: 1rem 2rem;
   align-items: start;
+  margin-bottom: 1.35rem;
 }}
-.brand {{
-  margin: 0 0 0.85rem;
+.wordmark {{
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}}
+.kicker {{
+  margin: 0.15rem 0 0;
   font-size: 0.72rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 650;
 }}
-h1 {{
-  margin: 0 0 1rem;
-  font-size: 1.75rem;
+.doc-kind {{
+  margin: 0;
+  font-size: 1.85rem;
   font-weight: 650;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
+}}
+.top {{
+  display: grid;
+  grid-template-columns: 1.15fr 0.95fr;
+  gap: 1.35rem 2rem;
+  align-items: start;
 }}
 .party-label {{
   margin: 0 0 0.25rem;
@@ -372,6 +430,7 @@ h1 {{
 }}
 .party-name {{ margin: 0; font-weight: 650; }}
 .party-line, .muted {{ margin: 0.1rem 0 0; color: var(--muted); }}
+.prepared {{ margin-top: 1.05rem; }}
 .meta {{
   margin: 0;
   width: 100%;
@@ -382,12 +441,12 @@ h1 {{
   text-align: left;
   font-weight: 500;
   color: var(--muted);
-  padding: 0.2rem 0.6rem 0.2rem 0;
+  padding: 0.18rem 0.6rem 0.18rem 0;
 }}
 .meta td {{
   text-align: right;
   font-variant-numeric: tabular-nums;
-  padding: 0.2rem 0;
+  padding: 0.18rem 0;
 }}
 .meta tr.total td, .meta tr.total th {{
   padding-top: 0.55rem;
@@ -397,16 +456,19 @@ h1 {{
 }}
 .hero-amt {{ font-variant-numeric: tabular-nums; }}
 .lines {{
-  margin-top: 1.75rem;
+  margin-top: 1.6rem;
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }}
+.col-desc {{ width: 52%; }}
+.col-qty, .col-rate {{ width: 16%; }}
+.col-amt {{ width: 16%; }}
 .lines th {{
   text-align: left;
-  border-bottom: 1px solid var(--ink);
-  padding: 0.4rem 0.45rem;
-  font-size: 0.72rem;
+  border-bottom: 1px solid var(--rule);
+  padding: 0.28rem 0.4rem 0.4rem;
+  font-size: 0.7rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
@@ -414,19 +476,42 @@ h1 {{
 }}
 .lines th.num, .lines td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
 .lines td {{
-  padding: 0.38rem 0.45rem;
+  padding: 0.22rem 0.4rem;
   border-bottom: 1px solid var(--hair);
   vertical-align: baseline;
 }}
 .lines tr.group td {{
-  padding-top: 0.9rem;
-  border-bottom: 1px solid #d1d5db;
+  padding-top: 0.85rem;
+  padding-bottom: 0.05rem;
+  border-bottom: none;
 }}
-.lines tr.sku td {{ color: var(--ink); font-weight: 550; }}
-.lines tr.meter td.indent {{ padding-left: 1.15rem; color: #374151; }}
-.lines tr.adj td {{ color: var(--muted); font-style: italic; }}
-.lines .period, .lines .tier {{ color: var(--muted); font-weight: 400; }}
-.lines .empty-row {{ color: var(--muted); padding: 1rem 0.45rem; }}
+.lines tr.group-period td {{
+  padding-top: 0;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #d8d2e4;
+  color: var(--muted);
+  font-size: 0.8rem;
+}}
+.lines tr.sku td {{ color: var(--ink); font-weight: 550; border-bottom-color: transparent; }}
+.lines tr.meter td {{ border-bottom-color: #f3eef8; }}
+.lines tr.meter td.indent,
+.lines tr.adj td.indent {{ padding-left: 1.15rem; color: #4b4558; }}
+.lines tr.adj td {{ color: var(--muted); }}
+.lines .empty-row {{ color: var(--muted); padding: 1rem 0.4rem; }}
+.lines tfoot td {{
+  border-bottom: none;
+  padding-top: 0.35rem;
+}}
+.lines tr.tot-sub td,
+.lines tr.tot-adj td {{
+  color: var(--muted);
+  border-bottom: none;
+}}
+.lines tr.tot-grand td {{
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.95rem;
+}}
 .memo {{
   margin-top: 1.75rem;
   color: var(--muted);
@@ -448,35 +533,60 @@ h1 {{
 .notes {{
   margin-top: 1.4rem;
   padding: 0.85rem 1rem;
-  border: 1px solid #f1e4c8;
-  background: #fffbeb;
+  border: 1px solid #e9e1f6;
+  background: var(--mist);
 }}
 .notes p {{ margin: 0 0 0.45rem; color: var(--muted); font-size: 0.82rem; }}
-.notes ul {{ margin: 0; padding-left: 1.1rem; color: #92400e; }}
+.notes ul {{ margin: 0; padding-left: 1.1rem; color: #5234d2; }}
 .foot {{ margin-top: 1.8rem; color: var(--muted); font-size: 0.75rem; }}
+@page {{
+  size: letter;
+  margin: 14mm 16mm 16mm;
+}}
+@page {{
+  @bottom-center {{
+    content: counter(page) " of " counter(pages);
+    font-size: 9pt;
+    color: #6d6778;
+  }}
+}}
 @media print {{
   html, body {{ background: #fff; }}
+  body {{
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }}
   .wrap {{
     margin: 0;
     max-width: none;
     border: none;
-    padding: 0.5in 0.6in;
+    padding: 0;
   }}
-  .lines tr.group {{ break-inside: avoid; }}
-  .notes {{ break-inside: avoid; }}
+  thead {{ display: table-header-group; }}
+  tfoot {{ display: table-footer-group; }}
+  tbody.section {{ break-inside: avoid; page-break-inside: avoid; }}
+  tr.group, tr.group-period, tr.sku {{ break-after: avoid; page-break-after: avoid; }}
+  .notes, .quiet, .memo {{ break-inside: avoid; }}
 }}
 </style>
 </head>
 <body>
 <main class="wrap">
-  <p class="brand">Ardoise · spend statement</p>
-  <h1>Statement</h1>
+  <header class="letterhead">
+    <div>
+      <p class="wordmark">Ardoise</p>
+      <p class="kicker">Spend statement</p>
+    </div>
+    <h1 class="doc-kind">Statement</h1>
+  </header>
   <div class="top">
     <div>
       <p class="party-label">From</p>
       {from_html}
-      <p class="party-label" style="margin-top:1.1rem">Prepared for</p>
-      {prepared_html}
+      <div class="prepared">
+        <p class="party-label">Prepared for</p>
+        {prepared_html}
+      </div>
     </div>
     <div>
       <table class="meta">
@@ -489,6 +599,12 @@ h1 {{
     </div>
   </div>
   <table class="lines">
+    <colgroup>
+      <col class="col-desc"/>
+      <col class="col-qty"/>
+      <col class="col-rate"/>
+      <col class="col-amt"/>
+    </colgroup>
     <thead>
       <tr>
         <th>Description</th>
@@ -497,9 +613,8 @@ h1 {{
         <th class="num">Amount</th>
       </tr>
     </thead>
-    <tbody>
-      {table_body}
-    </tbody>
+    {table_body}
+    {table_foot}
   </table>
   <section class="memo">
     <h2>Memo</h2>

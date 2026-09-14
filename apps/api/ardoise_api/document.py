@@ -246,6 +246,19 @@ def build_document(
             }
         )
 
+    list_usd = round(sum(float(g.get("list_total_usd") or 0) for g in groups), 8)
+    adjustment_usd = round(
+        sum(float((g.get("adjustment") or {}).get("amount_usd") or 0) for g in groups),
+        8,
+    )
+    total_out = round(total, 2) if invoice_grade else round(total, 4)
+    totals = {
+        "list_usd": list_usd,
+        "adjustment_usd": adjustment_usd,
+        "total_usd": total_out,
+        "show_reconciliation": bool(invoice_grade and abs(adjustment_usd) >= 0.0000005),
+    }
+
     return {
         "title": "Statement",
         "number": month,
@@ -253,10 +266,11 @@ def build_document(
         "period": period,
         "from": issuer,
         "prepared_for": prepared,
-        "total_usd": round(total, 2) if invoice_grade else round(total, 4),
+        "total_usd": total_out,
         "invoice_grade": invoice_grade,
         "estimated_usd": round(estimated, 8),
         "billed_usd": round(billed, 2) if invoice_grade else None,
+        "totals": totals,
         "groups": groups,
         "memo": [
             "This is a spend statement, not a tax invoice.",

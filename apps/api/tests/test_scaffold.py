@@ -459,9 +459,12 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(doc.get("title"), "Statement")
         self.assertEqual((doc.get("from") or {}).get("name"), "Ardoise")
         self.assertIn("groups", doc)
+        self.assertIn("totals", doc)
+        self.assertFalse((doc.get("totals") or {}).get("show_reconciliation"))
         self.assertNotIn("Amount due", str(doc))
         self.assertTrue(any("spend statement" in m for m in (doc.get("memo") or [])))
         self.assertIn("period", doc)
+        self.assertIn("| Description | Quantity | Rate | Amount |", stmt.json()["markdown"])
 
         minted = client.post("/v1/cli/tokens", headers=headers)
         self.assertEqual(minted.status_code, 200)
@@ -539,6 +542,10 @@ class ScaffoldTests(unittest.TestCase):
         self.assertNotIn("Amount due", str(doc))
         adj = (doc.get("groups") or [{}])[0].get("adjustment")
         self.assertTrue(adj)
+        totals = doc.get("totals") or {}
+        self.assertTrue(totals.get("show_reconciliation"))
+        self.assertIn("List price", stmt.json()["markdown"])
+        self.assertIn("Reconciling adjustment", stmt.json()["markdown"])
         pasted = client.post(
             "/v1/invoices",
             json={"vendor": "cursor", "cycle": "2026-09", "usd_cents": 400},

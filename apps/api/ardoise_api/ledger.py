@@ -268,44 +268,91 @@ def summarize(
     }
 
 
+def _md_money(value: Any, *, places: int = 2) -> str:
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        number = 0.0
+    return f"${number:,.{places}f}"
+
+
 def render_markdown(summary: dict[str, Any]) -> str:
-    month = summary.get("month") or ""
-    invoice_grade = bool(summary.get("invoice_grade"))
+    from ardoise_api.document import build_document
+
+    doc = build_document(summary)
+    invoice_grade = bool(doc.get("invoice_grade"))
+    period = (doc.get("period") or {}).get("label") or ""
+    places = 2 if invoice_grade else 4
     lines = [
-        f"# Ardoise statement · {month}",
+        f"# {doc.get('title') or 'Statement'} {doc.get('number') or summary.get('month') or ''}",
         "",
-        f"Entries: {summary.get('month_entries') or 0}",
-        f"T0 estimate: ${float(summary.get('estimated_usd') or 0):.4f}",
+        "## From",
+        "",
+        f"- {(doc.get('from') or {}).get('name') or 'Ardoise'}",
+        "",
+        "## Prepared for",
+        "",
+        f"- {(doc.get('prepared_for') or {}).get('name') or (doc.get('prepared_for') or {}).get('email') or '—'}",
+        "",
+        "| | |",
+        "|---|---|",
+        f"| Statement number | {doc.get('number')} |",
+        f"| Statement date | {doc.get('statement_date')} |",
+        f"| Usage period | {period} |",
+        f"| Total | {_md_money(doc.get('total_usd'), places=places)} |",
+        "",
+        "| Description | Quantity | Rate | Amount |",
+        "|---|---:|---:|---:|",
     ]
-    if invoice_grade:
-        lines.append(f"Billed: ${float(summary.get('billed_usd') or 0):.2f}")
-    else:
-        lines.append("Billed: (Free estimate — upgrade to Pro)")
-    lines += ["", "## Section A — vendor lines"]
-    section_a = summary.get("section_a") or []
-    if not invoice_grade:
-        lines.append("Invoice-grade totals are a Pro feature.")
-    elif not section_a:
-        lines.append("(empty)")
-    else:
-        for row in section_a:
-            lines.append(
-                f"- {row.get('vendor')}  ${float(row.get('billed_usd') or 0):.2f}  "
-                f"{row.get('tier_of_truth')}  {row.get('source')}"
-            )
-    lines += ["", "## By project"]
-    projects = summary.get("by_project") or []
-    if not projects:
-        lines.append("(empty)")
-    for row in projects:
-        alloc = row.get("allocated_billed_usd")
-        extra = f"  alloc=${float(alloc):.2f}" if alloc is not None and invoice_grade else ""
+    groups = doc.get("groups") or []
+    if not groups:
+        lines.append("| (no usage this period) | — | — | — |")
+    for group in groups:
+        vendor = group.get("label") or group.get("vendor") or "vendor"
         lines.append(
-            f"- {row.get('project')}  est=${float(row.get('cost_usd') or 0):.4f}  "
-            f"n={row.get('entries')}{extra}"
+            f"| **{vendor}** |  |  | **{_md_money(group.get('subtotal_usd'))}** |"
         )
-    for note in summary.get("notes") or []:
-        lines += ["", f"> {note}"]
+        period_bits = [group.get("period_label") or period]
+        if group.get("tier"):
+            period_bits.append(str(group.get("tier")))
+        lines.append(f"| {' · '.join(bit for bit in period_bits if bit)} |  |  |  |")
+        for model in group.get("models") or []:
+            lines.append(
+                f"| {model.get('model') or '(none)'} |  |  | "
+                f"{_md_money(model.get('subtotal_usd'), places=4)} |"
+            )
+            for meter in model.get("lines") or []:
+                lines.append(
+                    "| {desc} | {qty} | {rate} | {amt} |".format(
+                        desc=meter.get("description") or "",
+                        qty=meter.get("quantity_label") or "—",
+                        rate=meter.get("rate_label") or "—",
+                        amt=_md_money(meter.get("amount_usd"), places=4),
+                    )
+                )
+        adj = group.get("adjustment")
+        if adj:
+            lines.append(
+                "| {desc} | — | — | {amt} |".format(
+                    desc=adj.get("description") or "Reconciling adjustment",
+                    amt=_md_money(adj.get("amount_usd"), places=4),
+                )
+            )
+    totals = doc.get("totals") or {}
+    if totals.get("show_reconciliation"):
+        lines += [
+            f"| List price |  |  | {_md_money(totals.get('list_usd'), places=4)} |",
+            f"| Reconciling adjustment |  |  | {_md_money(totals.get('adjustment_usd'), places=4)} |",
+        ]
+    lines.append(f"| **Total** |  |  | **{_md_money(doc.get('total_usd'), places=places)}** |")
+    if not invoice_grade:
+        lines += ["", "Estimated (Free). Upgrade to Pro for invoice-grade statements."]
+    lines += ["", "## Memo", ""]
+    for item in doc.get("memo") or []:
+        lines.append(f"- {item}")
+    for note in doc.get("notes") or summary.get("notes") or []:
+        if note:
+            lines += ["", f"> {note}"]
     return "\n".join(lines) + "\n"
 
 

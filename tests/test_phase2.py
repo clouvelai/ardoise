@@ -212,6 +212,11 @@ class InvoiceAndReconcileTests(unittest.TestCase):
         self.assertIn("Amount", html)
         self.assertIn("Total", html)
         self.assertIn("@media print", html)
+        self.assertIn("@page", html)
+        self.assertIn("table-header-group", html)
+        self.assertIn("group-period", html)
+        self.assertIn("List price", html)
+        self.assertIn("Spend statement", html)
         self.assertIn("A_vendor", csv_text)
         self.assertIn("B_t0_allocation", csv_text)
         self.assertNotIn("### Lines", md)
@@ -359,6 +364,8 @@ class InvoiceAndReconcileTests(unittest.TestCase):
         self.assertIn("Finance", md)
         self.assertIn("Total", html)
         self.assertNotIn("Amount due", html)
+        self.assertIn("Spend statement", html)
+        self.assertIn("group-period", html)
 
 
 class VendorCliTests(unittest.TestCase):

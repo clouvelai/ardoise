@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:px-8">
+      <header className="print-hide mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:px-8">
         <Link href="/app" className="flex items-center gap-2.5 text-ink">
           <SlateMark className="h-7 w-7" />
           <span className="text-[17px] font-semibold tracking-tight">ardoise</span>

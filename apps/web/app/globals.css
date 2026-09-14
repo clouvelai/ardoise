@@ -144,14 +144,34 @@ body {
   }
 }
 
+@page {
+  size: letter;
+  margin: 14mm 16mm 16mm;
+}
+
+@page {
+  @bottom-center {
+    content: counter(page) " of " counter(pages);
+    font-size: 9pt;
+    color: #6d6778;
+  }
+}
+
 @media print {
   body {
     background: #fff !important;
-    color: #111827 !important;
+    color: #17141f !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .print-hide {
     display: none !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
   }
 
   .stmt-doc {
@@ -160,5 +180,18 @@ body {
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
+  }
+
+  .stmt-lines thead {
+    display: table-header-group;
+  }
+
+  .stmt-lines tfoot {
+    display: table-footer-group;
+  }
+
+  .stmt-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
