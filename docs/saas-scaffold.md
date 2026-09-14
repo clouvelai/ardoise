@@ -11,7 +11,10 @@ Arbusteia humans sign in with **Supabase Auth email OTP**:
 
 1. Browser calls `POST {SUPABASE_URL}/auth/v1/otp` with the public
    publishable/anon key (`sb_publishable_…` or legacy `eyJ…` JWT).
-2. User types the one-time code; Supabase returns an access JWT.
+2. User types the one-time code **or** clicks the magic link. Typed verify
+   and `token_hash` hit Gotrue `/verify`; implicit links put `#access_token=`
+   on the marketing `/signup` URL and the browser establishes the session via
+   `GET /v1/me`. Allow-list that origin on Auth → URL Configuration.
 3. The API verifies `Authorization: Bearer <access_token>` (HS256
    `SUPABASE_JWT_SECRET` when it is a raw secret; otherwise JWKS from
    `{SUPABASE_URL}/auth/v1/.well-known/jwks.json` — use JWKS when the

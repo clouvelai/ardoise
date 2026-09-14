@@ -149,6 +149,12 @@ class Settings:
         return f"{self.supabase_url}/auth/v1/verify"
 
     @property
+    def otp_token_url(self) -> str:
+        if not self.supabase_url:
+            return ""
+        return f"{self.supabase_url}/auth/v1/token"
+
+    @property
     def jwt_issuer(self) -> str:
         if not self.supabase_url:
             return ""

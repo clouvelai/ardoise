@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -17,6 +18,10 @@ from ardoise_api.store import AccountStore
 
 _jwks_clients: dict[str, PyJWKClient] = {}
 _ASYMMETRIC_ALGS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA")
+_ALLOWED_OTP_TYPES = frozenset(
+    {"email", "magiclink", "signup", "invite", "recovery", "email_change"}
+)
+_SAFE_NEXT = frozenset({"/pricing", "/app", "/app/settings", "/app/statement"})
 
 
 class AuthError(Exception):
@@ -54,7 +59,63 @@ def _gotrue_headers(settings: Settings) -> dict[str, str]:
     }
 
 
-def kickoff_otp(settings: Settings, email: str) -> dict[str, Any]:
+def safe_next_path(value: str | None) -> str | None:
+    """Same allow-list as apps/web `safeNextPath` — view-only, never blocks."""
+    if not value or not value.startswith("/") or value.startswith("//"):
+        return None
+    if "://" in value or "\\" in value:
+        return None
+    return value if value in _SAFE_NEXT else None
+
+
+def auth_email_redirect(settings: Settings, next_path: str | None = None) -> str:
+    """Marketing-origin /signup so magic-link tokens land on the form."""
+    origin = (settings.web_origin or "").rstrip("/")
+    if not origin:
+        return ""
+    dest = f"{origin}/signup"
+    safe = safe_next_path(next_path)
+    if safe:
+        dest = f"{dest}?next={safe}"
+    return dest
+
+
+def _otp_type(raw: str | None) -> str:
+    value = (raw or "email").strip().lower() or "email"
+    if value not in _ALLOWED_OTP_TYPES:
+        raise AuthError("unsupported verify type", 400)
+    return value
+
+
+def _gotrue_post(
+    settings: Settings,
+    url: str,
+    payload: dict[str, Any],
+    *,
+    action: str,
+) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers=_gotrue_headers(settings),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            text = resp.read().decode("utf-8") or "{}"
+            data = json.loads(text)
+    except urllib.error.HTTPError as exc:
+        err = exc.read().decode("utf-8", errors="replace")
+        raise AuthError(f"supabase {action} failed: {err}", exc.code) from exc
+    except urllib.error.URLError as exc:
+        raise AuthError(f"supabase {action} unreachable: {exc}", 502) from exc
+    return data if isinstance(data, dict) else {}
+
+
+def kickoff_otp(
+    settings: Settings, email: str, next_path: str | None = None
+) -> dict[str, Any]:
     """POST {SUPABASE_URL}/auth/v1/otp with the public anon key."""
     email = _normalize_email(email)
     if not settings.supabase_otp_configured:
@@ -70,22 +131,13 @@ def kickoff_otp(settings: Settings, email: str) -> dict[str, Any]:
                 "non-production."
             ),
         }
-    payload = json.dumps({"email": email, "create_user": True}).encode("utf-8")
-    req = urllib.request.Request(
-        settings.otp_url,
-        data=payload,
-        method="POST",
-        headers=_gotrue_headers(settings),
+    url = settings.otp_url
+    redirect_to = auth_email_redirect(settings, next_path)
+    if redirect_to:
+        url = f"{url}?redirect_to={urllib.parse.quote(redirect_to, safe='')}"
+    data = _gotrue_post(
+        settings, url, {"email": email, "create_user": True}, action="otp"
     )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            body = resp.read().decode("utf-8") or "{}"
-            data = json.loads(body)
-    except urllib.error.HTTPError as exc:
-        err = exc.read().decode("utf-8", errors="replace")
-        raise AuthError(f"supabase otp failed: {err}", exc.code) from exc
-    except urllib.error.URLError as exc:
-        raise AuthError(f"supabase otp unreachable: {exc}", 502) from exc
     return {"ok": True, "mocked": False, "email": email, "supabase": data}
 
 
@@ -107,15 +159,99 @@ def mint_mock_access_token(settings: Settings, email: str) -> str:
     )
 
 
+def _session_from_gotrue(
+    settings: Settings,
+    store: AccountStore,
+    data: dict[str, Any],
+    fallback_email: str | None = None,
+) -> dict[str, Any]:
+    access_token = data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        raise AuthError("supabase verify returned no access_token", 502)
+
+    user = data.get("user") if isinstance(data.get("user"), dict) else {}
+    sub = user.get("id") if isinstance(user.get("id"), str) else None
+    verified_email = (fallback_email or "").strip().lower() or None
+    raw_email = user.get("email")
+    if isinstance(raw_email, str) and raw_email.strip():
+        verified_email = raw_email.strip().lower()
+    if not sub or not verified_email:
+        try:
+            claims = decode_access_token(settings, access_token)
+            _, claim_email, claim_sub = identity_from_claims(claims)
+            if claim_email:
+                verified_email = claim_email
+            if not sub:
+                sub = claim_sub
+        except AuthError:
+            pass
+    if not verified_email:
+        raise AuthError("supabase verify returned no email", 502)
+    if not sub:
+        raise AuthError("supabase verify returned no user id", 502)
+
+    account = store.upsert_account(
+        external_key=verified_email, email=verified_email, supabase_sub=sub
+    )
+    return {
+        "ok": True,
+        "mocked": False,
+        "email": verified_email,
+        "access_token": access_token,
+        "token_type": data.get("token_type") or "bearer",
+        "expires_in": data.get("expires_in"),
+        "refresh_token": data.get("refresh_token"),
+        "account": {
+            "id": account["id"],
+            "external_key": account["external_key"],
+            "email": account["email"],
+            "plan": account.get("plan") or "free",
+        },
+    }
+
+
 def verify_email_otp(
     settings: Settings,
     store: AccountStore,
-    email: str,
-    token: str,
+    email: str | None = None,
+    token: str | None = None,
+    *,
+    token_hash: str | None = None,
+    otp_type: str | None = None,
+    code: str | None = None,
 ) -> dict[str, Any]:
-    """POST {SUPABASE_URL}/auth/v1/verify — creates the account, no card."""
-    email = _normalize_email(email)
-    token = token.strip()
+    """POST Gotrue verify / token — creates the account, no card.
+
+    Typed OTP: email + 6-digit token.
+    Magic-link query: token_hash (+ type) or PKCE `code`.
+    """
+    token_hash = (token_hash or "").strip() or None
+    code = (code or "").strip() or None
+    token = (token or "").strip() or None
+    email_raw = (email or "").strip()
+
+    if token_hash or code:
+        if not settings.supabase_otp_configured:
+            raise AuthError("one-time code required", 400)
+        if token_hash:
+            data = _gotrue_post(
+                settings,
+                settings.otp_verify_url,
+                {"token_hash": token_hash, "type": _otp_type(otp_type)},
+                action="otp verify",
+            )
+        else:
+            data = _gotrue_post(
+                settings,
+                f"{settings.otp_token_url}?grant_type=pkce",
+                {"auth_code": code},
+                action="otp verify",
+            )
+        return _session_from_gotrue(
+            settings, store, data, fallback_email=email_raw or None
+        )
+
+    email = _normalize_email(email_raw)
     if not token:
         raise AuthError("one-time code required", 400)
 
@@ -155,64 +291,13 @@ def verify_email_otp(
             ),
         }
 
-    payload = json.dumps(
-        {"email": email, "token": token, "type": "email"}
-    ).encode("utf-8")
-    req = urllib.request.Request(
+    data = _gotrue_post(
+        settings,
         settings.otp_verify_url,
-        data=payload,
-        method="POST",
-        headers=_gotrue_headers(settings),
+        {"email": email, "token": token, "type": _otp_type(otp_type)},
+        action="otp verify",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            body = resp.read().decode("utf-8") or "{}"
-            data = json.loads(body)
-    except urllib.error.HTTPError as exc:
-        err = exc.read().decode("utf-8", errors="replace")
-        raise AuthError(f"supabase otp verify failed: {err}", exc.code) from exc
-    except urllib.error.URLError as exc:
-        raise AuthError(f"supabase otp verify unreachable: {exc}", 502) from exc
-
-    access_token = data.get("access_token")
-    if not isinstance(access_token, str) or not access_token:
-        raise AuthError("supabase verify returned no access_token", 502)
-
-    user = data.get("user") if isinstance(data.get("user"), dict) else {}
-    sub = user.get("id") if isinstance(user.get("id"), str) else None
-    verified_email = email
-    raw_email = user.get("email")
-    if isinstance(raw_email, str) and raw_email.strip():
-        verified_email = raw_email.strip().lower()
-    if not sub:
-        try:
-            claims = decode_access_token(settings, access_token)
-            _, claim_email, sub = identity_from_claims(claims)
-            if claim_email:
-                verified_email = claim_email
-        except AuthError:
-            sub = None
-    if not sub:
-        raise AuthError("supabase verify returned no user id", 502)
-
-    account = store.upsert_account(
-        external_key=verified_email, email=verified_email, supabase_sub=sub
-    )
-    return {
-        "ok": True,
-        "mocked": False,
-        "email": verified_email,
-        "access_token": access_token,
-        "token_type": data.get("token_type") or "bearer",
-        "expires_in": data.get("expires_in"),
-        "refresh_token": data.get("refresh_token"),
-        "account": {
-            "id": account["id"],
-            "external_key": account["external_key"],
-            "email": account["email"],
-            "plan": account.get("plan") or "free",
-        },
-    }
+    return _session_from_gotrue(settings, store, data, fallback_email=email)
 
 
 def _token_header(token: str) -> dict[str, Any]:

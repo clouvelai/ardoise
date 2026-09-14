@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { COPY, isNetworkError, safeNextPath } from "@/lib/saas-errors";
-import { isOtpNotWired, otpMessage, requestEmailOtp, verifyEmailOtp } from "@/lib/saas-otp";
+import { parseAuthRedirect, stripAuthRedirect } from "@/lib/saas-callback";
+import { COPY, isNetworkError, safeNextPath, sparseMessage } from "@/lib/saas-errors";
+import {
+  isOtpNotWired,
+  otpMessage,
+  requestEmailOtp,
+  sessionFromRedirect,
+  verifyEmailOtp,
+} from "@/lib/saas-otp";
 import { getSession, saveSession } from "@/lib/saas-session";
 import { Mascot } from "./mark";
 
@@ -15,6 +22,14 @@ const fieldClass =
 const primaryClass =
   "flex w-full items-center justify-center rounded-full bg-grape py-3.5 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep disabled:cursor-wait disabled:opacity-70";
 
+function replaceAuthUrl() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const clean = stripAuthRedirect(new URL(window.location.href));
+  window.history.replaceState(null, "", clean);
+}
+
 export function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -23,13 +38,62 @@ export function SignupForm() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
+  const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const consumed = useRef(false);
 
   useEffect(() => {
-    if (nextPath && getSession()) {
-      router.replace(nextPath);
+    if (consumed.current || typeof window === "undefined") {
+      return;
     }
+    const parsed = parseAuthRedirect(window.location.search, window.location.hash);
+    if (parsed.kind === "none") {
+      if (nextPath && getSession()) {
+        router.replace(nextPath);
+      }
+      return;
+    }
+    consumed.current = true;
+    let cancelled = false;
+    void (async () => {
+      // Hash/query tokens only exist after mount; yield so setState is not sync in the effect.
+      await Promise.resolve();
+      if (cancelled) {
+        return;
+      }
+      if (parsed.kind === "error") {
+        setError(sparseMessage(new Error(parsed.message), COPY.invalidAuth));
+        replaceAuthUrl();
+        return;
+      }
+      setAccepting(true);
+      setError(null);
+      setStatus(null);
+      try {
+        const session = await sessionFromRedirect(parsed);
+        if (cancelled) {
+          return;
+        }
+        saveSession(session);
+        replaceAuthUrl();
+        router.replace(nextPath || "/app");
+      } catch (caught) {
+        if (cancelled) {
+          return;
+        }
+        replaceAuthUrl();
+        if (isOtpNotWired(caught)) {
+          setStatus(COPY.notWired);
+        } else {
+          setError(otpMessage(caught));
+        }
+        setAccepting(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [nextPath, router]);
 
   async function onRequest(event: FormEvent<HTMLFormElement>) {
@@ -38,7 +102,7 @@ export function SignupForm() {
     setError(null);
     setStatus(null);
     try {
-      const result = await requestEmailOtp(email);
+      const result = await requestEmailOtp(email, { next: nextPath });
       setEmail(result.email);
       setStep("code");
       setStatus(null);
@@ -80,7 +144,7 @@ export function SignupForm() {
     setPending(true);
     setError(null);
     try {
-      await requestEmailOtp(email);
+      await requestEmailOtp(email, { next: nextPath });
       setStatus("Sent again.");
     } catch (caught) {
       if (isOtpNotWired(caught) || isNetworkError(caught)) {
@@ -102,7 +166,13 @@ export function SignupForm() {
         <Mascot className="h-full w-full drop-shadow-sm" />
       </div>
       <div className="rounded-[28px] bg-white px-6 py-8 shadow-[0_8px_30px_rgba(76,29,149,0.07),0_28px_80px_rgba(76,29,149,0.08)] ring-1 ring-black/[0.03] sm:px-8 sm:py-10">
-        {step === "email" ? (
+        {accepting ? (
+          <div className="py-6 text-center">
+            <p className="text-[15px] text-muted">{COPY.signingIn}</p>
+          </div>
+        ) : null}
+
+        {!accepting && step === "email" ? (
           <form onSubmit={onRequest} className="space-y-5">
             <label className="block">
               <span className="sr-only">Email</span>
@@ -125,10 +195,10 @@ export function SignupForm() {
           </form>
         ) : null}
 
-        {step === "code" ? (
+        {!accepting && step === "code" ? (
           <form onSubmit={onVerify} className="space-y-5">
             <p className="text-[15px] text-muted">
-              We sent a code to {email}.
+              Check {email} for a sign-in link or a code.
             </p>
             <label className="block">
               <span className="sr-only">One-time code</span>
@@ -179,7 +249,7 @@ export function SignupForm() {
           </form>
         ) : null}
 
-        {step === "done" ? (
+        {!accepting && step === "done" ? (
           <div className="py-4 text-center">
             <p className="text-[1.35rem] font-semibold tracking-tight text-ink">
               You’re in.
@@ -196,7 +266,7 @@ export function SignupForm() {
           </div>
         ) : null}
 
-        {status && step !== "done" ? (
+        {status && step !== "done" && !accepting ? (
           <p
             role="status"
             className="mt-5 rounded-2xl bg-mist/80 px-4 py-3 text-center text-[13px] leading-relaxed text-muted"
@@ -211,7 +281,7 @@ export function SignupForm() {
           </p>
         ) : null}
 
-        {step !== "done" ? (
+        {step !== "done" && !accepting ? (
           <p className="mt-6 text-center text-[13px] text-muted">
             Local ledger stays on your machine
           </p>
