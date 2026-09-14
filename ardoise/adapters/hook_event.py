@@ -66,7 +66,9 @@ def event_to_entry(raw: dict[str, Any], *, default_source: str) -> dict[str, Any
         or "grok" in model
     )
     session_id = event.get("session_id")
-    join_row = looks_cursor and (not has_usage) and bool(session_id)
+    # Join rows are hook lifecycle only (session id, no tokens). Prompt-only
+    # transcripts must not become zero-token ledger rows.
+    join_row = cursor_hook and (not has_usage) and bool(session_id)
     if not has_usage and not join_row:
         return None
 
