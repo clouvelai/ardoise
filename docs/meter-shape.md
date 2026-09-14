@@ -1,5 +1,7 @@
 # Meter shape
 
+Product story: [grok-bot.md](grok-bot.md).
+
 Install and `backfill` never require API keys. They only persist rows that
 already carry a usage object (token counts and/or charged cents). Hooks do
 the same: they meter when the editor already emitted usage.
