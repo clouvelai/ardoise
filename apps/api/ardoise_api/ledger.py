@@ -309,8 +309,9 @@ def render_markdown(summary: dict[str, Any]) -> str:
         lines.append("| (no usage this period) | — | — | — |")
     for group in groups:
         vendor = group.get("label") or group.get("vendor") or "vendor"
+        group_places = 2 if group.get("invoice_grade") else 4
         lines.append(
-            f"| **{vendor}** |  |  | **{_md_money(group.get('subtotal_usd'))}** |"
+            f"| **{vendor}** |  |  | **{_md_money(group.get('subtotal_usd'), places=group_places)}** |"
         )
         period_bits = [group.get("period_label") or period]
         if group.get("tier"):

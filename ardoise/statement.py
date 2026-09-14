@@ -118,8 +118,9 @@ def _md(summary: dict[str, Any]) -> str:
         lines.append("| (no usage this period) | — | — | — |")
     for group in groups:
         vendor = group.get("label") or group.get("vendor") or "vendor"
+        group_places = 2 if group.get("invoice_grade") else 4
         lines.append(
-            f"| **{vendor}** |  |  | **{_money(group.get('subtotal_usd'))}** |"
+            f"| **{vendor}** |  |  | **{_money(group.get('subtotal_usd'), places=group_places)}** |"
         )
         period_bits = [group.get("period_label") or period]
         if group.get("tier"):
@@ -232,7 +233,8 @@ def _html_page(summary: dict[str, Any]) -> str:
     group_blocks: list[str] = []
     for group in doc.get("groups") or []:
         vendor = cell(group.get("label") or group.get("vendor") or "vendor")
-        sub = _money(group.get("subtotal_usd"))
+        group_places = 2 if group.get("invoice_grade") else 4
+        sub = _money(group.get("subtotal_usd"), places=group_places)
         tier = cell(group.get("tier") or "T0")
         period_label = cell(group.get("period_label") or "")
         rows_html: list[str] = [

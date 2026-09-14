@@ -28,6 +28,7 @@ type StatementGroup = {
   period_label?: string;
   subtotal_usd?: number;
   tier?: string;
+  invoice_grade?: boolean;
   models?: ModelGroup[];
   adjustment?: Meter & { description?: string };
 };
@@ -211,7 +212,7 @@ export function StatementDocumentView({
                   <strong>{group.label || group.vendor}</strong>
                 </td>
                 <td className="px-1.5 pt-3.5 pb-0 text-right font-semibold tabular-nums">
-                  {money(group.subtotal_usd)}
+                  {money(group.subtotal_usd, group.invoice_grade ? 2 : 4)}
                 </td>
               </tr>
               <tr>

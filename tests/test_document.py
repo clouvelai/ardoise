@@ -89,6 +89,9 @@ class BuildDocumentTests(unittest.TestCase):
         self.assertTrue(any("/ MTok" in str(row.get("rate_label")) for row in meters))
         self.assertNotIn("Amount due", str(doc))
         self.assertNotIn("Trivelta", str(doc))
+        html = Path(write_statement("2026-09")["html"]).read_text(encoding="utf-8")
+        self.assertIn("$0.0090", html)
+        self.assertNotIn(">$0.01<", html)
 
     def test_invoice_grade_adds_adjustment_and_totals(self) -> None:
         self._seed()
