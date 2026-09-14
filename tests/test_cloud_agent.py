@@ -229,10 +229,10 @@ class IngestAndRosterTests(IsolatedHome):
         backfill(claude=empty_claude, cursor=empty_cursor, transcripts=drop)
 
         data = summarize("2026-09")
-        names = {row["agent"] for row in data["agents"]}
-        self.assertEqual(names, {"Craie", "Encre", "captain"})
+        names = [row["agent"] for row in data["agents"]]
+        self.assertEqual(names, ["captain", "Craie", "Encre"])
         text = render_text(data)
-        self.assertIn("agents   Craie, Encre, captain", text)
+        self.assertIn("agents   captain, Craie, Encre", text)
         self.assertIn("attribution (when present)", text)
 
         craie = summarize("2026-09", person="Craie")
