@@ -24,7 +24,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+
+    async function consume() {
       await Promise.resolve();
       if (cancelled) {
         return;
@@ -54,9 +55,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         return;
       }
       setEmail(session.email);
-    })();
+    }
+
+    void consume();
+    window.addEventListener("hashchange", consume);
     return () => {
       cancelled = true;
+      window.removeEventListener("hashchange", consume);
     };
   }, [router]);
 
