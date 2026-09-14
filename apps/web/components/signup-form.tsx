@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { COPY, isNetworkError, safeNextPath } from "@/lib/saas-errors";
 import { isOtpNotWired, otpMessage, requestEmailOtp, verifyEmailOtp } from "@/lib/saas-otp";
 import { getSession, saveSession } from "@/lib/saas-session";
+import { Install } from "./install";
 import { Mascot } from "./mark";
 
 type Step = "email" | "code" | "done";
@@ -95,7 +96,9 @@ export function SignupForm() {
   }
 
   return (
-    <div className="relative mx-auto w-full max-w-[440px]">
+    <div
+      className={`relative mx-auto w-full ${step === "done" ? "max-w-3xl" : "max-w-[440px]"}`}
+    >
       <div
         className="mascot-bob pointer-events-none absolute -top-10 right-6 z-10 h-[72px] w-[66px] sm:-top-12 sm:right-8 sm:h-[80px] sm:w-[72px]"
         aria-hidden
@@ -188,23 +191,12 @@ export function SignupForm() {
             <p className="mt-2 text-[15px] text-muted">
               Local ledger stays on your machine.
             </p>
-            <div className="mt-6 flex flex-col items-center gap-3">
-              <Link
-                href="/#install"
-                className="inline-flex items-center rounded-full bg-grape px-6 py-3 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
-              >
-                Install the CLI
-                <span aria-hidden className="ml-1.5">
-                  →
-                </span>
-              </Link>
-              <Link
-                href="/pricing"
-                className="text-[13px] font-medium text-muted transition hover:text-ink"
-              >
-                See pricing
-              </Link>
-            </div>
+            <Link
+              href="/pricing"
+              className="mt-6 inline-block text-[13px] font-medium text-muted transition hover:text-ink"
+            >
+              See pricing
+            </Link>
           </div>
         ) : null}
 
@@ -229,6 +221,7 @@ export function SignupForm() {
           </p>
         ) : null}
       </div>
+      {step === "done" ? <Install className="mt-8 w-full" /> : null}
     </div>
   );
 }

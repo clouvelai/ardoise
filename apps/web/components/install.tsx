@@ -6,12 +6,11 @@ import {
   INSTALL_VERIFY,
 } from "@/lib/install";
 
-export function Install() {
+export function Install({ className }: { className?: string }) {
   return (
     <section
-      id="install"
       aria-labelledby="install-heading"
-      className="mx-auto w-full max-w-3xl scroll-mt-24 px-6 pb-16 sm:px-8"
+      className={className ?? "w-full max-w-3xl"}
     >
       <h2
         id="install-heading"
