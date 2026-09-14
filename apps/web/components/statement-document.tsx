@@ -56,12 +56,26 @@ export type StatementDocument = {
   month?: string;
 };
 
-function money(value: number | undefined, places = 2): string {
+export function money(value: number | undefined, places = 2): string {
   const n = Number(value || 0);
   return `$${n.toLocaleString("en-US", {
     minimumFractionDigits: places,
     maximumFractionDigits: places,
   })}`;
+}
+
+export function GradeBadge({ billed }: { billed: boolean }) {
+  return (
+    <span
+      className={
+        billed
+          ? "inline-flex items-center rounded-full bg-grape px-2.5 py-[3px] text-[10px] font-semibold tracking-[0.14em] text-white uppercase"
+          : "inline-flex items-center rounded-full bg-lavender px-2.5 py-[3px] text-[10px] font-semibold tracking-[0.14em] text-grape-ink uppercase"
+      }
+    >
+      {billed ? "Billed" : "Estimate"}
+    </span>
+  );
 }
 
 function PartyBlock({ label, party }: { label: string; party?: Party }) {
@@ -118,9 +132,14 @@ export function StatementDocumentView({
             Spend statement
           </p>
         </div>
-        <h2 className="m-0 text-[1.85rem] font-semibold tracking-[0.14em] uppercase leading-none">
-          Statement
-        </h2>
+        <div className="text-right">
+          <h2 className="m-0 text-[1.85rem] font-semibold tracking-[0.14em] uppercase leading-none">
+            Statement
+          </h2>
+          <p className="mt-2.5">
+            <GradeBadge billed={grade} />
+          </p>
+        </div>
       </header>
       <div className="grid gap-6 md:grid-cols-[1.15fr_0.95fr]">
         <div>
@@ -158,8 +177,8 @@ export function StatementDocumentView({
             <tr>
               <th className="pt-3 pr-3 text-left text-[1.05rem] font-bold text-ink">
                 Total{" "}
-                <span className="text-[13px] font-medium text-muted">
-                  ({grade ? "invoice-grade" : "estimate"})
+                <span className="align-middle font-medium">
+                  <GradeBadge billed={grade} />
                 </span>
               </th>
               <td className="pt-3 text-right text-[1.05rem] font-bold tabular-nums">

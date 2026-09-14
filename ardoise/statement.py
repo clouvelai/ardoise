@@ -107,6 +107,7 @@ def _md(summary: dict[str, Any]) -> str:
         f"| Statement number | {doc.get('number')} |",
         f"| Statement date | {doc.get('statement_date')} |",
         f"| Usage period | {period} |",
+        f"| Truth | {'Billed' if grade else 'Estimate'} |",
         f"| Total | {_money(total, places=2 if grade else 4)} |",
         "",
         "| Description | Quantity | Rate | Amount |",
@@ -199,6 +200,8 @@ def _md(summary: dict[str, Any]) -> str:
     lines += [
         "",
         f"Per-event rows are in `{summary.get('month')}.csv` next to this file.",
+        "",
+        "Copy totals into your invoice. Print the HTML → Save as PDF for a portable statement.",
         "",
         "_Generated locally by Ardoise. Prompts and credentials are not stored._",
         "",
@@ -353,7 +356,12 @@ def _html_page(summary: dict[str, Any]) -> str:
                 f"{''.join(blocks)}</section>"
             )
 
-    grade_label = "invoice-grade" if grade else "estimate"
+    grade_label = "Billed" if grade else "Estimate"
+    badge_kind = "billed" if grade else "estimate"
+    copy_totals = html.escape(
+        f"Statement {summary.get('month') or number} · {grade_label} · Total {total_s}",
+        quote=True,
+    )
     from_html = _party_html(doc.get("from") or {}, cell)
     prepared_html = _party_html(doc.get("prepared_for") or {}, cell)
     return f"""<!DOCTYPE html>
@@ -408,6 +416,7 @@ body {{
   color: var(--muted);
   font-weight: 650;
 }}
+.doc-kind-wrap {{ text-align: right; }}
 .doc-kind {{
   margin: 0;
   font-size: 1.85rem;
@@ -416,6 +425,56 @@ body {{
   text-transform: uppercase;
   line-height: 1;
 }}
+.chrome {{
+  max-width: 52rem;
+  margin: 1.1rem auto 0;
+  padding: 0 0.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem 1rem;
+}}
+.chrome-actions {{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}}
+.badge {{
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.18rem 0.68rem;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}}
+.badge-estimate {{ background: #f3eef8; color: #5234d2; }}
+.badge-billed {{ background: #7c5cff; color: #fff; }}
+.letterhead .badge {{ margin-top: 0.55rem; }}
+.print-btn {{
+  border: 0;
+  border-radius: 999px;
+  background: #7c5cff;
+  color: #fff;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 650;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+}}
+.whisper {{
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+}}
+.whisper:hover {{ color: var(--ink); }}
 .top {{
   display: grid;
   grid-template-columns: 1.15fr 0.95fr;
@@ -558,6 +617,7 @@ body {{
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }}
+  .print-hide {{ display: none !important; }}
   .wrap {{
     margin: 0;
     max-width: none;
@@ -573,13 +633,23 @@ body {{
 </style>
 </head>
 <body>
+<div class="chrome print-hide">
+  <span class="badge badge-{badge_kind}">{grade_label}</span>
+  <div class="chrome-actions">
+    <button type="button" class="whisper" data-copy-totals="{copy_totals}" onclick="copyTotals(this)">Copy totals into your invoice</button>
+    <button type="button" class="print-btn" onclick="window.print()">Print statement</button>
+  </div>
+</div>
 <main class="wrap">
   <header class="letterhead">
     <div>
       <p class="wordmark">Ardoise</p>
       <p class="kicker">Spend statement</p>
     </div>
-    <h1 class="doc-kind">Statement</h1>
+    <div class="doc-kind-wrap">
+      <h1 class="doc-kind">Statement</h1>
+      <p class="badge badge-{badge_kind}">{grade_label}</p>
+    </div>
   </header>
   <div class="top">
     <div>
@@ -595,7 +665,7 @@ body {{
         <tr><th>Statement number</th><td>{number}</td></tr>
         <tr><th>Statement date</th><td>{cell(doc.get("statement_date"))}</td></tr>
         <tr><th>Usage period</th><td>{period}</td></tr>
-        <tr class="total"><th>Total <span class="muted">({grade_label})</span></th>
+        <tr class="total"><th>Total <span class="badge badge-{badge_kind}">{grade_label}</span></th>
             <td class="hero-amt">{total_s}</td></tr>
       </table>
     </div>
@@ -625,8 +695,36 @@ body {{
   {attr_block}
   {notes_block}
   <p class="foot">Generated locally. Prompts and credentials are not stored.
-  Per-event rows are in <code>{month}.csv</code>. Print → Save as PDF for a portable copy.</p>
+  Per-event rows are in <code>{month}.csv</code>. Print statement → Save as PDF for a portable copy.</p>
 </main>
+<script>
+function copyTotals(btn) {{
+  var text = btn.getAttribute("data-copy-totals") || "";
+  function done() {{
+    var prior = btn.getAttribute("data-label") || btn.textContent;
+    if (!btn.getAttribute("data-label")) btn.setAttribute("data-label", prior);
+    btn.textContent = "Copied";
+    setTimeout(function () {{ btn.textContent = btn.getAttribute("data-label"); }}, 1600);
+  }}
+  if (navigator.clipboard && navigator.clipboard.writeText) {{
+    navigator.clipboard.writeText(text).then(done).catch(function () {{ fallback(); }});
+  }} else {{
+    fallback();
+  }}
+  function fallback() {{
+    var area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+    area.select();
+    try {{ document.execCommand("copy"); }} catch (e) {{}}
+    area.remove();
+    done();
+  }}
+}}
+</script>
 </body>
 </html>
 """

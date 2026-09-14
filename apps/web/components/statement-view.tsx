@@ -2,14 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
-import { StatementDocumentView } from "@/components/statement-document";
+import {
+  GradeBadge,
+  StatementDocumentView,
+  money,
+} from "@/components/statement-document";
 import { apiGet, type StatementResponse } from "@/lib/saas-api";
 import { getSession } from "@/lib/saas-session";
 import { sparseMessage } from "@/lib/saas-errors";
 
+function copyPayload(data: StatementResponse, month: string): string {
+  const billed = Boolean(data.invoice_grade);
+  const total = money(data.document?.total_usd, billed ? 2 : 4);
+  return `Statement ${month} · ${billed ? "Billed" : "Estimate"} · Total ${total}`;
+}
+
 export function StatementView() {
   const [data, setData] = useState<StatementResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -30,6 +41,7 @@ export function StatementView() {
         if (!cancelled) {
           setData(payload);
           setError(null);
+          setCopied(false);
         }
       } catch (caught) {
         if (!cancelled) {
@@ -42,6 +54,28 @@ export function StatementView() {
     };
   }, [month]);
 
+  async function copyTotals() {
+    if (!data) {
+      return;
+    }
+    const text = copyPayload(data, month);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.left = "-9999px";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
   return (
     <AppShell>
       <div className="print-hide flex flex-wrap items-end justify-between gap-4">
@@ -53,11 +87,16 @@ export function StatementView() {
             {month}
           </h1>
           {data ? (
-            <p className="mt-1 text-[14px] text-muted">
-              {data.invoice_grade
-                ? "Invoice-grade"
-                : "Estimate (upgrade to Pro for billed totals)"}
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <GradeBadge billed={Boolean(data.invoice_grade)} />
+              <button
+                type="button"
+                onClick={copyTotals}
+                className="text-[13px] text-muted transition hover:text-ink"
+              >
+                {copied ? "Copied" : "Copy totals into your invoice"}
+              </button>
+            </div>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -73,9 +112,9 @@ export function StatementView() {
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded-full border border-black/[0.08] bg-white px-3.5 py-1.5 text-[13px] font-medium text-ink transition hover:border-black/[0.14]"
+            className="rounded-full bg-grape px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(124,92,255,0.22)] transition hover:bg-grape-deep"
           >
-            Print
+            Print statement
           </button>
         </div>
       </div>
