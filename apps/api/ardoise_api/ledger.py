@@ -61,11 +61,15 @@ def _group(rows: list[dict[str, Any]], column: str, *, missing: str = "(none)") 
                 "cost_usd": 0.0,
                 "allocated_billed_usd": 0.0,
                 "has_allocated": False,
+                "input_tokens": 0,
+                "output_tokens": 0,
             }
             order.append(key)
         bucket = buckets[key]
         bucket["entries"] += 1
         bucket["cost_usd"] += _float(row.get("cost_usd"))
+        bucket["input_tokens"] += _int(row.get("input_tokens"))
+        bucket["output_tokens"] += _int(row.get("output_tokens"))
         if row.get("allocated_billed_usd") is not None:
             bucket["allocated_billed_usd"] += _float(row["allocated_billed_usd"])
             bucket["has_allocated"] = True
@@ -251,6 +255,7 @@ def summarize(
         "billed_usd": billed_usd if invoice_grade else 0.0,
         "invoice_grade": invoice_grade,
         "section_a": section_a if invoice_grade else [],
+        "lines": allocated,
         "by_project": _group(allocated, "project", missing="unmapped"),
         "by_model": _group(allocated, "model"),
         "by_person": _group(allocated, "person"),

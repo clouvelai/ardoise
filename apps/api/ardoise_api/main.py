@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from ardoise_api import __version__
 from ardoise_api.auth import AuthError, kickoff_otp, require_account, verify_email_otp
 from ardoise_api.ledger import current_month, render_csv, render_markdown, summarize as summarize_usage
+from ardoise_api.document import build_document
 from ardoise_api.privacy import reject_secrets
 from ardoise_api.settings import Settings
 from ardoise_api.store import AccountStore, open_store
@@ -425,6 +426,14 @@ def create_app(
         account: dict[str, Any] = Depends(require_account),
     ) -> dict[str, Any]:
         summary = _usage_summary(account, _month_or_400(month))
+        prepared = {"name": "", "email": str(account.get("email") or ""), "address": []}
+        if prepared["email"] and "@" in prepared["email"]:
+            prepared["name"] = prepared["email"].split("@", 1)[0]
+        document = build_document(
+            summary,
+            prepared_for=prepared,
+            from_party={"name": "Ardoise"},
+        )
         return {
             "ok": True,
             "month": summary["month"],
@@ -432,6 +441,7 @@ def create_app(
             "markdown": render_markdown(summary),
             "csv": render_csv(summary),
             "summary": summary,
+            "document": document,
         }
 
     @app.post("/v1/invoices")

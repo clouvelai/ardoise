@@ -192,15 +192,26 @@ class InvoiceAndReconcileTests(unittest.TestCase):
             self.assertIn("invoice", blob)
             self.assertIn("T0", blob)
             self.assertNotIn("Trivelta", blob)
-        self.assertIn("A. Vendor lines", md)
-        self.assertIn("B. T0 allocation", md)
+        self.assertIn("## From", md)
+        self.assertIn("Prepared for", md)
+        self.assertIn("Statement number", md)
+        self.assertIn("Usage period", md)
+        self.assertIn("| Description | Quantity | Rate | Amount |", md)
         self.assertIn("19.50", md)
-        self.assertRegex(md, r"\|\s*anthropic\s*\|.*\|\s*invoice\s*\|")
-        self.assertIn("T2 billed events · T1 seat usage · T0 local estimate · Invoice paste-in", md)
-        self.assertIn("[T0]", md)
-        self.assertIn("badge invoice", html)
+        self.assertIn("21.05", md)
+        self.assertIn("anthropic", md)
+        self.assertIn("Reconciling adjustment", md)
+        self.assertIn("spend statement, not a tax invoice", md)
+        self.assertNotIn("Amount due", md)
+        self.assertNotIn("Amount due", html)
+        self.assertIn("From", html)
+        self.assertIn("Prepared for", html)
+        self.assertIn("Statement number", html)
+        self.assertIn("Quantity", html)
+        self.assertIn("Rate", html)
+        self.assertIn("Amount", html)
+        self.assertIn("Total", html)
         self.assertIn("@media print", html)
-        self.assertIn("#7C5CFF", html)
         self.assertIn("A_vendor", csv_text)
         self.assertIn("B_t0_allocation", csv_text)
         self.assertNotIn("### Lines", md)
@@ -229,9 +240,11 @@ class InvoiceAndReconcileTests(unittest.TestCase):
         self.assertGreater(data["cost_usd"], 0)
         written = write_statement("2026-09")
         md = Path(written["md"]).read_text(encoding="utf-8")
-        self.assertIn("A. Vendor lines", md)
-        self.assertIn("No invoice, T2 billed events, or T1 snapshot", md)
-        self.assertIn("B. T0 allocation", md)
+        self.assertIn("## From", md)
+        self.assertIn("| Description | Quantity | Rate | Amount |", md)
+        self.assertIn("anthropic", md)
+        self.assertIn("Input tokens", md)
+        self.assertNotIn("Amount due", md)
 
     def test_prefer_invoice_over_t1_and_t2(self) -> None:
         with db.session() as conn:
@@ -325,6 +338,27 @@ class InvoiceAndReconcileTests(unittest.TestCase):
                         "api_key": "sk-secret",
                     },
                 )
+
+    def test_statement_from_config_letterhead(self) -> None:
+        home = Path(os.environ["ARDOISE_HOME"])
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "config.json").write_text(
+            '{"statement":{"from":{"name":"Acme Labs","address":["1 Main"],"email":"ops@acme.test"},'
+            '"prepared_for":{"name":"Finance","email":"fin@acme.test"}}}',
+            encoding="utf-8",
+        )
+        with db.session() as conn:
+            self._seed_t0(conn)
+        html = Path(write_statement("2026-09")["html"]).read_text(encoding="utf-8")
+        md = Path(write_statement("2026-09")["md"]).read_text(encoding="utf-8")
+        self.assertIn("Acme Labs", html)
+        self.assertIn("1 Main", html)
+        self.assertIn("ops@acme.test", html)
+        self.assertIn("Finance", html)
+        self.assertIn("Acme Labs", md)
+        self.assertIn("Finance", md)
+        self.assertIn("Total", html)
+        self.assertNotIn("Amount due", html)
 
 
 class VendorCliTests(unittest.TestCase):

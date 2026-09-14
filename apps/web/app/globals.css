@@ -143,3 +143,22 @@ body {
     width: 76%;
   }
 }
+
+@media print {
+  body {
+    background: #fff !important;
+    color: #111827 !important;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  .stmt-doc {
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+}

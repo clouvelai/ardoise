@@ -1,4 +1,4 @@
-"""Optional ~/.ardoise/config.json (soft caps, anomaly knobs, roster, transcript roots).
+"""Optional ~/.ardoise/config.json (soft caps, anomaly knobs, roster, transcript roots, statement letterhead).
 
 Never stores prompts or credentials. Unknown keys are ignored.
 A missing or invalid file is a no-op: status still prints, estimate still prices.
@@ -29,9 +29,44 @@ def empty() -> dict[str, Any]:
         "anomalies": dict(DEFAULT_ANOMALIES),
         "roster": {},
         "transcripts": {"paths": []},
+        "statement": {"from": {}, "prepared_for": {}},
         "path": None,
         "loaded": False,
         "load_error": None,
+    }
+
+
+def _party(raw: Any) -> dict[str, Any]:
+    """Optional statement letterhead / prepared-for block."""
+    if not isinstance(raw, dict):
+        return {}
+    name = str(raw.get("name") or "").strip()
+    email = str(raw.get("email") or "").strip()
+    address_raw = raw.get("address")
+    address: list[str] = []
+    if isinstance(address_raw, str) and address_raw.strip():
+        address = [line.strip() for line in address_raw.splitlines() if line.strip()]
+    elif isinstance(address_raw, list):
+        for item in address_raw:
+            text = str(item or "").strip()
+            if text:
+                address.append(text)
+    out: dict[str, Any] = {}
+    if name:
+        out["name"] = name
+    if email:
+        out["email"] = email
+    if address:
+        out["address"] = address
+    return out
+
+
+def _statement(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {"from": {}, "prepared_for": {}}
+    return {
+        "from": _party(raw.get("from")),
+        "prepared_for": _party(raw.get("prepared_for")),
     }
 
 
@@ -158,6 +193,7 @@ def _parse(raw: dict[str, Any], path: Path) -> dict[str, Any]:
     cfg["anomalies"] = _anomalies(raw.get("anomalies"))
     cfg["roster"] = _roster(raw.get("roster"))
     cfg["transcripts"] = {"paths": _transcript_paths(raw.get("transcripts"))}
+    cfg["statement"] = _statement(raw.get("statement"))
     return cfg
 
 

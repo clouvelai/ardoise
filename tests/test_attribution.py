@@ -279,13 +279,18 @@ class PersistAndStatusTests(IsolatedHome):
         self.assertIn("## Attribution", md)
         self.assertIn("Explore", md)
         self.assertIn("session-retrospective", md)
-        self.assertIn("A. Vendor lines", md)
-        self.assertNotIn("Explore", md.split("## A. Vendor lines")[1].split("## B.")[0])
-        self.assertIn("section class=\"quiet attr\"", html)
+        self.assertIn("## From", md)
+        self.assertIn("| Description | Quantity | Rate | Amount |", md)
+        # Attribution lives in its own section, not the Orb line table
+        before_attr = md.split("## Attribution")[0]
+        self.assertNotIn("Explore", before_attr)
+        self.assertIn('section class="quiet"', html)
         self.assertIn("agent,skill,effort", csv_text.splitlines()[0])
         self.assertIn("Explore", csv_text)
-        # Section A stays sparse — no attribution columns on vendor cards
-        self.assertNotIn("agent", html.split("A. Vendor lines")[1].split("B. T0")[0].lower())
+        # Line table stays sparse — no attribution columns on meters
+        table = html.split('<table class="lines">')[1].split("</table>")[0]
+        self.assertNotIn("explore", table.lower())
+        self.assertNotIn("session-retrospective", table.lower())
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { StatementDocumentView } from "@/components/statement-document";
 import { apiGet, type StatementResponse } from "@/lib/saas-api";
 import { getSession } from "@/lib/saas-session";
 import { sparseMessage } from "@/lib/saas-errors";
@@ -43,7 +44,7 @@ export function StatementView() {
 
   return (
     <AppShell>
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="print-hide flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold tracking-[0.22em] text-muted/80 uppercase">
             Statement
@@ -59,22 +60,33 @@ export function StatementView() {
             </p>
           ) : null}
         </div>
-        <label className="text-[13px] text-muted">
-          Month
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-            className="ml-2 rounded-full border border-black/[0.06] bg-white px-3 py-1.5 text-[14px] text-ink"
-          />
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-[13px] text-muted">
+            Month
+            <input
+              type="month"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+              className="ml-2 rounded-full border border-black/[0.06] bg-white px-3 py-1.5 text-[14px] text-ink"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-full border border-black/[0.08] bg-white px-3.5 py-1.5 text-[13px] font-medium text-ink transition hover:border-black/[0.14]"
+          >
+            Print
+          </button>
+        </div>
       </div>
       {error ? (
         <p role="alert" className="mt-8 text-[15px] text-grape-ink">
           {error}
         </p>
       ) : null}
-      {data ? (
+      {data?.document ? (
+        <StatementDocumentView document={data.document} />
+      ) : data ? (
         <pre className="mt-8 overflow-x-auto whitespace-pre-wrap rounded-[24px] bg-white px-6 py-5 text-[13px] leading-relaxed text-ink/80 ring-1 ring-black/[0.04]">
           {data.markdown}
         </pre>

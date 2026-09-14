@@ -455,6 +455,13 @@ class ScaffoldTests(unittest.TestCase):
         stmt = client.get("/v1/usage/statement?month=2026-09", headers=headers)
         self.assertEqual(stmt.status_code, 200)
         self.assertIn("Estimated", stmt.json()["markdown"])
+        doc = stmt.json().get("document") or {}
+        self.assertEqual(doc.get("title"), "Statement")
+        self.assertEqual((doc.get("from") or {}).get("name"), "Ardoise")
+        self.assertIn("groups", doc)
+        self.assertNotIn("Amount due", str(doc))
+        self.assertTrue(any("spend statement" in m for m in (doc.get("memo") or [])))
+        self.assertIn("period", doc)
 
         minted = client.post("/v1/cli/tokens", headers=headers)
         self.assertEqual(minted.status_code, 200)
@@ -520,6 +527,18 @@ class ScaffoldTests(unittest.TestCase):
         self.assertEqual(status.json()["section_a"][0]["tier_of_truth"], "invoice")
         stmt = client.get("/v1/usage/statement?month=2026-09", headers=headers)
         self.assertIn("19.50", stmt.json()["markdown"])
+        doc = stmt.json().get("document") or {}
+        self.assertTrue(doc.get("invoice_grade"))
+        self.assertEqual(float(doc.get("total_usd") or 0), 19.5)
+        self.assertTrue(doc.get("groups"))
+        vendors = {row.get("vendor") for row in doc.get("groups") or []}
+        self.assertIn("anthropic", vendors)
+        self.assertEqual((doc.get("prepared_for") or {}).get("email"), "pro@example.com")
+        memo = " ".join(doc.get("memo") or [])
+        self.assertIn("spend statement", memo)
+        self.assertNotIn("Amount due", str(doc))
+        adj = (doc.get("groups") or [{}])[0].get("adjustment")
+        self.assertTrue(adj)
         pasted = client.post(
             "/v1/invoices",
             json={"vendor": "cursor", "cycle": "2026-09", "usd_cents": 400},
