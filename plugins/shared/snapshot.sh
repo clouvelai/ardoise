@@ -1,6 +1,7 @@
 #!/bin/sh
 # Claude Code SessionStart → Anthropic T1 seat snapshot (throttled, 3 min).
 # Discard hook stdin. Never print prompts. Always exit 0.
+# Self-contained: invoke ardoise on PATH or ~/.local/bin — not a sibling shared/ tree.
 set -eu
 ARDOISE_HOOK=1
 export ARDOISE_HOOK
@@ -18,12 +19,6 @@ fi
 
 if [ -x "${HOME}/.local/bin/ardoise" ]; then
   "${HOME}/.local/bin/ardoise" snapshot anthropic --json >/dev/null 2>&1 || true
-  exit 0
-fi
-
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-if [ -x "${HERE}/../../bin/ardoise" ]; then
-  "${HERE}/../../bin/ardoise" snapshot anthropic --json >/dev/null 2>&1 || true
   exit 0
 fi
 

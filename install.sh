@@ -1,5 +1,6 @@
 #!/bin/sh
-# Install Ardoise locally: CLI on PATH + Claude Code / Cursor capture hooks.
+# Install Ardoise locally: CLI on PATH + self-contained capture hooks
+# under ~/.ardoise/hooks (no ../shared at runtime).
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -13,8 +14,8 @@ for arg in "$@"; do
       cat <<'EOF'
 Usage: ./install.sh
 
-Install the local Ardoise CLI and shared Claude Code / Cursor capture hooks
-without invoking any plugin marketplace.
+Install the local Ardoise CLI and self-contained Claude Code / Cursor
+capture hooks under ~/.ardoise/hooks (no plugin marketplace).
 
 Options:
   --no-plugin-manager   Accepted (this is the default)
