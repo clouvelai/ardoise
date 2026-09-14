@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { parseAuthRedirect, stripAuthRedirect } from "@/lib/saas-callback";
@@ -41,25 +41,27 @@ export function SignupForm() {
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const consumed = useRef(false);
 
   useEffect(() => {
-    if (consumed.current || typeof window === "undefined") {
+    if (typeof window === "undefined") {
       return;
     }
-    const parsed = parseAuthRedirect(window.location.search, window.location.hash);
-    if (parsed.kind === "none") {
-      if (nextPath && getSession()) {
-        router.replace(nextPath);
-      }
-      return;
-    }
-    consumed.current = true;
     let cancelled = false;
-    void (async () => {
-      // Hash/query tokens only exist after mount; yield so setState is not sync in the effect.
+
+    async function consume() {
+      // Read location after paint so hash/query survive hydration + Strict Mode.
       await Promise.resolve();
       if (cancelled) {
+        return;
+      }
+      const parsed = parseAuthRedirect(
+        window.location.search,
+        window.location.hash,
+      );
+      if (parsed.kind === "none") {
+        if (nextPath && getSession()) {
+          router.replace(nextPath);
+        }
         return;
       }
       if (parsed.kind === "error") {
@@ -90,9 +92,13 @@ export function SignupForm() {
         }
         setAccepting(false);
       }
-    })();
+    }
+
+    void consume();
+    window.addEventListener("hashchange", consume);
     return () => {
       cancelled = true;
+      window.removeEventListener("hashchange", consume);
     };
   }, [nextPath, router]);
 
