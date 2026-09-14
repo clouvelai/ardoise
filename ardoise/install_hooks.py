@@ -1,4 +1,10 @@
-"""Install shared Claude Code + Cursor hooks without a plugin manager."""
+"""Install shared Claude Code + Cursor hooks without a plugin manager.
+
+Canonical target is ``~/.ardoise/hooks/`` (self-contained scripts that invoke
+``ardoise`` on PATH or ``~/.local/bin/ardoise``). Plugin trees under
+``plugins/claude`` and ``plugins/cursor`` must not resolve ``../shared`` at
+runtime — marketplace copies only ship the plugin directory.
+"""
 
 from __future__ import annotations
 
@@ -73,37 +79,59 @@ def install_snapshot_script() -> Path:
 
 def _embedded_capture_sh() -> str:
     return """#!/bin/sh
+# Shared Claude Code + Cursor hook. Reads one JSON event on stdin.
+# Never prints prompts. Always exits 0 so the agent loop is not blocked.
+# Self-contained: invoke ardoise on PATH or ~/.local/bin — not a sibling shared/ tree.
 set -eu
-if [ -n "${ARDOISE_BIN:-}" ] && [ -x "$ARDOISE_BIN" ]; then
-  exec "$ARDOISE_BIN" capture --stdin || exit 0
+trap 'exit 0' EXIT
+ARDOISE_HOOK=1
+export ARDOISE_HOOK
+
+if [ -n "${ARDOISE_BIN:-}" ] && [ -x "${ARDOISE_BIN}" ]; then
+  "${ARDOISE_BIN}" capture --stdin >/dev/null 2>&1 || true
+  exit 0
 fi
+
 if command -v ardoise >/dev/null 2>&1; then
-  exec ardoise capture --stdin || exit 0
+  ardoise capture --stdin >/dev/null 2>&1 || true
+  exit 0
 fi
-if [ -x "$HOME/.local/bin/ardoise" ]; then
-  exec "$HOME/.local/bin/ardoise" capture --stdin || exit 0
+
+if [ -x "${HOME:-}/.local/bin/ardoise" ]; then
+  "${HOME}/.local/bin/ardoise" capture --stdin >/dev/null 2>&1 || true
+  exit 0
 fi
+
 exit 0
 """
 
 
 def _embedded_snapshot_sh() -> str:
     return """#!/bin/sh
+# Claude Code SessionStart → Anthropic T1 seat snapshot (throttled, 3 min).
+# Discard hook stdin. Never print prompts. Always exit 0.
+# Self-contained: invoke ardoise on PATH or ~/.local/bin — not a sibling shared/ tree.
 set -eu
-# Discard hook stdin; this is a T1 snapshot trigger, not a usage event.
+trap 'exit 0' EXIT
+ARDOISE_HOOK=1
+export ARDOISE_HOOK
 cat >/dev/null || true
-if [ -n "${ARDOISE_BIN:-}" ] && [ -x "$ARDOISE_BIN" ]; then
-  "$ARDOISE_BIN" snapshot anthropic --json >/dev/null 2>&1 || true
+
+if [ -n "${ARDOISE_BIN:-}" ] && [ -x "${ARDOISE_BIN}" ]; then
+  "${ARDOISE_BIN}" snapshot anthropic --json >/dev/null 2>&1 || true
   exit 0
 fi
+
 if command -v ardoise >/dev/null 2>&1; then
   ardoise snapshot anthropic --json >/dev/null 2>&1 || true
   exit 0
 fi
-if [ -x "$HOME/.local/bin/ardoise" ]; then
-  "$HOME/.local/bin/ardoise" snapshot anthropic --json >/dev/null 2>&1 || true
+
+if [ -x "${HOME:-}/.local/bin/ardoise" ]; then
+  "${HOME}/.local/bin/ardoise" snapshot anthropic --json >/dev/null 2>&1 || true
   exit 0
 fi
+
 exit 0
 """
 
@@ -238,7 +266,11 @@ def install(*, no_plugin_manager: bool = True) -> dict[str, str]:
     merge_claude_settings(claude_settings, script, snapshot_script)
     merge_cursor_hooks(cursor_hooks, script)
     bound = link_bin()
-    plugin_note = "copied hooks into ~/.claude/settings.json and ~/.cursor/hooks.json (no plugin manager)"
+    plugin_note = (
+        "copied self-contained hooks into ~/.ardoise/hooks and merged "
+        "~/.claude/settings.json + ~/.cursor/hooks.json (no plugin manager); "
+        "marketplace Claude plugin stubs resolve these hooks or ardoise on PATH"
+    )
     on_path = _on_path(bound)
     return {
         "script": str(script),

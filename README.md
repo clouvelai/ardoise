@@ -19,10 +19,16 @@ bin/ardoise backfill
 bin/ardoise status
 ```
 
-That copies shared capture hooks into `~/.claude/settings.json` and
-`~/.cursor/hooks.json` (no plugin marketplace) and links `bin/ardoise` to
+That copies **self-contained** capture/snapshot scripts into
+`~/.ardoise/hooks/` (they call `ardoise` on `PATH` or `~/.local/bin/ardoise`,
+never a monorepo `../shared` path), merges them into `~/.claude/settings.json`
+and `~/.cursor/hooks.json` (no plugin marketplace), and links `bin/ardoise` to
 `~/.local/bin/ardoise`. `--no-plugin-manager` is accepted and is the default.
 If `~/.local/bin` is not on `PATH`, keep using `bin/ardoise` from the clone.
+
+A marketplace copy of `plugins/claude` works the same way: its hook stubs
+resolve the installed scripts or the CLI. Maintainer notes:
+[docs/install.md](docs/install.md).
 
 Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 
