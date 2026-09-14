@@ -9,7 +9,7 @@ import os
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -204,7 +204,10 @@ class RepriceCliTests(IsolatedHome):
         self.assertIn("skipped", payload)
 
     def test_bad_month_exits(self) -> None:
-        self.assertEqual(cli_main(["reprice", "--month", "09-2026"]), 2)
+        err = io.StringIO()
+        with redirect_stderr(err):
+            self.assertEqual(cli_main(["reprice", "--month", "09-2026"]), 2)
+        self.assertIn("YYYY-MM", err.getvalue())
 
 
 if __name__ == "__main__":
