@@ -1,14 +1,22 @@
 /**
- * Email OTP helpers for /signup. Fetch only — no supabase-js, no Stripe keys.
+ * Email OTP + magic-link helpers for /signup. Fetch only — no supabase-js,
+ * no Stripe keys.
  *
  * Browser calls same-origin `/ardoise-api/*` (apps/web route). The route
  * forwards to the public Railway API so production marketing is not blocked
  * by the API CORS allow-list. Never put STRIPE_* / SUPABASE_JWT_SECRET here.
  *
- *   requestEmailOtp → POST {API_BASE}/v1/auth/otp
- *   verifyEmailOtp  → POST {API_BASE}/v1/auth/otp/verify
+ *   requestEmailOtp       → POST {API_BASE}/v1/auth/otp
+ *   verifyEmailOtp        → POST {API_BASE}/v1/auth/otp/verify  (typed code)
+ *   verifyTokenHash       → POST {API_BASE}/v1/auth/otp/verify  (token_hash)
+ *   verifyAuthCode        → POST {API_BASE}/v1/auth/otp/verify  (PKCE code)
+ *   sessionFromAccessToken → GET  {API_BASE}/v1/me
  */
 
+import {
+  sessionFromAccessTokenLocal,
+  type AuthRedirect,
+} from "./saas-callback";
 import {
   COPY,
   NetworkError,
@@ -85,13 +93,19 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
   return payload;
 }
 
-export async function requestEmailOtp(email: string): Promise<OtpRequestResult> {
+export async function requestEmailOtp(
+  email: string,
+  options?: { next?: string | null },
+): Promise<OtpRequestResult> {
   const trimmed = email.trim().toLowerCase();
   if (!trimmed || !trimmed.includes("@")) {
     throw new Error(COPY.invalidEmail);
   }
 
-  const payload = await postJson("/v1/auth/otp", { email: trimmed });
+  const payload = await postJson("/v1/auth/otp", {
+    email: trimmed,
+    next: options?.next || undefined,
+  });
   if (!isRecord(payload)) {
     throw new OtpNotWiredError();
   }
@@ -101,6 +115,33 @@ export async function requestEmailOtp(email: string): Promise<OtpRequestResult> 
     mocked: payload.mocked === true,
     detail: typeof payload.detail === "string" ? payload.detail : undefined,
   };
+}
+
+function sessionFromPayload(
+  payload: unknown,
+  fallbackEmail?: string,
+): OtpVerifyResult {
+  if (!isRecord(payload)) {
+    throw new OtpNotWiredError();
+  }
+
+  const accessToken =
+    (typeof payload.access_token === "string" && payload.access_token) ||
+    (typeof payload.accessToken === "string" && payload.accessToken) ||
+    "";
+  if (!accessToken) {
+    throw new OtpNotWiredError();
+  }
+
+  const email =
+    (typeof payload.email === "string" && payload.email.trim().toLowerCase()) ||
+    fallbackEmail ||
+    "";
+  if (!email || !email.includes("@")) {
+    throw new OtpNotWiredError();
+  }
+
+  return { email, accessToken };
 }
 
 export async function verifyEmailOtp(
@@ -120,19 +161,105 @@ export async function verifyEmailOtp(
     email: trimmedEmail,
     token: trimmedCode,
   });
-  if (!isRecord(payload)) {
-    throw new OtpNotWiredError();
+  return sessionFromPayload(payload, trimmedEmail);
+}
+
+export async function verifyTokenHash(
+  tokenHash: string,
+  type = "email",
+): Promise<OtpVerifyResult> {
+  const trimmed = tokenHash.trim();
+  if (!trimmed) {
+    throw new Error(COPY.invalidAuth);
+  }
+  const payload = await postJson("/v1/auth/otp/verify", {
+    token_hash: trimmed,
+    type,
+  });
+  return sessionFromPayload(payload);
+}
+
+export async function verifyAuthCode(code: string): Promise<OtpVerifyResult> {
+  const trimmed = code.trim();
+  if (!trimmed) {
+    throw new Error(COPY.invalidAuth);
+  }
+  const payload = await postJson("/v1/auth/otp/verify", { code: trimmed });
+  return sessionFromPayload(payload);
+}
+
+async function getJson(path: string, accessToken: string): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+  } catch {
+    throw new NetworkError();
   }
 
-  const accessToken =
-    (typeof payload.access_token === "string" && payload.access_token) ||
-    (typeof payload.accessToken === "string" && payload.accessToken) ||
-    "";
-  if (!accessToken) {
-    throw new OtpNotWiredError();
+  let payload: unknown = null;
+  const text = await response.text();
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = { detail: text };
+    }
   }
 
-  return { email: trimmedEmail, accessToken };
+  if (response.status === 404 || response.status === 501) {
+    throw new OtpNotWiredError();
+  }
+  if (!response.ok) {
+    throw new Error(detailOf(payload, `OTP request failed (${response.status})`));
+  }
+  return payload;
+}
+
+export async function sessionFromAccessToken(
+  accessToken: string,
+): Promise<OtpVerifyResult> {
+  const trimmed = accessToken.trim();
+  if (!trimmed) {
+    throw new Error(COPY.invalidAuth);
+  }
+  const local = sessionFromAccessTokenLocal(trimmed);
+  if (local) {
+    return local;
+  }
+  const payload = await getJson("/v1/me", trimmed);
+  if (!isRecord(payload) || !isRecord(payload.account)) {
+    throw new OtpNotWiredError();
+  }
+  const email =
+    typeof payload.account.email === "string"
+      ? payload.account.email.trim().toLowerCase()
+      : "";
+  if (!email || !email.includes("@")) {
+    throw new OtpNotWiredError();
+  }
+  return { email, accessToken: trimmed };
+}
+
+export async function sessionFromRedirect(
+  parsed: AuthRedirect,
+): Promise<OtpVerifyResult> {
+  if (parsed.kind === "access_token") {
+    return sessionFromAccessToken(parsed.accessToken);
+  }
+  if (parsed.kind === "token_hash") {
+    return verifyTokenHash(parsed.tokenHash, parsed.type);
+  }
+  if (parsed.kind === "code") {
+    return verifyAuthCode(parsed.code);
+  }
+  if (parsed.kind === "error") {
+    throw new Error(parsed.message);
+  }
+  throw new Error(COPY.invalidAuth);
 }
 
 export function isOtpNotWired(error: unknown): error is OtpNotWiredError {

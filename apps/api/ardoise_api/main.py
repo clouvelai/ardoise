@@ -55,11 +55,15 @@ EXPORT_FIELDS = [
 
 class OtpBody(BaseModel):
     email: str
+    next: str | None = None
 
 
 class OtpVerifyBody(BaseModel):
-    email: str
-    token: str
+    email: str | None = None
+    token: str | None = None
+    token_hash: str | None = None
+    type: str | None = None
+    code: str | None = None
 
 
 class CheckoutBody(BaseModel):
@@ -222,7 +226,7 @@ def create_app(
     @app.post("/v1/auth/otp")
     def auth_otp(body: OtpBody) -> dict[str, Any]:
         try:
-            return kickoff_otp(settings, str(body.email))
+            return kickoff_otp(settings, str(body.email), next_path=body.next)
         except AuthError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
@@ -230,7 +234,13 @@ def create_app(
     def auth_otp_verify(body: OtpVerifyBody) -> dict[str, Any]:
         try:
             return verify_email_otp(
-                settings, store, str(body.email), str(body.token)
+                settings,
+                store,
+                body.email,
+                body.token,
+                token_hash=body.token_hash,
+                otp_type=body.type,
+                code=body.code,
             )
         except AuthError as exc:
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

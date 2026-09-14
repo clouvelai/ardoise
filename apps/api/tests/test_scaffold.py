@@ -178,6 +178,11 @@ class ScaffoldTests(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 400)
 
+    def test_otp_verify_token_hash_mocked_is_400(self) -> None:
+        client = self._cli()
+        res = client.post("/v1/auth/otp/verify", json={"token_hash": "abc"})
+        self.assertEqual(res.status_code, 400)
+
     def test_mock_checkout_and_fulfill_idempotent(self) -> None:
         client = self._cli()
         headers = {"Authorization": f"Bearer {_token()}"}

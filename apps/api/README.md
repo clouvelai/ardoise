@@ -7,7 +7,7 @@ Follows [`docs/saas-scaffold.md`](../../docs/saas-scaffold.md):
 
 | Concern | Pattern |
 |---|---|
-| Auth | **Account first.** Supabase **email OTP** via Gotrue HTTP (`POST /v1/auth/otp` + `/verify`). API verifies `Authorization: Bearer` JWT (HS256 `SUPABASE_JWT_SECRET` when it is a raw secret, otherwise JWKS). Email/`sub` → `ops.accounts.external_key`. No card at signup. No passwords. No supabase-js. |
+| Auth | **Account first.** Supabase **email OTP or magic link** via Gotrue HTTP (`POST /v1/auth/otp` + `/verify`). Typed codes and `token_hash` / PKCE `code` land on the same verify route. API verifies `Authorization: Bearer` JWT (HS256 `SUPABASE_JWT_SECRET` when it is a raw secret, otherwise JWKS). Email/`sub` → `ops.accounts.external_key`. No card at signup. No passwords. No supabase-js. |
 | Billing | Stripe **Checkout Sessions** `mode=subscription` for Pro ($20/mo) / Team ($49/mo). `POST /v1/billing/checkout` + `/v1/billing/webhook`. Not Connect. Invoice-grade claims are **Pro+**. Legacy `mode=payment` credits stay on `/v1/checkout/sessions`. |
 | Mock | Missing Supabase URL or publishable/anon key → OTP mock (verify mints a JWT when `SUPABASE_JWT_SECRET` is a raw HMAC secret). `STRIPE_MOCK=true` **or** missing `STRIPE_SECRET_KEY` → local mock Checkout. |
 | Sync | `POST /v1/usage/sync` upserts already-priced `bin/ardoise export` rows plus invoices/snapshots. Never upload `ledger.db`. |
@@ -75,8 +75,8 @@ Open the mock URL and click **Pay (mock)**, or `POST /v1/stripe/webhook` with
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | `GET` | `/health` | no | `store` (`sqlite` / `postgres`), `store_ok`, `database_url_configured`, `stripe_mock`, `lab_auth_bypass`, `supabase_otp_configured` (no secrets, no DSN) |
-| `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the publishable/anon (or server-only secret) key. Accepts legacy `eyJ…` JWTs and `sb_publishable_…` / `sb_secret_…`. Mocked if URL or key unset. |
-| `POST` | `/v1/auth/otp/verify` | no | Forwards to `{SUPABASE_URL}/auth/v1/verify`. Creates a **free** account (no card). Mock: mints HS256 JWT when a raw `SUPABASE_JWT_SECRET` is set; otherwise returns “not configured”. |
+| `POST` | `/v1/auth/otp` | no | Forwards to `{SUPABASE_URL}/auth/v1/otp` with the publishable/anon (or server-only secret) key. Optional `next` (`/app`, `/pricing`, …) becomes Gotrue `redirect_to={ARDOISE_WEB_ORIGIN}/signup?next=…` so magic links return to the marketing host. Mocked if URL or key unset. |
+| `POST` | `/v1/auth/otp/verify` | no | Forwards to `{SUPABASE_URL}/auth/v1/verify` (email+token or `token_hash`) or `/auth/v1/token?grant_type=pkce` (`code`). Creates a **free** account (no card). Mock: mints HS256 JWT when a raw `SUPABASE_JWT_SECRET` is set; otherwise returns “not configured”. |
 | `GET` | `/v1/me` | Bearer JWT or `ard_` CLI token | Account + `plan` + `invoice_grade` (Pro+) + credit balance |
 | `POST` | `/v1/cli/tokens` | Bearer JWT | Mint opaque `ard_…` token (shown once) |
 | `POST` | `/v1/usage/sync` | Bearer JWT or CLI token | Upsert usage / invoices / snapshots. Rejects prompt/credential keys. |
@@ -119,10 +119,30 @@ API does not try to HS256-verify with an API key.
 
 ## Web CTA
 
-`apps/web` `/signup` is email OTP (no card). `/pricing` Free stays signup-only;
+`apps/web` `/signup` accepts a typed code **or** a Supabase magic-link redirect
+(`#access_token=…`, `?token_hash=`, `?code=`). `/pricing` Free stays signup-only;
 Pro/Team call `/v1/billing/checkout` when a session exists, otherwise
 `/signup?plan=`. Helpers: [`apps/web/lib/saas-otp.ts`](../web/lib/saas-otp.ts),
+[`saas-callback.ts`](../web/lib/saas-callback.ts),
 [`saas-billing.ts`](../web/lib/saas-billing.ts). No Stripe secrets in the client.
+
+### Supabase Auth URLs (deploy)
+
+Dashboard → Authentication → URL Configuration. Magic-link `ConfirmationURL`
+hits Gotrue, then redirects to the marketing origin with tokens in the hash
+(or `token_hash` / `code` on the query). Those URLs must be allow-listed:
+
+| Setting | Production example |
+|---|---|
+| Site URL | `https://web-production-ffcebe.up.railway.app` |
+| Redirect URLs | `https://web-production-ffcebe.up.railway.app/**` and `http://localhost:3000/**` |
+| API `ARDOISE_WEB_ORIGIN` | same marketing origin (no trailing slash) |
+
+The Magic Link email template should keep `{{ .ConfirmationURL }}` (not a
+bare `{{ .SiteURL }}`). Include `{{ .Token }}` in the same template if you
+still want a typed 6-digit code. PKCE-only templates that put
+`token_hash` on the Site URL are supported; implicit `#access_token=` is
+the default when `POST /v1/auth/otp` does not send a code challenge.
 
 If you’ll charge US or EU customers, enable [Stripe Tax](https://docs.stripe.com/billing/taxes/collect-taxes)
 in the Dashboard after you have an active registration. This API does not set

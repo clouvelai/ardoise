@@ -6,11 +6,13 @@
 export const COPY = {
   invalidEmail: "Enter a valid email.",
   invalidCode: "That code didn’t work.",
+  invalidAuth: "That sign-in link or code didn’t work.",
   network: "Can’t reach Ardoise right now.",
   notWired: "Coming soon — API not wired.",
   signIn: "Sign in to continue.",
   rateLimit: "Try again in a moment.",
   generic: "Something went wrong.",
+  signingIn: "Signing you in…",
 } as const;
 
 export class NetworkError extends Error {
@@ -88,7 +90,10 @@ function looksLikeInternal(detail: string): boolean {
   );
 }
 
-export function sparseMessage(error: unknown, fallback = COPY.generic): string {
+export function sparseMessage(
+  error: unknown,
+  fallback: string = COPY.generic,
+): string {
   if (isNetworkError(error)) {
     return COPY.network;
   }
@@ -120,9 +125,11 @@ export function sparseMessage(error: unknown, fallback = COPY.generic): string {
   }
   if (
     code === "otp_expired" ||
-    /otp_expired|token has expired|invalid.*code|one-time code/.test(lower)
+    /otp_expired|token has expired|invalid.*code|one-time code|sign-in link/.test(
+      lower,
+    )
   ) {
-    return COPY.invalidCode;
+    return COPY.invalidAuth;
   }
   if (/429|rate.?limit|over_email_send_rate_limit/.test(lower)) {
     return COPY.rateLimit;
