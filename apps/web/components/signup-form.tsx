@@ -188,23 +188,12 @@ export function SignupForm() {
             <p className="mt-2 text-[15px] text-muted">
               Local ledger stays on your machine.
             </p>
-            <div className="mt-6 flex flex-col items-center gap-3">
-              <Link
-                href="/#install"
-                className="inline-flex items-center rounded-full bg-grape px-6 py-3 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
-              >
-                Install the CLI
-                <span aria-hidden className="ml-1.5">
-                  →
-                </span>
-              </Link>
-              <Link
-                href="/pricing"
-                className="text-[13px] font-medium text-muted transition hover:text-ink"
-              >
-                See pricing
-              </Link>
-            </div>
+            <Link
+              href="/pricing"
+              className="mt-6 inline-block text-[13px] font-medium text-muted transition hover:text-ink"
+            >
+              See pricing
+            </Link>
           </div>
         ) : null}
 
