@@ -1,4 +1,4 @@
-"""bin/ardoise — status, statement, export, backfill, capture, estimate, snapshot."""
+"""bin/ardoise — status, statement, export, backfill, capture, estimate, reprice, snapshot."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ from pathlib import Path
 from ardoise import __version__, backfill as backfill_mod, capture as capture_mod
 from ardoise import estimate as estimate_mod, export as export_mod
 from ardoise import install_hooks, invoice as invoice_mod, paths, session as session_mod
-from ardoise import snapshot as snapshot_mod, statement, status as status_mod, sync as sync_mod
+from ardoise import reprice as reprice_mod, snapshot as snapshot_mod, statement
+from ardoise import status as status_mod, sync as sync_mod
 from ardoise.vendors import get_adapter, list_adapters, result_text
 
 _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
@@ -180,6 +181,13 @@ def build_parser() -> argparse.ArgumentParser:
     est.add_argument("--json", action="store_true", help="Print JSON (hook-friendly)")
     est.add_argument("--stdin", action="store_true", help="Read one JSON ask from stdin")
 
+    rp = sub.add_parser(
+        "reprice",
+        help="Recompute T0 cost_usd from the current price book (no re-ingest)",
+    )
+    rp.add_argument("--month", help="YYYY-MM (default: all events)")
+    rp.add_argument("--json", action="store_true", help="Print updated/skipped/unknown JSON")
+
     inv = sub.add_parser("invoice", help="Owner-received vendor totals for statement section A")
     isub = inv.add_subparsers(dest="invoice_cmd", required=True)
     ia = isub.add_parser("add", help="Paste one Stripe/vendor total (idempotent on vendor+cycle+person)")
@@ -255,6 +263,15 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 sys.stdout.write(estimate_mod.render_text(data))
             return 0  # fire-and-forget: never fail the caller
+
+        if args.cmd == "reprice":
+            month = _check_month(getattr(args, "month", None))
+            data = reprice_mod.reprice(month=month)
+            if args.json:
+                print(json.dumps(data, indent=2, ensure_ascii=True))
+            else:
+                sys.stdout.write(reprice_mod.render_text(data))
+            return 0
 
         if args.cmd == "statement":
             month = _check_month(args.month)

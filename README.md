@@ -10,21 +10,21 @@ machine. Prompts and credentials are never stored.
 ## Install
 
 Requires **Python 3** (standard library only). Pin
-[v0.3.2](https://github.com/clouvelai/ardoise/releases/tag/v0.3.2):
+[v0.3.3](https://github.com/clouvelai/ardoise/releases/tag/v0.3.3):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/clouvelai/ardoise/v0.3.2/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/clouvelai/ardoise/v0.3.3/install.sh | sh
 ```
 
 Or verify the SHA-256 first:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/clouvelai/ardoise/v0.3.2/install.sh -o install.sh
-echo "fabc5874b1befdc3e1fe0e9edbb70f82bdbffcbf9297d2df39a1866361e0ff88  install.sh" | shasum -a 256 -c -
+curl -fsSL https://raw.githubusercontent.com/clouvelai/ardoise/v0.3.3/install.sh -o install.sh
+echo "417344fac213bd1bf330227b754d96971920db4a47d5589f3fac7997d7ddeaa8  install.sh" | shasum -a 256 -c -
 chmod +x install.sh && ./install.sh
 ```
 
-**SHA-256** of `install.sh` at that tag: `fabc5874b1befdc3e1fe0e9edbb70f82bdbffcbf9297d2df39a1866361e0ff88`
+**SHA-256** of `install.sh` at that tag: `417344fac213bd1bf330227b754d96971920db4a47d5589f3fac7997d7ddeaa8`
 
 That stages the engine at `~/.local/share/ardoise` (so a git clone is not
 required at runtime) and links `~/.local/bin/ardoise`. Then:
@@ -67,6 +67,8 @@ ardoise export --month 2026-09 --out /tmp/ardoise.jsonl
 ardoise invoice add --vendor anthropic --cycle 2026-09 --usd-cents 1950
 ardoise invoice paste --file invoices.jsonl   # same upsert, bulk
 ardoise estimate --model claude-sonnet-4-6 --input-tokens 1000 --output-tokens 400
+ardoise reprice                 # rewrite T0 cost_usd from the current price book
+ardoise reprice --month 2026-09 --json
 ardoise login --token ard_…    # token from /app/settings
 ardoise sync
 ardoise logout
