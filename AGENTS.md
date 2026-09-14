@@ -22,7 +22,7 @@ tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/
 ```
 
 - Ledger: `~/.ardoise/ledger.db`
-- Config: `~/.ardoise/config.json` — optional `budgets.monthly_usd` / `budgets.person` / `budgets.project` (soft caps, warn only), `anomalies.*` knobs, `roster` (name list or `{canonical: [aliases]}`), and `transcripts.paths` (extra Grok Bot / cloud-agent dirs)
+- Config: `~/.ardoise/config.json` — optional `budgets.monthly_usd` / `budgets.person` / `budgets.project` (soft caps, warn only), `anomalies.*` knobs, `roster` (name list or `{canonical: [aliases]}`), `transcripts.paths` (extra Grok Bot / cloud-agent dirs), and `statement.from` / `statement.prepared_for` (letterhead for Orb-floor spend statements)
 - Roster filters on `status` / `statement` (`--person` / `--seat` / `--roster`) are view-only and never block. Named `events.agent` values are first-class on the same flags.
 - Dedupe: `message.id` + `requestId` (keep highest `output_tokens`)
 - Project: `git remote` `owner/repo`

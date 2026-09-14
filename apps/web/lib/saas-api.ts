@@ -122,6 +122,8 @@ export type StatementResponse = {
   invoice_grade: boolean;
   markdown: string;
   csv: string;
+  document?: import("@/components/statement-document").StatementDocument;
+  summary?: UsageStatus;
 };
 
 export type CliTokenResponse = {

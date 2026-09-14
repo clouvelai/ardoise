@@ -81,7 +81,7 @@ Open the mock URL and click **Pay (mock)**, or `POST /v1/stripe/webhook` with
 | `POST` | `/v1/cli/tokens` | Bearer JWT | Mint opaque `ard_…` token (shown once) |
 | `POST` | `/v1/usage/sync` | Bearer JWT or CLI token | Upsert usage / invoices / snapshots. Rejects prompt/credential keys. |
 | `GET` | `/v1/usage/status` | Bearer JWT or CLI token | Month summary. Free: estimates. Pro: billed Section A. |
-| `GET` | `/v1/usage/statement` | Bearer JWT or CLI token | Markdown + CSV. Invoice-grade on Pro+. |
+| `GET` | `/v1/usage/statement` | Bearer JWT or CLI token | Document + markdown + CSV. Invoice-grade on Pro+. |
 | `POST` | `/v1/invoices` | Bearer JWT or CLI token | Pro paste-in vendor total |
 | `POST` | `/v1/billing/checkout` | Bearer JWT | Pro/Team Checkout Session (`mode=subscription`). Price IDs: `STRIPE_PRICE_PRO` / `STRIPE_PRICE_TEAM`. |
 | `POST` | `/v1/billing/webhook` | Stripe signature (live) | Idempotent `checkout.session.completed` (sets plan) |
