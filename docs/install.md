@@ -95,5 +95,5 @@ ln -s "$(pwd)" ~/.cursor/plugins/local/ardoise
 This scaffold does **not** replace `install.sh`'s merge into
 `~/.cursor/hooks.json`. Keep using `./install.sh` as the secure user path.
 
-Env for the lone-script path: `ARDOISE_TAG` (default `v0.3.2`),
+Env for the lone-script path: `ARDOISE_TAG` (default `v0.3.3`),
 `ARDOISE_TARBALL` (offline tests), `ARDOISE_PREFIX`.

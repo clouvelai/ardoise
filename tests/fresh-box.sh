@@ -185,6 +185,7 @@ HOOK_STDIN="$HOME/.ardoise/hook-stdin.json"
 "$BIN" backfill --json >"$BOX/backfill.json"
 "$BIN" backfill --json >"$BOX/backfill2.json"
 
+"$BIN" reprice --month 2026-09 --json >"$BOX/reprice.json"
 "$BIN" status --json --month 2026-09 >"$BOX/status.json"
 "$BIN" statement 2026-09 --out-dir "$HOME/.ardoise/statements" >"$BOX/statement.json"
 "$BIN" export --month 2026-09 --out "$BOX/export.jsonl" >"$BOX/export-meta.json"
@@ -255,8 +256,13 @@ for ext in ("md", "html", "csv"):
     if "SECRET" in text:
         raise SystemExit(f"statement leaked secret: {p}")
 
+reprice = json.loads((box / "reprice.json").read_text())
+if int(reprice.get("updated") or 0) != 0:
+    raise SystemExit(f"reprice should be idempotent on fresh fixtures: {reprice}")
+if "skipped" not in reprice or "unknown" not in reprice:
+    raise SystemExit(f"reprice json missing skipped/unknown: {reprice}")
+
 if status.get("month") != "2026-09":
-    raise SystemExit(f"status month {status.get('month')}")
 if int(status.get("month_entries") or 0) != 3:
     raise SystemExit(f"status month_entries={status.get('month_entries')}")
 if abs(float(status.get("cost_usd") or 0) - 0.020725) > 1e-6:

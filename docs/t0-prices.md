@@ -9,6 +9,11 @@ Override the bundled book with `~/.ardoise/prices.json` if you want newer
 rates without waiting for a release. There is no LiteLLM refresh in this
 build.
 
+Already-ingested rows keep their stored `cost_usd` until you run
+`ardoise reprice` (optional `--month YYYY-MM`). That rewrites T0
+estimates from the current book without reading transcripts. Unknown
+stays $0. T2 billed cents are not touched. Safe to re-run.
+
 ## Cursor model ids
 
 Cursor hooks send a legacy `model` slug that is often the placeholder
@@ -68,6 +73,7 @@ re-priced from this book.
 ```bash
 ./install.sh
 ardoise backfill --force
+ardoise reprice --month YYYY-MM --json   # leftover T0 rows; no transcript re-ingest
 ardoise status --json --month YYYY-MM | python3 -m json.tool
 ardoise estimate --model cursor-grok-4.6-high --input-tokens 1000 --output-tokens 400 --json
 ```

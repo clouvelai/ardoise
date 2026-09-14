@@ -5,7 +5,7 @@
 set -eu
 
 REPO_SLUG="clouvelai/ardoise"
-TAG="${ARDOISE_TAG:-v0.3.2}"
+TAG="${ARDOISE_TAG:-v0.3.3}"
 PREFIX="${ARDOISE_PREFIX:-${HOME}/.local/share/ardoise}"
 JSON=0
 
@@ -30,7 +30,7 @@ Options:
   --json                Print machine-readable result
 
 Env:
-  ARDOISE_TAG       Release tag to fetch (default: v0.3.2)
+  ARDOISE_TAG       Release tag to fetch (default: v0.3.3)
   ARDOISE_TARBALL   Local .tar.gz (offline / tests)
   ARDOISE_PREFIX    Install prefix (default: ~/.local/share/ardoise)
 EOF
