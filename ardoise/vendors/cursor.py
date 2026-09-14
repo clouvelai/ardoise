@@ -14,7 +14,6 @@ import base64
 import hashlib
 import json
 import os
-import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -49,11 +48,12 @@ PAGE_SIZE = 100
 DEFAULT_LOOKBACK = timedelta(days=7)
 OVERLAP = timedelta(hours=1)
 T0_SOURCES = ("cursor", "hook", "anthropic_t0")
-_HTTP_STATUS_RE = re.compile(r"HTTP\s+(\d{3})")
-_AUTH_REJECTED_NEEDLES = (
-    "unauthorized",
-    "invalid team api key",
-    "invalid api key",
+# Fail-open copy for vendor test 401 / Invalid Team API Key. Never interpolates the key.
+_AUTH_REJECTED = (
+    "cursor: Team Admin API key rejected (401). "
+    "Needs a Team/Enterprise Admin API key from cursor.com/dashboard → API Keys "
+    "with admin:* scope when available. Personal/solo keys often fail this way. "
+    "Install, backfill, and hooks still work with no keys — this is optional T2 only."
 )
 
 Transport = Callable[[str, str, dict[str, Any] | None], dict[str, Any]]
@@ -595,33 +595,6 @@ def _missing_cred_result(*, action: str) -> dict[str, Any]:
     }
 
 
-def _http_status(exc: BaseException) -> int | None:
-    match = _HTTP_STATUS_RE.search(str(exc))
-    if not match:
-        return None
-    return int(match.group(1))
-
-
-def _is_auth_rejected(exc: BaseException) -> bool:
-    """True for 401/403 or Cursor's Invalid Team API Key wording."""
-    status = _http_status(exc)
-    if status in (401, 403):
-        return True
-    text = str(exc).lower()
-    return any(needle in text for needle in _AUTH_REJECTED_NEEDLES)
-
-
-def _auth_rejected_message(status: int | None = None) -> str:
-    """Fail-open copy for a rejected Team Admin API key. Never interpolates the key."""
-    code = status if status in (401, 403) else 401
-    return (
-        f"cursor: Team Admin API key rejected ({code}). "
-        "Needs a Team/Enterprise Admin API key from cursor.com/dashboard → API Keys "
-        "with admin:* scope when available. Personal/solo keys often fail this way. "
-        "Install, backfill, and hooks still work with no keys — this is optional T2 only."
-    )
-
-
 def pull(
     *,
     db_path: Any = None,
@@ -737,17 +710,16 @@ def test_vendor(
         events = fetch_usage_events(transport, start_ms=start_ms, end_ms=end_ms)
         spend = fetch_spend(transport)
     except RuntimeError as exc:
-        if _is_auth_rejected(exc):
-            status = _http_status(exc) or 401
+        text = str(exc).lower()
+        if "401" in text or "invalid team api key" in text or "unauthorized" in text:
             return {
                 "vendor": VENDOR,
                 "ok": False,
                 "has_cred": True,
                 "t0": True,
                 "t2": True,
-                "reason": f"http_{status}",
                 "error": str(exc),
-                "message": _auth_rejected_message(status),
+                "message": _AUTH_REJECTED,
             }
         return {
             "vendor": VENDOR,
