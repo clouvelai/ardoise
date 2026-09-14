@@ -1,0 +1,23 @@
+{
+  "name": "ardoise",
+  "description": "Local AI spend ledger capture (usage only; no prompts).",
+  "version": "0.1.0",
+  "author": {
+    "name": "clouvelai"
+  },
+  "homepage": "https://github.com/clouvelai/ardoise",
+  "repository": "https://github.com/clouvelai/ardoise",
+  "license": "MIT",
+  "keywords": ["ledger", "spend", "usage", "cursor"],
+  "hooks": {
+    "stop": [
+      { "command": "${CURSOR_PLUGIN_ROOT}/plugins/cursor/capture.sh" }
+    ],
+    "sessionEnd": [
+      { "command": "${CURSOR_PLUGIN_ROOT}/plugins/cursor/capture.sh" }
+    ],
+    "afterAgentResponse": [
+      { "command": "${CURSOR_PLUGIN_ROOT}/plugins/cursor/capture.sh" }
+    ]
+  }
+}

@@ -1,15 +1,13 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "ardoise",
   "description": "Local AI spend ledger capture (usage only; no prompts).",
   "version": "0.1.0",
   "author": {
-    "name": "clouvelai",
-    "url": "https://github.com/clouvelai"
+    "name": "clouvelai"
   },
   "homepage": "https://github.com/clouvelai/ardoise",
   "repository": "https://github.com/clouvelai/ardoise",
   "license": "MIT",
-  "keywords": ["ledger", "spend", "usage", "anthropic"],
+  "keywords": ["ledger", "spend", "usage", "cursor"],
   "hooks": "./hooks/hooks.json"
 }
