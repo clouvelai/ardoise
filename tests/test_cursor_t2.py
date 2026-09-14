@@ -119,6 +119,8 @@ class CursorT2Tests(unittest.TestCase):
         self.assertEqual(data["reason"], "missing_cred")
         self.assertIn("missing CURSOR_ADMIN_API_KEY", data["message"])
         self.assertIn("T0-only", cursor_t2.render_test(data))
+        self.assertIn("advanced", data["message"].lower())
+        self.assertIn("Team/Enterprise", data["message"])
 
     def test_vendor_test_fixture_roster_role_events(self) -> None:
         transport = FixtureTransport()
@@ -280,6 +282,8 @@ class CursorT2Tests(unittest.TestCase):
             out = buf.getvalue()
             self.assertIn("missing CURSOR_ADMIN_API_KEY", out)
             self.assertIn("T0-only", out)
+            self.assertIn("advanced", out.lower())
+            self.assertIn("Team/Enterprise", out)
         finally:
             env_home.cleanup()
 

@@ -27,7 +27,8 @@ Admin T2 can join a known run, those trees will not show spend.
 | Optional Cursor Admin T2 | `CURSOR_ADMIN_API_KEY` (alias `CURSOR_API_KEY`) is set. `ardoise vendor pull cursor` fetches Admin usage events. |
 
 T2 is never required at install, backfill, or `tests/fresh-box.sh` /
-`tests/dogfood-grok.sh`. Missing key → T0-only skip, exit 0.
+`tests/dogfood-grok.sh`. It is **advanced / optional (Team/Enterprise)** —
+not a post-install next step. Missing key → T0-only skip, exit 0.
 
 ## How T2 join sets `agent=`
 

@@ -55,6 +55,11 @@ _AUTH_REJECTED = (
     "with admin:* scope when available. Personal/solo keys often fail this way. "
     "Install, backfill, and hooks still work with no keys — this is optional T2 only."
 )
+# Explicit vendor test/pull only. Do not surface this as a post-install next step.
+_MISSING_CRED = (
+    "cursor: missing CURSOR_ADMIN_API_KEY (T0-only; "
+    "Admin T2 is advanced Team/Enterprise)"
+)
 
 Transport = Callable[[str, str, dict[str, Any] | None], dict[str, Any]]
 
@@ -591,7 +596,7 @@ def _missing_cred_result(*, action: str) -> dict[str, Any]:
         "skipped": True,
         "reason": "missing_cred",
         "action": action,
-        "message": "cursor: missing CURSOR_ADMIN_API_KEY (T0-only)",
+        "message": _MISSING_CRED,
     }
 
 
@@ -751,7 +756,7 @@ def render_test(data: dict[str, Any]) -> str:
     if data.get("message"):
         return str(data["message"]).rstrip() + "\n"
     if not data.get("has_cred"):
-        return "cursor: missing CURSOR_ADMIN_API_KEY (T0-only)\n"
+        return f"{_MISSING_CRED}\n"
     return (
         "cursor: roster={roster} role={role} events_7d={events_7d}\n".format(
             roster=data.get("roster", 0),
@@ -763,7 +768,7 @@ def render_test(data: dict[str, Any]) -> str:
 
 def render_pull(data: dict[str, Any]) -> str:
     if data.get("skipped") and data.get("reason") == "missing_cred":
-        return "cursor: missing CURSOR_ADMIN_API_KEY (T0-only)\n"
+        return f"{_MISSING_CRED}\n"
     if not data.get("ok"):
         return f"cursor: error: {data.get('error') or 'pull failed'}\n"
     return (
@@ -786,7 +791,7 @@ class CursorAdapter:
             CredentialField(
                 key="api_key",
                 env="CURSOR_ADMIN_API_KEY",
-                purpose="T2 usage event pull",
+                purpose="advanced Team/Enterprise Admin T2 pull",
                 optional=True,
                 alt_envs=("CURSOR_API_KEY",),
             ),
