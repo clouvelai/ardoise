@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  emailFromAccessToken,
   hasAuthRedirect,
   parseAuthRedirect,
+  sessionFromAccessTokenLocal,
   stripAuthRedirect,
 } from "./saas-callback.ts";
+
+function jwtWithEmail(email: string): string {
+  const payload = Buffer.from(JSON.stringify({ email }), "utf8")
+    .toString("base64url");
+  return `eyJhbGciOiJIUzI1NiJ9.${payload}.sig`;
+}
 
 describe("parseAuthRedirect", () => {
   it("reads implicit magic-link tokens from the hash", () => {
@@ -67,6 +75,24 @@ describe("parseAuthRedirect", () => {
     assert.deepEqual(parseAuthRedirect("?next=/app", ""), { kind: "none" });
     assert.equal(hasAuthRedirect("?next=/app", ""), false);
     assert.equal(hasAuthRedirect("", "#access_token=tok"), true);
+  });
+});
+
+describe("emailFromAccessToken", () => {
+  it("reads email from an implicit magic-link JWT", () => {
+    const token = jwtWithEmail("Link@Example.com");
+    assert.equal(emailFromAccessToken(token), "link@example.com");
+    assert.deepEqual(sessionFromAccessTokenLocal(token), {
+      email: "link@example.com",
+      accessToken: token,
+    });
+  });
+
+  it("returns null when the payload has no email", () => {
+    const payload = Buffer.from(JSON.stringify({ sub: "user" }), "utf8")
+      .toString("base64url");
+    assert.equal(emailFromAccessToken(`hdr.${payload}.sig`), null);
+    assert.equal(sessionFromAccessTokenLocal("not-a-jwt"), null);
   });
 });
 

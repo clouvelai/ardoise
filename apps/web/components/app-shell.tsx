@@ -4,7 +4,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { SlateMark } from "./mark";
-import { clearSession, getSession } from "@/lib/saas-session";
+import {
+  parseAuthRedirect,
+  sessionFromAccessTokenLocal,
+  stripAuthRedirect,
+} from "@/lib/saas-callback";
+import { clearSession, getSession, saveSession } from "@/lib/saas-session";
 
 const links = [
   { href: "/app", label: "Ledger" },
@@ -18,12 +23,41 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    const session = getSession();
-    if (!session) {
-      router.replace("/signup?next=/app");
-      return;
-    }
-    setEmail(session.email);
+    let cancelled = false;
+    void (async () => {
+      await Promise.resolve();
+      if (cancelled) {
+        return;
+      }
+      if (typeof window !== "undefined") {
+        const parsed = parseAuthRedirect(
+          window.location.search,
+          window.location.hash,
+        );
+        if (parsed.kind === "access_token") {
+          const hashed = sessionFromAccessTokenLocal(parsed.accessToken);
+          if (hashed) {
+            saveSession(hashed);
+            window.history.replaceState(
+              null,
+              "",
+              stripAuthRedirect(new URL(window.location.href)),
+            );
+            setEmail(hashed.email);
+            return;
+          }
+        }
+      }
+      const session = getSession();
+      if (!session) {
+        router.replace("/signup?next=/app");
+        return;
+      }
+      setEmail(session.email);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (!email) {

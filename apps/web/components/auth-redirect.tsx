@@ -7,7 +7,7 @@ import { safeNextPath } from "@/lib/saas-errors";
 /**
  * If a magic-link lands on `/` or `/pricing` (Site URL), bounce to `/signup`
  * with the same query + hash so SignupForm can write `ardoise.session`.
- * `/signup` is left alone — the form consumes the redirect there.
+ * `/signup` and `/app*` consume the hash themselves — do not drop it.
  */
 export function AuthRedirect() {
   useEffect(() => {
@@ -16,7 +16,10 @@ export function AuthRedirect() {
     }
 
     const bounce = () => {
-      if (window.location.pathname === "/signup") {
+      if (
+        window.location.pathname === "/signup" ||
+        window.location.pathname.startsWith("/app")
+      ) {
         return;
       }
       if (!hasAuthRedirect(window.location.search, window.location.hash)) {

@@ -74,6 +74,44 @@ export function hasAuthRedirect(search: string, hash: string): boolean {
   return parseAuthRedirect(search, hash).kind !== "none";
 }
 
+/**
+ * Read `email` from a JWT payload. Unverified — the token already arrived
+ * on this origin from Gotrue. Used only to write `ardoise.session`.
+ */
+export function emailFromAccessToken(accessToken: string): string | null {
+  const parts = accessToken.split(".");
+  if (parts.length < 2 || !parts[1]) {
+    return null;
+  }
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+    const json: unknown = JSON.parse(atob(b64 + pad));
+    if (
+      typeof json !== "object" ||
+      json === null ||
+      typeof (json as { email?: unknown }).email !== "string"
+    ) {
+      return null;
+    }
+    const email = (json as { email: string }).email.trim().toLowerCase();
+    return email.includes("@") ? email : null;
+  } catch {
+    return null;
+  }
+}
+
+export function sessionFromAccessTokenLocal(
+  accessToken: string,
+): { email: string; accessToken: string } | null {
+  const trimmed = accessToken.trim();
+  const email = emailFromAccessToken(trimmed);
+  if (!email) {
+    return null;
+  }
+  return { email, accessToken: trimmed };
+}
+
 export function stripAuthRedirect(url: URL): string {
   for (const key of AUTH_QUERY_KEYS) {
     url.searchParams.delete(key);

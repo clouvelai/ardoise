@@ -3,7 +3,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { parseAuthRedirect, stripAuthRedirect } from "@/lib/saas-callback";
+import {
+  parseAuthRedirect,
+  sessionFromAccessTokenLocal,
+  stripAuthRedirect,
+} from "@/lib/saas-callback";
 import { COPY, isNetworkError, safeNextPath, sparseMessage } from "@/lib/saas-errors";
 import {
   isOtpNotWired,
@@ -73,7 +77,11 @@ export function SignupForm() {
       setError(null);
       setStatus(null);
       try {
-        const session = await sessionFromRedirect(parsed);
+        const hashed =
+          parsed.kind === "access_token"
+            ? sessionFromAccessTokenLocal(parsed.accessToken)
+            : null;
+        const session = hashed ?? (await sessionFromRedirect(parsed));
         if (cancelled) {
           return;
         }

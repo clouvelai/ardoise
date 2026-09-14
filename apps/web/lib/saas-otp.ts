@@ -13,7 +13,10 @@
  *   sessionFromAccessToken → GET  {API_BASE}/v1/me
  */
 
-import type { AuthRedirect } from "./saas-callback";
+import {
+  sessionFromAccessTokenLocal,
+  type AuthRedirect,
+} from "./saas-callback";
 import {
   COPY,
   NetworkError,
@@ -222,6 +225,10 @@ export async function sessionFromAccessToken(
   const trimmed = accessToken.trim();
   if (!trimmed) {
     throw new Error(COPY.invalidAuth);
+  }
+  const local = sessionFromAccessTokenLocal(trimmed);
+  if (local) {
+    return local;
   }
   const payload = await getJson("/v1/me", trimmed);
   if (!isRecord(payload) || !isRecord(payload.account)) {
