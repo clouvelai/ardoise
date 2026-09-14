@@ -137,6 +137,43 @@ class CursorT2Tests(unittest.TestCase):
             {"/teams/members", "/teams/spend", "/teams/filtered-usage-events"},
         )
 
+    def test_vendor_test_401_uses_fail_open_wording(self) -> None:
+        secret = "key_should_never_appear_in_output"
+
+        def boom(_method: str, _path: str, _body: dict[str, Any] | None = None) -> dict[str, Any]:
+            raise RuntimeError(
+                "cursor admin API GET /teams/members failed: HTTP 401 Invalid Team API Key"
+            )
+
+        data = cursor_t2.test_vendor(
+            transport=boom,
+            environ={"CURSOR_ADMIN_API_KEY": secret},
+        )
+        self.assertFalse(data["ok"])
+        self.assertEqual(data["reason"], "http_401")
+        text = cursor_t2.render_test(data)
+        self.assertIn("Team Admin API key rejected (401)", text)
+        self.assertIn("Team/Enterprise Admin API key", text)
+        self.assertIn("cursor.com/dashboard", text)
+        self.assertIn("API Keys", text)
+        self.assertIn("admin:*", text)
+        self.assertIn("Personal/solo", text)
+        self.assertIn("optional T2", text)
+        self.assertIn("no keys", text)
+        self.assertNotIn(secret, text)
+        self.assertNotIn(secret[:8], text)
+        self.assertNotIn("key_should", text)
+
+    def test_vendor_test_invalid_team_key_wording_without_status(self) -> None:
+        def boom(_method: str, _path: str, _body: dict[str, Any] | None = None) -> dict[str, Any]:
+            raise RuntimeError("Invalid Team API Key")
+
+        data = cursor_t2.test_vendor(transport=boom, environ={})
+        text = cursor_t2.render_test(data)
+        self.assertFalse(data["ok"])
+        self.assertIn("Team Admin API key rejected (401)", text)
+        self.assertIn("optional T2", text)
+
     def test_pull_without_cred_is_noop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.db"
