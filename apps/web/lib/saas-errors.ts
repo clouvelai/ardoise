@@ -139,8 +139,8 @@ export function sparseMessage(error: unknown, fallback = COPY.generic): string {
 }
 
 export function safeNextPath(value: string | null | undefined): string | null {
-  if (value === "/pricing") {
-    return "/pricing";
+  if (value === "/pricing" || value === "/install") {
+    return value;
   }
   return null;
 }

@@ -4,11 +4,11 @@ import { PageShell } from "@/components/page-shell";
 import { RequireSession } from "@/components/require-session";
 
 export const metadata: Metadata = {
-  title: "You’re in — Ardoise",
-  description: "Subscription checkout completed.",
+  title: "Install — Ardoise",
+  description: "Pin the CLI. Local ledger on your machine.",
 };
 
-export default function BillingSuccessPage() {
+export default function InstallPage() {
   return (
     <PageShell>
       <RequireSession>

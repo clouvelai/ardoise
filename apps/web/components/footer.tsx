@@ -19,9 +19,6 @@ export function Footer() {
         <Link href="/#privacy" className="transition hover:text-ink">
           Privacy
         </Link>
-        <Link href="/#install" className="transition hover:text-ink">
-          Install
-        </Link>
       </div>
     </footer>
   );

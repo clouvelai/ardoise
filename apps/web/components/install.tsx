@@ -29,7 +29,7 @@ export function Install() {
         >
           {INSTALL_TAG}
         </a>
-        . No API keys. Signup is optional later for Pro/Team.
+        . No API keys.
       </p>
       <pre className="mt-4 overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-white/60 px-4 py-3 text-[12px] leading-relaxed text-ink/75 ring-1 ring-black/[0.04]">
         <code>{INSTALL_ONE_LINER}</code>

@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { COPY, isNetworkError, safeNextPath } from "@/lib/saas-errors";
 import { isOtpNotWired, otpMessage, requestEmailOtp, verifyEmailOtp } from "@/lib/saas-otp";
 import { getSession, saveSession } from "@/lib/saas-session";
 import { Mascot } from "./mark";
 
-type Step = "email" | "code" | "done";
+type Step = "email" | "code";
 
 const fieldClass =
   "w-full rounded-full border border-black/[0.06] bg-mist/70 px-5 py-3.5 text-[15px] text-ink outline-none transition placeholder:text-muted/70 focus:border-grape/40 focus:ring-4 focus:ring-grape/15 disabled:opacity-70";
@@ -60,12 +59,8 @@ export function SignupForm() {
     try {
       const session = await verifyEmailOtp(email, code);
       saveSession(session);
-      if (nextPath) {
-        router.replace(nextPath);
-        return;
-      }
-      setStep("done");
-      setStatus(null);
+      router.replace(nextPath ?? "/install");
+      return;
     } catch (caught) {
       if (isOtpNotWired(caught)) {
         setStatus(COPY.notWired);
@@ -180,35 +175,7 @@ export function SignupForm() {
           </form>
         ) : null}
 
-        {step === "done" ? (
-          <div className="py-4 text-center">
-            <p className="text-[1.35rem] font-semibold tracking-tight text-ink">
-              You’re in.
-            </p>
-            <p className="mt-2 text-[15px] text-muted">
-              Local ledger stays on your machine.
-            </p>
-            <div className="mt-6 flex flex-col items-center gap-3">
-              <Link
-                href="/#install"
-                className="inline-flex items-center rounded-full bg-grape px-6 py-3 text-[15px] font-semibold text-white shadow-[0_10px_24px_rgba(124,92,255,0.28)] transition hover:bg-grape-deep"
-              >
-                Install the CLI
-                <span aria-hidden className="ml-1.5">
-                  →
-                </span>
-              </Link>
-              <Link
-                href="/pricing"
-                className="text-[13px] font-medium text-muted transition hover:text-ink"
-              >
-                See pricing
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {status && step !== "done" ? (
+        {status ? (
           <p
             role="status"
             className="mt-5 rounded-2xl bg-mist/80 px-4 py-3 text-center text-[13px] leading-relaxed text-muted"
@@ -223,11 +190,9 @@ export function SignupForm() {
           </p>
         ) : null}
 
-        {step !== "done" ? (
-          <p className="mt-6 text-center text-[13px] text-muted">
-            Local ledger stays on your machine
-          </p>
-        ) : null}
+        <p className="mt-6 text-center text-[13px] text-muted">
+          Local ledger stays on your machine
+        </p>
       </div>
     </div>
   );
