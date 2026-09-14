@@ -23,6 +23,17 @@ def _month_bounds(month: str) -> tuple[str, str]:
     return start, end
 
 
+def _capture_ran(conn) -> bool:
+    """True after a backfill/capture pass, even when no usage rows landed."""
+    row = conn.execute(
+        "SELECT 1 FROM sync_state WHERE kind = 'capture' LIMIT 1"
+    ).fetchone()
+    if row:
+        return True
+    src = conn.execute("SELECT 1 FROM sources LIMIT 1").fetchone()
+    return bool(src)
+
+
 def current_month(now: datetime | None = None) -> str:
     stamp = now or datetime.now(timezone.utc)
     return stamp.strftime("%Y-%m")
@@ -121,6 +132,7 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
             config=cfg,
         )
         latest = _latest_month(conn) if int(total_rows or 0) else None
+        backfilled = _capture_ran(conn)
 
     estimated = round(sum(float(row.get("estimated_usd") or row.get("cost_usd") or 0) for row in lines), 6)
     billed_usd = round(
@@ -161,6 +173,7 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
         "agents": named_agents,
         "filter": filt,
         "latest_month": latest,
+        "backfilled": backfilled,
     }
     data["budgets"] = budget.evaluate(data, cfg)
     notes: list[str] = []
@@ -287,14 +300,23 @@ def render_text(data: dict[str, Any]) -> str:
         for note in notes:
             lines.append(f"  {note}")
     if int(data.get("entries") or 0) == 0:
-        lines.extend(
-            [
-                "",
-                "ledger is empty — ingest local Claude Code / Cursor logs:",
-                "  ardoise backfill",
-                "  ardoise status",
-            ]
-        )
+        if data.get("backfilled"):
+            lines.extend(
+                [
+                    "",
+                    "ledger is empty — already backfilled, no usage rows",
+                    "  prompt-only trees stay empty until a usage-shaped export or hook lands",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "",
+                    "ledger is empty — ingest local Claude Code / Cursor logs:",
+                    "  ardoise backfill",
+                    "  ardoise status",
+                ]
+            )
     else:
         latest = data.get("latest_month") or {}
         latest_month = str(latest.get("month") or "")

@@ -120,7 +120,9 @@ def build_parser() -> argparse.ArgumentParser:
             "Advanced (optional, Team/Enterprise only): "
             "vendor test cursor / vendor pull cursor use CURSOR_ADMIN_API_KEY only. "
             "CURSOR_API_KEY is not an Admin key. Individual Cursor plans have no "
-            "Team Admin API. Skipped probe stays T0 (exit 0). See docs/meter-shape.md."
+            "Team Admin API. vendor test anthropic / vendor pull anthropic use "
+            "Analytics (Enterprise). Skipped probe stays T0 (exit 0). "
+            "See docs/meter-shape.md."
         ),
     )
     vsub = vendor.add_subparsers(dest="vendor_cmd", required=True)
@@ -283,6 +285,9 @@ def main(argv: list[str] | None = None) -> int:
                     "backfill inserted={inserted} updated={updated} skipped={skipped} "
                     "files={files} skipped_files={skipped_files}".format(**result)
                 )
+                tip = backfill_mod.empty_ledger_tip(result)
+                if tip:
+                    print(tip)
             return 0
 
         if args.cmd == "capture":
@@ -319,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.json:
                     print(json.dumps(result.as_dict(), indent=2, ensure_ascii=True))
                 elif (
-                    adapter.name == "cursor"
+                    adapter.name in {"cursor", "anthropic"}
                     and not result.cred_resolved
                     and not getattr(args, "verbose", False)
                 ):

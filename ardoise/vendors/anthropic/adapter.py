@@ -180,19 +180,16 @@ class AnthropicAdapter:
 
     def test(self) -> VendorTestResult:
         status = resolve_status(self.credential_spec)
-        resolved = any(item.present for item in status)
         data = t2a.test_vendor()
-        detail = (
-            "T0 capture works without credentials. T1 snapshot uses OAuth "
-            "(env/keychain) when present. "
-            + str(data.get("message") or "")
-        )
+        # Quiet vendor test/pull is T2a-only. OAuth / Admin stay off the
+        # default one-liner so ANTHROPIC_ADMIN_API_KEY is --verbose only.
+        t2a_resolved = bool(data.get("has_cred"))
         return VendorTestResult(
             name=self.name,
             tools=self.tools,
             capabilities=self.capabilities,
             credentials=status,
-            cred_resolved=resolved,
+            cred_resolved=t2a_resolved,
             ok=bool(data.get("ok", True)),
-            detail=detail.strip(),
+            detail=str(data.get("message") or ""),
         )

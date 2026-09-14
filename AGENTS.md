@@ -11,8 +11,6 @@ bin/ardoise statement YYYY-MM
 bin/ardoise statement YYYY-MM --person alice
 bin/ardoise status --json --seat alice
 bin/ardoise status --json --person Craie
-bin/ardoise vendor test anthropic  # T2a probe; missing Analytics key skips T2a
-bin/ardoise vendor pull anthropic  # T2a Analytics when ANTHROPIC_ANALYTICS_API_KEY is set
 bin/ardoise snapshot anthropic   # T1 seat snapshot when OAuth cred resolves
 bin/ardoise invoice add --vendor anthropic --cycle YYYY-MM --usd-cents N
 bin/ardoise invoice paste --file invoices.jsonl
@@ -27,7 +25,7 @@ tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/
 - Dedupe: `message.id` + `requestId` (keep highest `output_tokens`)
 - Project: `git remote` `owner/repo`
 - Attribution: persist `agent` / `skill` / `effort` when a T0 transcript or hook already names them; never invent; missing stays unattributed
-- Meter-shape: prompt-only cloud/box transcripts do not meter (empty ledger is expected). Install/backfill/dogfood never require keys. Team / Enterprise only (not Free): `vendor test cursor` / `vendor pull cursor` — see [docs/meter-shape.md](docs/meter-shape.md). Individual Cursor plans have no Team Admin API key.
+- Meter-shape: prompt-only cloud/box transcripts do not meter (empty ledger is expected). Install/backfill/dogfood never require keys. Team / Enterprise only (not Free): `vendor test cursor` / `vendor pull cursor` and `vendor test anthropic` / `vendor pull anthropic` — see [docs/meter-shape.md](docs/meter-shape.md). Individual Cursor plans have no Team Admin API key. Anthropic Analytics is Enterprise-only.
 - Never persist prompts or credentials
 - Soft caps and `ardoise estimate` never block the editor
 - Do not add third-party Python deps to `ardoise/`
