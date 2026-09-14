@@ -9,8 +9,9 @@ Canonical Phase 1 install is still clone-then-`./install.sh`. That path:
    `~/.cursor/hooks.json`
 
 `--no-plugin-manager` is accepted and is the default. Hooks never store
-credentials or prompts. Soft caps and `ardoise estimate` never block the
-editor.
+credentials or prompts. Every hook is **fail-open** (`trap 'exit 0' EXIT`
+plus `|| true` around the CLI) so a missing or crashing `ardoise` never
+blocks the editor. Soft caps and `ardoise estimate` also never block.
 
 ## Runtime contract
 

@@ -76,6 +76,24 @@ printf '%s\n' '{"hook_event_name":"Stop"}' | \
 HOME="$MKT_HOME" ARDOISE_HOME="$MKT_HOME/.ardoise" ARDOISE_BIN="$LAUNCHER" \
   "$MKT_PLUGIN/hooks/snapshot.sh" </dev/null
 
+# Fail-open: a crashing CLI must not block the editor.
+BOOM="$BOX/boom-ardoise"
+printf '%s\n' '#!/bin/sh' 'exit 7' >"$BOOM"
+chmod +x "$BOOM"
+HOME="$MKT_HOME" ARDOISE_HOME="$MKT_HOME/.ardoise" ARDOISE_BIN="$BOOM" \
+  "$MKT_PLUGIN/hooks/capture.sh" </dev/null
+ARDOISE_BIN="$BOOM" "$HOME/.ardoise/hooks/capture.sh" </dev/null
+ARDOISE_BIN="$BOOM" "$HOME/.ardoise/hooks/snapshot.sh" </dev/null
+
+# Install must not write keys.
+for needle in sk-ant- ANTHROPIC_API_KEY CURSOR_ADMIN_API_KEY access_token; do
+  if grep -R -F -- "$needle" "$HOME/.ardoise/hooks" "$HOME/.claude/settings.json" \
+      "$HOME/.cursor/hooks.json" >/dev/null 2>&1; then
+    echo "install stored credential-like $needle" >&2
+    exit 1
+  fi
+done
+
 # --- fixtures with this box's project cwd ---
 CLAUDE_DIR="$HOME/.claude/projects/-tmp-proj"
 CURSOR_DIR="$HOME/.cursor/projects/proj"

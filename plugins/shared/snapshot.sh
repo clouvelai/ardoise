@@ -3,6 +3,7 @@
 # Discard hook stdin. Never print prompts. Always exit 0.
 # Self-contained: invoke ardoise on PATH or ~/.local/bin — not a sibling shared/ tree.
 set -eu
+trap 'exit 0' EXIT
 ARDOISE_HOOK=1
 export ARDOISE_HOOK
 cat >/dev/null || true
@@ -17,7 +18,7 @@ if command -v ardoise >/dev/null 2>&1; then
   exit 0
 fi
 
-if [ -x "${HOME}/.local/bin/ardoise" ]; then
+if [ -x "${HOME:-}/.local/bin/ardoise" ]; then
   "${HOME}/.local/bin/ardoise" snapshot anthropic --json >/dev/null 2>&1 || true
   exit 0
 fi

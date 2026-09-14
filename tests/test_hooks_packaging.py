@@ -84,6 +84,9 @@ class SourceTreeTests(unittest.TestCase):
         enqueue = (ROOT / "plugins" / "shared" / "hook_enqueue.py").read_text(encoding="utf-8")
         self.assertNotIn("parents[2]", enqueue)
         self.assertNotIn("parents[1]", enqueue)
+        for path in paths:
+            if path.suffix == ".sh":
+                self.assertIn("trap 'exit 0' EXIT", path.read_text(encoding="utf-8"))
 
     def test_embedded_fallback_matches_shared_files(self) -> None:
         self.assertEqual(
@@ -186,6 +189,47 @@ class MarketplaceIsolationTests(IsolatedHome):
         self.assertEqual(marker.read_text(encoding="utf-8"), "installed")
         self.assertFalse(log.exists())
 
+    def test_hooks_fail_open_when_cli_errors(self) -> None:
+        isolated = self._copy_plugin(ROOT / "plugins" / "claude")
+        boom = Path(self.tmp.name) / "boom"
+        boom.write_text("#!/bin/sh\nexit 7\n", encoding="utf-8")
+        boom.chmod(0o755)
+        env = os.environ.copy()
+        env["ARDOISE_BIN"] = str(boom)
+        env["PATH"] = "/usr/bin:/bin"
+        for script in (
+            isolated / "hooks" / "capture.sh",
+            isolated / "hooks" / "snapshot.sh",
+        ):
+            proc = subprocess.run(
+                [str(script)],
+                input="{}\n",
+                text=True,
+                capture_output=True,
+                env=env,
+                cwd=str(isolated),
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, f"{script} blocked: {proc.stderr}")
+
+    def test_hooks_fail_open_without_cli_or_home(self) -> None:
+        isolated = self._copy_plugin(ROOT / "plugins" / "claude")
+        env = os.environ.copy()
+        env.pop("ARDOISE_BIN", None)
+        env.pop("ARDOISE_HOME", None)
+        env.pop("HOME", None)
+        env["PATH"] = "/usr/bin:/bin"
+        proc = subprocess.run(
+            [str(isolated / "hooks" / "capture.sh")],
+            input="{}\n",
+            text=True,
+            capture_output=True,
+            env=env,
+            cwd=str(isolated),
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
 
 class InstallCopyTests(IsolatedHome):
     def test_install_writes_self_contained_hooks(self) -> None:
@@ -223,6 +267,23 @@ class InstallCopyTests(IsolatedHome):
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(log.read_text(encoding="utf-8").strip(), "capture --stdin")
+
+        forbidden_keys = (
+            "sk-ant-",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_ANALYTICS_API_KEY",
+            "CURSOR_ADMIN_API_KEY",
+            "access_token",
+            "Bearer ",
+        )
+        installed_root = script.parent
+        for path in (script, snap, enqueue, Path(result["claude_settings"]), Path(result["cursor_hooks"])):
+            blob = path.read_text(encoding="utf-8")
+            for needle in forbidden_keys:
+                self.assertNotIn(needle, blob, f"{path} stored {needle!r}")
+        for child in installed_root.iterdir():
+            if child.is_file() and child.suffix in {".env", ".pem", ".key"}:
+                self.fail(f"install wrote a key-like file {child}")
 
 
 if __name__ == "__main__":
