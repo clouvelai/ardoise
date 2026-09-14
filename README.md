@@ -43,6 +43,20 @@ Claude marketplace add / Cursor local plugin are additive — see
 
 Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 
+## Grok Bot
+
+Install once → local ledger → when usage meters (hooks, usage-shaped
+transcripts, or optional Admin T2), `status` shows captain / Craie /
+Encre chips. **No keys required for Free.**
+
+Admin T2 (`CURSOR_ADMIN_API_KEY` / `vendor pull cursor`) is optional and
+may return Cursor `401 Invalid Team API Key` unless the plan exposes
+Team Admin API. Solo / personal keys often fail. Free stays zero-key —
+never required at install. Box / cloud-agent chats can be prompt-shaped
+with no token objects until meters land.
+
+[docs/grok-bot.md](docs/grok-bot.md) · [docs/meter-shape.md](docs/meter-shape.md)
+
 ## Commands
 
 ```bash

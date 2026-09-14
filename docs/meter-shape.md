@@ -1,5 +1,7 @@
 # Meter shape
 
+Product story: [grok-bot.md](grok-bot.md).
+
 Install and `backfill` never require API keys. They only persist rows that
 already carry a usage object (token counts and/or charged cents). Hooks do
 the same: they meter when the editor already emitted usage.
@@ -46,5 +48,7 @@ Unknown ids stay unattributed. Job titles, folder names, and prompt text
 are never treated as agent names. Project join is unchanged: conversation
 → T0 `owner/repo`, else project `unattributed`.
 
-Admin dogfood needs a real team Admin API key. CI and offline tests use
-fixtures/mocks only — no live key.
+Admin T2 needs a real Team / Enterprise Admin key. Solo / personal keys
+often get `401 Invalid Team API Key`. Do not treat Admin smoke as
+working today. CI and offline tests use fixtures/mocks only — no live
+key.
