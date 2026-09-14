@@ -45,16 +45,12 @@ Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 
 ## Grok Bot
 
-Install once → local ledger → when usage meters (hooks, usage-shaped
-transcripts, or optional Admin T2), `status` shows captain / Craie /
-Encre chips. **No keys required for Free.**
+Install once → local ledger → hooks / usage-shaped capture → `status`
+with captain / Craie / Encre chips. **No keys required for Free.**
 
-Admin T2 (`CURSOR_ADMIN_API_KEY` / `vendor pull cursor`) is **advanced /
-optional** (Team/Enterprise) and may return Cursor `401 Invalid Team API
-Key` unless the plan exposes Team Admin API. Solo / personal keys often
-fail. Free stays zero-key — never required at install, and not a
-post-install next step. Box / cloud-agent chats can be prompt-shaped
-with no token objects until meters land.
+Box / cloud-agent chats can be prompt-shaped with no token objects.
+Until a usage-shaped export or hook lands, `status` stays quiet. That
+is expected.
 
 [docs/grok-bot.md](docs/grok-bot.md) · [docs/meter-shape.md](docs/meter-shape.md)
 
@@ -82,12 +78,9 @@ ardoise estimate --stdin --json # hook-friendly ask on stdin
 
 Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
 
-**Advanced (optional Team/Enterprise — not a post-install step):** Cursor
-Admin T2 is not part of the default product story. Individual Cursor
-plans have no Team Admin API key. Discover `vendor test cursor` /
-`vendor pull cursor` under `ardoise vendor --help` or
-[docs/meter-shape.md](docs/meter-shape.md) only when
-`CURSOR_ADMIN_API_KEY` is already set.
+**Team / Enterprise only (not Free):** `vendor test cursor` /
+`vendor pull cursor` → [docs/meter-shape.md](docs/meter-shape.md).
+Individual Cursor plans have no Team Admin API key.
 
 **Section A** is one vendor line per scope: pasted invoice, else T2, else T1 snapshot — each line prints its tier. **Section B** uses T0 token weights only to allocate that billed total across projects.
 
@@ -98,22 +91,14 @@ plans have no Team Admin API key. Discover `vendor test cursor` /
 | Claude Code session logs | `vendors/anthropic` T0 | `~/.claude/projects/**/*.jsonl` |
 | Cursor transcripts | `vendors/cursor` T0 | `~/.cursor/**/*.jsonl` (usage-shaped; skips `agent-transcripts`) |
 | Grok Bot / cloud-agent | `adapters/cloud_agent` T0 | configurable roots — see below |
-| Claude Enterprise Analytics (optional T2a) | `vendors/anthropic` pull | `GET /v1/organizations/analytics/usage_report` when `ANTHROPIC_ANALYTICS_API_KEY` is set |
-| Cursor Admin API (optional T2) | `vendors/cursor` pull | `POST /teams/filtered-usage-events` when `CURSOR_ADMIN_API_KEY` is set |
-| Pasted invoices | `invoice paste` | ledger `invoices` table (section A) |
-| Live sessions | Shared hooks + queue | `~/.ardoise/queue/*.json` |
 
 Streaming duplicates share `message.id` + `requestId`. Ardoise keeps the row
 with the highest `output_tokens`.
 
 **Project** is the git remote `owner/repo` for the event `cwd` (or the current
 workspace). T2 events join T0 hook rows on `conversation_id`; unmatched events
-are stored as project `unattributed`. When `CURSOR_ADMIN_API_KEY` is set,
-`vendor pull cursor` also copies `agent=` if `conversationId` or
-`cloudAgentId` (`bcId`) matches a T0/hook row or local sidecar that already
-named that run. Unknown ids stay unattributed. Without the key, Cursor
-capture stays T0-only. The key is never written to the ledger. See
-[docs/meter-shape.md](docs/meter-shape.md).
+are stored as project `unattributed`. Cursor capture stays T0-only on the
+Free path.
 
 **Attribution** (agent / skill / effort) is copied from T0 transcript and hook
 JSON when those identifiers are already present (`agentId`, `attributionSkill`,
@@ -146,9 +131,10 @@ adapter fail-open. Prompts are scrubbed. No marketplace or credentials.
 
 Usage-shaped fixtures (like `tests/fixtures/dogfood/agent-data`) produce
 agent chips. Live cloud/box trees that are prompt-only will **not** meter
-until a platform export includes usage objects, or optional Admin T2 can
-join a known `bcId` / conversation. Empty ledger after install → backfill
-on those trees is expected. No keys required. Do not estimate-from-prompt.
+until a usage-shaped export or hook lands. Empty chips are a Free
+meter-gap, not a reason to mint an Admin key. Empty ledger after
+install → backfill on those trees is expected. No keys required. Do not
+estimate-from-prompt.
 
 **Anthropic T2a** lights up when the org primary owner mints an Analytics API
 key at [claude.ai → Organization settings → API](https://claude.ai) (`read:analytics`)
