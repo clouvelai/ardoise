@@ -259,8 +259,8 @@ if status.get("month") != "2026-09":
     raise SystemExit(f"status month {status.get('month')}")
 if int(status.get("month_entries") or 0) != 3:
     raise SystemExit(f"status month_entries={status.get('month_entries')}")
-if abs(float(status.get("cost_usd") or 0) - 0.02105) > 1e-6:
-    raise SystemExit(f"status cost {status.get('cost_usd')} != 0.02105")
+if abs(float(status.get("cost_usd") or 0) - 0.020725) > 1e-6:
+    raise SystemExit(f"status cost {status.get('cost_usd')} != 0.020725")
 
 # hooks installed without a plugin manager
 claude = json.loads((home / ".claude" / "settings.json").read_text())
@@ -361,7 +361,7 @@ if int(rerun.get("inserted") or 0) != 0:
 if int(rerun.get("skipped_files") or 0) < 1:
     raise SystemExit(f"second backfill should skip unchanged files: {rerun}")
 
-print("checks=ok entries=3 cost=0.02105 project=clouvelai/Arbusteia")
+print("checks=ok entries=3 cost=0.020725 project=clouvelai/Arbusteia")
 PY
 
 # paste-in invoices are the solid dollar source for section A
@@ -382,8 +382,8 @@ if int(paste.get("inserted") or 0) != 2:
 status = json.loads((box / "status-billed.json").read_text())
 if abs(float(status.get("billed_usd") or 0) - 21.05) > 1e-6:
     raise SystemExit(f"section A billed_usd={status.get('billed_usd')} want 21.05")
-if abs(float(status.get("cost_usd") or 0) - 0.02105) > 1e-6:
-    raise SystemExit(f"T0 estimated cost_usd={status.get('cost_usd')} want 0.02105")
+if abs(float(status.get("cost_usd") or 0) - 0.020725) > 1e-6:
+    raise SystemExit(f"T0 estimated cost_usd={status.get('cost_usd')} want 0.020725")
 if float(status.get("estimated_usd") or 0) >= float(status.get("billed_usd") or 0):
     raise SystemExit("T0 estimate must not replace invoice billed total")
 tiers = {row.get("tier_of_truth") for row in status.get("section_a") or []}
@@ -423,7 +423,7 @@ conn = sqlite3.connect(home / ".ardoise" / "ledger.db")
 n_inv = conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0]
 if n_inv != 2:
     raise SystemExit(f"invoices table count={n_inv}")
-print("invoice-paste=ok section_a=21.05 t0_estimate=0.02105")
+print("invoice-paste=ok section_a=21.05 t0_estimate=0.020725")
 PY
 
 # Phase 3: estimate stub + soft-cap warn (never blocks)

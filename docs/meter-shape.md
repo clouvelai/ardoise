@@ -30,6 +30,12 @@ will not show spend. Admin T2 is not the Free fix for empty chips.
 `tests/fresh-box.sh` and `tests/dogfood-grok.sh` stay on this path.
 No keys.
 
+T0 dollars are list-price estimates from the bundled price book
+([docs/t0-prices.md](t0-prices.md)). Cursor hooks often send
+`model=default`; capture prefers `model_id` / a nested real slug and
+persists `unknown` (priced $0) when none exists. Grok and Composer SKUs
+do not fall through to Claude Sonnet rates.
+
 ## Team / Enterprise Admin only — not Free
 
 Cursor Admin T2 is **not** a next step after install. It needs a real

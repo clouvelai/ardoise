@@ -143,8 +143,11 @@ T0 JSONL and T1 OAuth snapshots keep working. Analytics rows join T0 on
 `session_id` / `conversation_id` (or an `owner/repo` `project` field) when the
 payload exposes them; otherwise the project is `unattributed`.
 
-Prices come from [`data/prices.fallback.json`](data/prices.fallback.json).
-Override with `~/.ardoise/prices.json`.
+Prices come from [`data/prices.fallback.json`](data/prices.fallback.json)
+(T0 list-price estimate only). Override with `~/.ardoise/prices.json`.
+Cursor / `cursor-grok-*` SKUs use published Cursor list prices — see
+[docs/t0-prices.md](docs/t0-prices.md). Missing or Auto/`default` models
+store as `unknown` and do **not** inherit Claude Sonnet $3/$15.
 
 ## Soft caps, anomalies, estimate (Phase 3)
 

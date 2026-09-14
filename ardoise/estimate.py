@@ -11,6 +11,7 @@ from typing import Any, TextIO
 
 from ardoise import config as config_mod
 from ardoise import paths, prices
+from ardoise.model import UNKNOWN
 
 
 def _int(value: Any, default: int = 0) -> int:
@@ -88,6 +89,7 @@ def price_ask(
     month: str | None = None,
     with_gate: bool = True,
 ) -> dict[str, Any]:
+    looked = prices.lookup(model)
     usd = prices.price_usd(
         model=model,
         input_tokens=max(0, int(input_tokens or 0)),
@@ -100,8 +102,10 @@ def price_ask(
     data: dict[str, Any] = {
         "ok": True,
         "command": "estimate",
-        "model": model or "default",
+        "model": model or UNKNOWN,
         "normalized_model": prices.normalize_model(model),
+        "rate_key": looked["key"],
+        "unknown": looked["unknown"],
         "input_tokens": int(input_tokens or 0),
         "output_tokens": int(output_tokens or 0),
         "cache_read_tokens": int(cache_read_tokens or 0),
@@ -109,7 +113,7 @@ def price_ask(
         "cache_creation_5m_tokens": int(cache_creation_5m_tokens or 0),
         "cache_creation_1h_tokens": int(cache_creation_1h_tokens or 0),
         "usd": usd,
-        "rates": prices.rates_for(model),
+        "rates": looked["rates"],
         "unit": "per_million_tokens",
         "currency": "USD",
         "blocks": False,
@@ -157,7 +161,7 @@ def render_text(data: dict[str, Any]) -> str:
         extra = "\ngate      stub  never-blocks"
     return (
         "estimate  model={model}  in={inn}  out={out}  ${usd:.6f}{extra}\n".format(
-            model=data.get("normalized_model") or data.get("model") or "default",
+            model=data.get("normalized_model") or data.get("model") or UNKNOWN,
             inn=int(data.get("input_tokens") or 0),
             out=int(data.get("output_tokens") or 0),
             usd=float(data.get("usd") or 0),

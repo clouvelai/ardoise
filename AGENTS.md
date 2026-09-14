@@ -30,5 +30,6 @@ tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/
 - Meter-shape: prompt-only cloud/box transcripts do not meter (empty ledger is expected). Install/backfill/dogfood never require keys. Team / Enterprise only (not Free): `vendor test cursor` / `vendor pull cursor` and `vendor test anthropic` / `vendor pull anthropic` — see [docs/meter-shape.md](docs/meter-shape.md). Individual Cursor plans have no Team Admin API key. Anthropic Analytics is Enterprise-only.
 - Never persist prompts or credentials
 - Soft caps and `ardoise estimate` never block the editor
+- T0 prices: bundled `data/prices.fallback.json` (no network). Cursor `default`/`auto` persist as `unknown` ($0), never Sonnet. See [docs/t0-prices.md](docs/t0-prices.md).
 - Do not add third-party Python deps to `ardoise/`
 - Hosted companion: `apps/api` (FastAPI + its own requirements). **Account first, card later** — OTP signup is free; Stripe Checkout (`mode=subscription`) only for Pro/Team. `ardoise login` / `ardoise sync` upload already-priced export rows. Keep Stripe/JWT secrets server-side. Never add third-party Python deps to `ardoise/`.

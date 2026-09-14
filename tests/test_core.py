@@ -24,6 +24,9 @@ class PriceTests(unittest.TestCase):
     def test_normalize(self) -> None:
         self.assertEqual(normalize_model("claude-haiku-4-5-20251001"), "claude-haiku-4-5")
         self.assertEqual(normalize_model("composer-2.5"), "composer-2-5")
+        self.assertEqual(normalize_model("cursor-grok-4.6-high"), "grok-4-6-high")
+        self.assertEqual(normalize_model("default"), "unknown")
+        self.assertEqual(normalize_model(None), "unknown")
 
     def test_sonnet_46_stream_final(self) -> None:
         usd = price_usd(
