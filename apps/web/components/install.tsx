@@ -31,13 +31,13 @@ export function Install() {
         </a>
         . No API keys. Signup is optional later for Pro/Team.
       </p>
-      <pre className="mt-4 overflow-x-auto rounded-xl bg-white/60 px-4 py-3 text-[12px] leading-relaxed text-ink/75 ring-1 ring-black/[0.04]">
+      <pre className="mt-4 overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-white/60 px-4 py-3 text-[12px] leading-relaxed text-ink/75 ring-1 ring-black/[0.04]">
         <code>{INSTALL_ONE_LINER}</code>
       </pre>
       <p className="mt-3 break-all font-mono text-[11px] leading-relaxed text-muted/80">
         SHA-256 {INSTALL_SHA256}
       </p>
-      <pre className="mt-3 overflow-x-auto rounded-xl bg-white/40 px-4 py-3 text-[11px] leading-relaxed text-ink/60 ring-1 ring-black/[0.03]">
+      <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-white/40 px-4 py-3 text-[11px] leading-relaxed text-ink/60 ring-1 ring-black/[0.03]">
         <code>{INSTALL_VERIFY}</code>
       </pre>
       <ol className="mt-5 list-decimal space-y-1 pl-5 text-[13px] text-muted">
