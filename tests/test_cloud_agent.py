@@ -203,6 +203,30 @@ class IngestAndRosterTests(IsolatedHome):
         cfg = config_mod.load()
         self.assertEqual(cfg["transcripts"]["paths"], [str(dest)])
 
+    def test_default_transcripts_dir_needs_no_flag(self) -> None:
+        empty_claude = Path(self.tmp.name) / "empty-claude"
+        empty_cursor = Path(self.tmp.name) / "empty-cursor"
+        empty_claude.mkdir()
+        empty_cursor.mkdir()
+        from ardoise import paths as paths_mod
+
+        dest = paths_mod.transcripts_dir() / "agent-data"
+        dest.mkdir(parents=True)
+        src = ROOT / "tests" / "fixtures" / "dogfood" / "agent-data"
+        for name in ("Craie", "Encre", "captain"):
+            folder = dest / name
+            folder.mkdir()
+            body = (src / name / "session.jsonl").read_text(encoding="utf-8")
+            (folder / "session.jsonl").write_text(body.replace("/WORKSPACE", str(ROOT)), encoding="utf-8")
+        result = backfill(claude=empty_claude, cursor=empty_cursor)
+        self.assertGreaterEqual(result["inserted"], 3)
+        data = summarize("2026-09")
+        self.assertEqual({row["agent"] for row in data["agents"]}, {"Craie", "Encre", "captain"})
+        text = render_text(data)
+        for name in ("Craie", "Encre", "captain"):
+            self.assertIn(f"{name} $", text)
+        self.assertGreater(float(summarize("2026-09", person="Craie")["cost_usd"]), 0)
+
     def test_cursor_discover_still_skips_agent_transcripts(self) -> None:
         root = Path(self.tmp.name) / ".cursor"
         keep = root / "projects" / "app" / "chat.jsonl"
@@ -229,20 +253,24 @@ class IngestAndRosterTests(IsolatedHome):
         backfill(claude=empty_claude, cursor=empty_cursor, transcripts=drop)
 
         data = summarize("2026-09")
-        names = [row["agent"] for row in data["agents"]]
-        self.assertEqual(names, ["captain", "Craie", "Encre"])
+        names = {row["agent"] for row in data["agents"]}
+        self.assertEqual(names, {"Craie", "Encre", "captain"})
         text = render_text(data)
-        self.assertIn("agents   captain, Craie, Encre", text)
+        for name in ("Craie", "Encre", "captain"):
+            self.assertIn(f"{name} $", text)
+        self.assertIn("agents   ", text)
         self.assertIn("attribution (when present)", text)
 
         craie = summarize("2026-09", person="Craie")
         self.assertEqual(craie["filter"]["kind"], "agent")
         self.assertTrue(craie["filter"]["view_only"])
         self.assertTrue(all(row.get("agent") == "Craie" for row in craie["lines"]))
+        self.assertGreater(float(craie["cost_usd"]), 0)
         self.assertGreaterEqual(craie["month_entries"], 2)
         self.assertEqual(craie["entries"], data["entries"])
         filtered = render_text(craie)
         self.assertIn("filter   Craie", filtered)
+        self.assertIn("$", filtered.split("filter   Craie", 1)[1][:24])
         self.assertNotIn("Encre", json.dumps(craie["lines"]))
 
         written = write_statement("2026-09")
@@ -250,7 +278,9 @@ class IngestAndRosterTests(IsolatedHome):
         html = Path(written["html"]).read_text(encoding="utf-8")
         self.assertIn("Agents ·", md)
         self.assertIn("**Craie**", md)
+        self.assertIn("$", md.split("Agents ·", 1)[1][:80])
         self.assertIn("badge agent", html)
+        self.assertIn("$", html.split("badge agent", 1)[1][:80])
         self.assertNotIn("roster table", html.lower())
 
         agent_stmt = write_statement("2026-09", person="captain")
@@ -259,6 +289,7 @@ class IngestAndRosterTests(IsolatedHome):
         agent_html = Path(agent_stmt["html"]).read_text(encoding="utf-8")
         agent_csv = Path(agent_stmt["csv"]).read_text(encoding="utf-8")
         self.assertIn("Agent **captain**", agent_md)
+        self.assertIn("$", agent_md.split("Agent **captain**", 1)[1][:40])
         self.assertIn("view only", agent_md)
         self.assertIn("badge agent", agent_html)
         self.assertIn("agent filter captain", agent_csv)

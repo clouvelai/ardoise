@@ -177,17 +177,8 @@ def _filter_kind(summary: dict[str, Any]) -> str:
     return str((summary.get("filter") or {}).get("kind") or "person")
 
 
-def _agent_names(summary: dict[str, Any]) -> list[str]:
-    names: list[str] = []
-    seen: set[str] = set()
-    for row in summary.get("agents") or []:
-        text = str((row or {}).get("agent") or "").strip()
-        key = text.casefold()
-        if not text or key in seen:
-            continue
-        seen.add(key)
-        names.append(text)
-    return names
+def _agent_spend_chips(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    return attribution.spend_chips(summary)
 
 
 def _md(summary: dict[str, Any]) -> str:
@@ -203,12 +194,18 @@ def _md(summary: dict[str, Any]) -> str:
     ]
     if seat:
         noun = "Agent" if kind == "agent" else "Seat"
-        lines += [f"{noun} **{seat}** · view only — ledger unchanged.", ""]
+        spend = ""
+        chips = _agent_spend_chips(summary)
+        if kind == "agent" and chips:
+            spend = f" · ${float(chips[0].get('cost_usd') or 0):.4f}"
+        lines += [f"{noun} **{seat}**{spend} · view only — ledger unchanged.", ""]
     else:
-        named = _agent_names(summary)
-        if named:
-            chips = " · ".join(f"**{name}**" for name in named)
-            lines += [f"Agents · {chips}", ""]
+        chips = _agent_spend_chips(summary)
+        if chips:
+            bits = " · ".join(
+                f"**{row['agent']}** ${float(row.get('cost_usd') or 0):.4f}" for row in chips
+            )
+            lines += [f"Agents · {bits}", ""]
     lines += [
         _LEGEND,
         "",
@@ -353,16 +350,21 @@ def _html_page(summary: dict[str, Any]) -> str:
     kind = _filter_kind(summary)
     if seat:
         chip_cls = "badge agent" if kind == "agent" else "badge seat"
+        spend = ""
+        chips = _agent_spend_chips(summary)
+        if kind == "agent" and chips:
+            spend = f" ${float(chips[0].get('cost_usd') or 0):.4f}"
         seat_chip = (
-            f'<p class="seat"><span class="{chip_cls}">{html.escape(seat)}</span> view only</p>'
+            f'<p class="seat"><span class="{chip_cls}">{html.escape(seat)}{spend}</span> view only</p>'
         )
     else:
-        named = _agent_names(summary)
-        if named:
-            chips = "".join(
-                f'<span class="badge agent">{html.escape(name)}</span>' for name in named
+        chips = _agent_spend_chips(summary)
+        if chips:
+            badges = "".join(
+                f'<span class="badge agent">{html.escape(attribution.chip_text(row))}</span>'
+                for row in chips
             )
-            seat_chip = f'<p class="seat agents">{chips}</p>'
+            seat_chip = f'<p class="seat agents">{badges}</p>'
         else:
             seat_chip = ""
 

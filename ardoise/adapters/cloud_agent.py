@@ -344,7 +344,7 @@ def default_drop_roots() -> list[Path]:
     return [
         home / ".cursor" / "cloud-agent-transcripts",
         home / ".cursor" / "agent-data",
-        paths_mod.ardoise_home() / "transcripts",
+        paths_mod.transcripts_dir(),
         home / "agent-data",
     ]
 

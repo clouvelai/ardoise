@@ -74,10 +74,19 @@ def config_path() -> Path:
     return ardoise_home() / "config.json"
 
 
+def transcripts_dir() -> Path:
+    """Default drop folder for Grok Bot / cloud-agent exports."""
+    override = os.environ.get("ARDOISE_TRANSCRIPTS")
+    if override:
+        return Path(override).expanduser()
+    return ardoise_home() / "transcripts"
+
+
 def ensure_home() -> Path:
     root = ardoise_home()
     root.mkdir(parents=True, exist_ok=True)
     queue_dir().mkdir(parents=True, exist_ok=True)
     statements_dir().mkdir(parents=True, exist_ok=True)
+    transcripts_dir().mkdir(parents=True, exist_ok=True)
     (root / "hooks").mkdir(parents=True, exist_ok=True)
     return root

@@ -48,8 +48,8 @@ Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 ```bash
 ardoise                         # status for this UTC month
 ardoise status --json
-ardoise backfill                # Anthropic T0 JSONL + Cursor logs + hook queue
-ardoise backfill --cloud-agent-root ~/exports/cloud-agents
+ardoise backfill                # Anthropic T0 + Cursor + ~/.ardoise/transcripts
+ardoise status --month 2026-09 --roster Craie
 ardoise capture                 # drain ~/.ardoise/queue
 ardoise capture --stdin         # one hook event (used by plugins)
 ardoise statement 2026-09       # writes MD + HTML + CSV
@@ -99,28 +99,26 @@ quiet breakdown only when at least one row is named. Named agents also appear as
 roster chips; `--person` / `--seat` / `--roster` match a seat *or* a named agent.
 Section A vendor lines stay sparse.
 
-In-editor Cursor chat is already T0. Cloud-agent / Grok Bot box paths
-(`agent-data`, exported `transcript.json` + `index.json`) are not under
-`~/.cursor/projects`. Point Ardoise at a local export:
+In-editor Cursor chat is already T0. Named Grok Bot / cloud-agent exports
+(`agent-data`, `transcript.json` + `index.json`) are not under `~/.cursor/projects`.
+`install.sh` creates `~/.ardoise/transcripts`. Drop a fixture tree there and
+plain `backfill` is enough — no flags, no keys:
 
 ```bash
-ardoise backfill --cloud-agent-root ~/exports/cloud-agents
-# or: ARDOISE_CLOUD_AGENT_ROOT, ARDOISE_AGENT_DATA, ARDOISE_TRANSCRIPT_PATHS
+./install.sh
+mkdir -p ~/.ardoise/transcripts
+cp -R tests/fixtures/dogfood/agent-data ~/.ardoise/transcripts/
+ardoise backfill
+ardoise status --month 2026-09
+ardoise status --month 2026-09 --roster Craie
+# or: tests/dogfood-grok.sh   # must print DOGFOOD-OK
 ```
 
-Optional `config.json`:
-
-```json
-{
-  "transcripts": {
-    "paths": ["~/exports/cloud-agents", "~/agent-data"]
-  }
-}
-```
-
-If they already exist, Ardoise also reads `~/.cursor/cloud-agent-transcripts`,
-`~/.cursor/agent-data`, `~/agent-data`, and `~/.ardoise/transcripts`. Hooks and
-the adapter fail-open. Prompts are scrubbed. No marketplace or credentials.
+If they already exist, backfill also reads `~/.cursor/cloud-agent-transcripts`,
+`~/.cursor/agent-data`, and `~/agent-data`. Extra roots:
+`ARDOISE_CLOUD_AGENT_ROOT`, `ARDOISE_AGENT_DATA`, `ARDOISE_TRANSCRIPT_PATHS`,
+`--cloud-agent-root`, or `config.json` `transcripts.paths`. Hooks and the
+adapter fail-open. Prompts are scrubbed. No marketplace or credentials.
 
 **Anthropic T2a** lights up when the org primary owner mints an Analytics API
 key at [claude.ai → Organization settings → API](https://claude.ai) (`read:analytics`)

@@ -6,7 +6,7 @@ Local AI spend ledger. Core is **Python 3 stdlib only**.
 ./install.sh
 bin/ardoise status --json
 bin/ardoise backfill
-bin/ardoise backfill --cloud-agent-root ~/exports/cloud-agents
+bin/ardoise status --month 2026-09 --roster Craie
 bin/ardoise statement YYYY-MM
 bin/ardoise statement YYYY-MM --person alice
 bin/ardoise status --json --seat alice
@@ -19,6 +19,7 @@ bin/ardoise invoice add --vendor anthropic --cycle YYYY-MM --usd-cents N
 bin/ardoise invoice paste --file invoices.jsonl
 bin/ardoise estimate --model MODEL --input-tokens N --output-tokens N
 tests/fresh-box.sh   # must print FRESH-BOX-OK offline
+tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/captain spend
 ```
 
 - Ledger: `~/.ardoise/ledger.db`

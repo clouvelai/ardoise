@@ -201,3 +201,13 @@ def present(groups: list[dict[str, Any]] | None, column: str) -> list[dict[str, 
 def any_present(summary: dict[str, Any] | None) -> bool:
     data = summary or {}
     return any(present(data.get(f"by_{dim}"), dim) for dim in DIMENSIONS)
+
+
+def spend_chips(summary: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Named agent buckets with T0 spend, already sorted highest-first."""
+    return present((summary or {}).get("by_agent"), "agent")
+
+
+def chip_text(row: dict[str, Any]) -> str:
+    name = str(row.get("agent") or "").strip()
+    return f"{name} ${float(row.get('cost_usd') or 0):.4f}"

@@ -184,7 +184,6 @@ def render_text(data: dict[str, Any]) -> str:
         billed_line = "billed    (none)  — invoice add or T1/T2; T0 vendor lines are estimated"
     filt = data.get("filter") or {}
     roster_rows = data.get("roster") or []
-    agent_rows = data.get("agents") or []
     header = [
         f"Ardoise  {data['month']}",
         f"ledger   {data['ledger']}",
@@ -194,19 +193,19 @@ def render_text(data: dict[str, Any]) -> str:
         f"tokens   in={data['input_tokens']} out={data['output_tokens']} "
         f"cache_read={data['cache_read_tokens']} cache_write={data['cache_creation_tokens']}",
     ]
+    chips = attribution.spend_chips(data)
     if filt:
-        header.append(
-            f"filter   {roster.display(filt.get('canonical') or filt.get('query'))}  "
-            "(view only — ledger unchanged)"
-        )
+        label = roster.display(filt.get("canonical") or filt.get("query"))
+        extra = ""
+        if filt.get("kind") == "agent" and chips:
+            extra = f"  ${float(chips[0].get('cost_usd') or 0):.4f}"
+        header.append(f"filter   {label}{extra}  (view only — ledger unchanged)")
     else:
         if len(roster_rows) > 1:
             names = [roster.display(row.get("person")) for row in roster_rows]
             header.append("roster   " + ", ".join(names))
-        agent_names = [str(row.get("agent") or "").strip() for row in agent_rows]
-        agent_names = [name for name in agent_names if name]
-        if agent_names:
-            header.append("agents   " + ", ".join(agent_names))
+        if chips:
+            header.append("agents   " + ", ".join(attribution.chip_text(row) for row in chips))
     lines = header + ["", "section A — vendor lines"]
     if not section_a:
         lines.append("  (empty)")
