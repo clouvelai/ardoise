@@ -2,8 +2,10 @@
 
 T0 capture works with no credentials. T2 pull is gated on
 CURSOR_ADMIN_API_KEY (CURSOR_API_KEY accepted as alias). Events join T0
-hook/transcript rows on conversation_id (session_id). Unmatched →
-project ``unattributed``.
+hook/transcript rows on conversation_id (session_id) for project, and on
+conversation_id / cloudAgentId (bcId) for ``agent=`` when a T0 row or local
+sidecar already names that run. Unmatched project → ``unattributed``.
+Unknown agent ids stay unset. Never invents agent names.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from typing import Any, Callable, Iterator
 
 from ardoise import db, paths, prices
 from ardoise.adapters.hook_event import event_to_entry
-from ardoise.attribution import DIMENSIONS, extract
+from ardoise.attribution import DIMENSIONS, bind, clean_id, extract
 from ardoise.privacy import scrub
 from ardoise.vendors.anthropic import parse_t0_line
 from ardoise.vendors.contract import (
@@ -155,6 +157,13 @@ def event_id(event: dict[str, Any]) -> str:
             str(event.get("timestamp") or ""),
             str(event.get("userEmail") or event.get("user_email") or ""),
             str(event.get("conversationId") or event.get("conversation_id") or ""),
+            str(
+                event.get("cloudAgentId")
+                or event.get("cloud_agent_id")
+                or event.get("bcId")
+                or event.get("bc_id")
+                or ""
+            ),
             str(event.get("model") or ""),
             str(usage.get("inputTokens") or usage.get("input_tokens") or 0),
             str(usage.get("outputTokens") or usage.get("output_tokens") or 0),
@@ -217,6 +226,13 @@ def parse_event(event: dict[str, Any]) -> dict[str, Any] | None:
         return None
     eid = event_id(event)
     conversation = event.get("conversationId") or event.get("conversation_id")
+    bc = (
+        event.get("cloudAgentId")
+        or event.get("cloud_agent_id")
+        or event.get("bcId")
+        or event.get("bc_id")
+    )
+    attrs = extract(event)
     occurred = _ms_to_iso(event.get("timestamp")) or db._now()
     if charged_f is not None:
         cost = round(charged_f / 100.0, 8)
@@ -238,8 +254,12 @@ def parse_event(event: dict[str, Any]) -> dict[str, Any] | None:
         "request_id": eid,
         "event_id": eid,
         "conversation_id": str(conversation) if conversation else None,
-        "session_id": str(conversation) if conversation else None,
+        "bc_id": str(bc) if bc else None,
+        "session_id": str(conversation or bc) if (conversation or bc) else None,
         "model": event.get("model"),
+        "agent": attrs.get("agent"),
+        "skill": attrs.get("skill"),
+        "effort": attrs.get("effort"),
         "occurred_at": occurred,
         "cycle": cycle_of(occurred),
         "input_tokens": input_tokens,
@@ -330,6 +350,40 @@ def fetch_usage_events(
     return events
 
 
+def _id_list(*values: Any) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in values:
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def event_join_ids(*layers: dict[str, Any] | None) -> list[str]:
+    """conversationId + cloudAgentId / bcId from an Admin event or parsed row."""
+    values: list[Any] = []
+    for layer in layers:
+        if not isinstance(layer, dict):
+            continue
+        values.extend(
+            [
+                layer.get("conversationId"),
+                layer.get("conversation_id"),
+                layer.get("cloudAgentId"),
+                layer.get("cloud_agent_id"),
+                layer.get("bcId"),
+                layer.get("bc_id"),
+                layer.get("session_id"),
+            ]
+        )
+    return _id_list(*values)
+
+
 def project_for_conversation(conn: Any, conversation_id: str | None) -> str:
     if not conversation_id:
         return UNATTRIBUTED
@@ -352,9 +406,66 @@ def project_for_conversation(conn: Any, conversation_id: str | None) -> str:
     return UNATTRIBUTED
 
 
+def project_for_ids(conn: Any, ids: list[str] | None) -> str:
+    for ident in ids or []:
+        found = project_for_conversation(conn, ident)
+        if found != UNATTRIBUTED:
+            return found
+    return UNATTRIBUTED
+
+
+def _agent_from_ledger(conn: Any, ident: str) -> str | None:
+    placeholders = ",".join("?" for _ in T0_SOURCES)
+    row = conn.execute(
+        f"""
+        SELECT agent FROM events
+        WHERE session_id = ?
+          AND source IN ({placeholders})
+          AND agent IS NOT NULL
+          AND TRIM(agent) != ''
+        ORDER BY ingested_at DESC
+        LIMIT 1
+        """,
+        (ident, *T0_SOURCES),
+    ).fetchone()
+    if not row:
+        return None
+    return clean_id(row["agent"])
+
+
+def agent_for_ids(
+    conn: Any | None,
+    ids: list[str] | None,
+    *,
+    raw: dict[str, Any] | None = None,
+    parsed: dict[str, Any] | None = None,
+    run_agents: dict[str, str] | None = None,
+) -> str | None:
+    """Named agent already present on the event, a T0 row, or a sidecar map.
+
+    Never invents. Job titles, prompts, and unknown ids stay unset.
+    """
+    named = extract(raw).get("agent") if raw else None
+    if not named and parsed:
+        named = bind(parsed).get("agent")
+    if named:
+        return named
+    for ident in ids or []:
+        if conn is not None:
+            found = _agent_from_ledger(conn, ident)
+            if found:
+                return found
+        mapped = (run_agents or {}).get(ident)
+        cleaned = clean_id(mapped)
+        if cleaned:
+            return cleaned
+    return None
+
+
 def upsert_t2_entry(conn: Any, row: dict[str, Any]) -> str:
     """Idempotent upsert keyed by event id. Writes the events table (entries is a view)."""
     occurred = row.get("occurred_at") or db._now()
+    attrs = bind(row)
     payload = {
         "vendor": VENDOR,
         "source": SOURCE,
@@ -374,14 +485,17 @@ def upsert_t2_entry(conn: Any, row: dict[str, Any]) -> str:
         "billed_cents": row.get("billed_cents"),
         "cost_usd": float(row["cost_usd"]),
         "tier": "T2",
-        "session_id": row.get("session_id") or row.get("conversation_id"),
+        "session_id": row.get("session_id") or row.get("conversation_id") or row.get("bc_id"),
         "cwd": row.get("cwd"),
+        "agent": attrs.get("agent"),
+        "skill": attrs.get("skill"),
+        "effort": attrs.get("effort"),
         "ingested_at": db._now(),
     }
     existing = conn.execute(
         """
         SELECT project, model, input_tokens, output_tokens,
-               cache_creation_tokens, cache_read_tokens, cost_usd, session_id
+               cache_creation_tokens, cache_read_tokens, cost_usd, session_id, agent
         FROM events WHERE message_id = ? AND request_id = ?
         """,
         (payload["message_id"], payload["request_id"]),
@@ -393,12 +507,14 @@ def upsert_t2_entry(conn: Any, row: dict[str, Any]) -> str:
               vendor, source, person, cycle, message_id, request_id, project, model,
               occurred_at, input_tokens, output_tokens, cache_creation_tokens,
               cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens,
-              billed_cents, cost_usd, tier, session_id, cwd, ingested_at
+              billed_cents, cost_usd, tier, session_id, cwd, agent, skill, effort,
+              ingested_at
             ) VALUES (
               :vendor, :source, :person, :cycle, :message_id, :request_id, :project, :model,
               :occurred_at, :input_tokens, :output_tokens, :cache_creation_tokens,
               :cache_read_tokens, :cache_creation_5m_tokens, :cache_creation_1h_tokens,
-              :billed_cents, :cost_usd, :tier, :session_id, :cwd, :ingested_at
+              :billed_cents, :cost_usd, :tier, :session_id, :cwd, :agent, :skill, :effort,
+              :ingested_at
             )
             """,
             payload,
@@ -413,6 +529,7 @@ def upsert_t2_entry(conn: Any, row: dict[str, Any]) -> str:
         and int(existing["cache_read_tokens"] or 0) == payload["cache_read_tokens"]
         and abs(float(existing["cost_usd"] or 0) - payload["cost_usd"]) < 1e-8
         and str(existing["session_id"] or "") == str(payload["session_id"] or "")
+        and str(existing["agent"] or "") == str(payload["agent"] or "")
     )
     if same:
         return "skipped"
@@ -434,6 +551,9 @@ def upsert_t2_entry(conn: Any, row: dict[str, Any]) -> str:
           tier = :tier,
           session_id = COALESCE(:session_id, session_id),
           cwd = COALESCE(:cwd, cwd),
+          agent = COALESCE(:agent, agent),
+          skill = COALESCE(:skill, skill),
+          effort = COALESCE(:effort, effort),
           ingested_at = :ingested_at
         WHERE message_id = :message_id AND request_id = :request_id
         """,
@@ -476,6 +596,7 @@ def pull(
     environ: dict[str, str] | None = None,
     now: datetime | None = None,
     since_ms: int | None = None,
+    run_agents: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Ingest T2 events (join + unattributed). No-op without credentials."""
     key = admin_api_key(environ)
@@ -486,18 +607,40 @@ def pull(
     stamp = now or datetime.now(timezone.utc)
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=timezone.utc)
+    if run_agents is None:
+        from ardoise.adapters.cloud_agent import load_named_run_agents
+
+        sidecar_agents = load_named_run_agents()
+    else:
+        sidecar_agents = run_agents
 
     def _run(cx: Any) -> dict[str, Any]:
         start_ms, end_ms = _window_ms(conn=cx, now=stamp, since_ms=since_ms)
         events = fetch_usage_events(transport, start_ms=start_ms, end_ms=end_ms)
-        totals = {"inserted": 0, "updated": 0, "skipped": 0, "unattributed": 0, "attributed": 0}
+        totals = {
+            "inserted": 0,
+            "updated": 0,
+            "skipped": 0,
+            "unattributed": 0,
+            "attributed": 0,
+            "agent_attributed": 0,
+            "agent_unattributed": 0,
+        }
         max_ts = start_ms
         for raw in events:
             parsed = parse_event(raw)
             if not parsed:
                 continue
-            parsed["project"] = project_for_conversation(cx, parsed.get("conversation_id"))
+            ids = event_join_ids(raw, parsed)
+            parsed["project"] = project_for_ids(cx, ids)
+            parsed["agent"] = agent_for_ids(
+                cx, ids, raw=raw, parsed=parsed, run_agents=sidecar_agents
+            )
             totals["unattributed" if parsed["project"] == UNATTRIBUTED else "attributed"] += 1
+            if parsed.get("agent"):
+                totals["agent_attributed"] += 1
+            else:
+                totals["agent_unattributed"] += 1
             kind = upsert_t2_entry(cx, parsed)
             totals[kind] = totals.get(kind, 0) + 1
             ev_ms = _to_ms(raw.get("timestamp"))
@@ -518,6 +661,8 @@ def pull(
             "skipped_rows": totals["skipped"],
             "unattributed": totals["unattributed"],
             "attributed": totals["attributed"],
+            "agent_attributed": totals["agent_attributed"],
+            "agent_unattributed": totals["agent_unattributed"],
             "watermark": watermark,
             "start_ms": start_ms,
             "end_ms": end_ms,

@@ -1,0 +1,13 @@
+[
+  {
+    "role": "assistant",
+    "timestamp": "2026-09-13T16:05:00.000Z",
+    "model": "cursor-grok-4.6-high",
+    "message": {
+      "id": "msg_prompt_only_encre",
+      "role": "assistant",
+      "content": "SECRET_PROMPT_ONLY_BODY"
+    },
+    "prompt": "SECRET_PROMPT_ONLY_PROMPT"
+  }
+]

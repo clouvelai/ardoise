@@ -88,8 +88,12 @@ with the highest `output_tokens`.
 
 **Project** is the git remote `owner/repo` for the event `cwd` (or the current
 workspace). T2 events join T0 hook rows on `conversation_id`; unmatched events
-are stored as project `unattributed`. Without an Admin API key, Cursor capture
-stays T0-only. The key is never written to the ledger.
+are stored as project `unattributed`. When `CURSOR_ADMIN_API_KEY` is set,
+`vendor pull cursor` also copies `agent=` if `conversationId` or
+`cloudAgentId` (`bcId`) matches a T0/hook row or local sidecar that already
+named that run. Unknown ids stay unattributed. Without the key, Cursor
+capture stays T0-only. The key is never written to the ledger. See
+[docs/meter-shape.md](docs/meter-shape.md).
 
 **Attribution** (agent / skill / effort) is copied from T0 transcript and hook
 JSON when those identifiers are already present (`agentId`, `attributionSkill`,
@@ -119,6 +123,12 @@ If they already exist, backfill also reads `~/.cursor/cloud-agent-transcripts`,
 `ARDOISE_CLOUD_AGENT_ROOT`, `ARDOISE_AGENT_DATA`, `ARDOISE_TRANSCRIPT_PATHS`,
 `--cloud-agent-root`, or `config.json` `transcripts.paths`. Hooks and the
 adapter fail-open. Prompts are scrubbed. No marketplace or credentials.
+
+Usage-shaped fixtures (like `tests/fixtures/dogfood/agent-data`) produce
+agent chips. Live cloud/box trees that are prompt-only will **not** meter
+until a platform export includes usage objects, or optional Admin T2 can
+join a known `bcId` / conversation. Empty ledger after install → backfill
+on those trees is expected. No keys required. Do not estimate-from-prompt.
 
 **Anthropic T2a** lights up when the org primary owner mints an Analytics API
 key at [claude.ai → Organization settings → API](https://claude.ai) (`read:analytics`)

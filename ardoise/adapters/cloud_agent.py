@@ -54,6 +54,16 @@ _SKIP_NAMES = frozenset(
 _SKIP_PARTS = frozenset({".git", "node_modules", "__pycache__"})
 _SIDECARS = ("index.json", "run.json", "agent.json", "meta.json")
 _ENV_ROOTS = ("ARDOISE_CLOUD_AGENT_ROOT", "ARDOISE_AGENT_DATA")
+_RUN_ID_KEYS = (
+    "sessionId",
+    "session_id",
+    "conversation_id",
+    "conversationId",
+    "bcId",
+    "bc_id",
+    "cloudAgentId",
+    "cloud_agent_id",
+)
 
 
 def _person() -> str:
@@ -138,6 +148,35 @@ def _normalized_usage(obj: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _run_id_values(data: dict[str, Any] | None) -> list[str]:
+    """Stable conversation / cloud-agent run ids. Never treats a job title as an id."""
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: Any) -> None:
+        if not isinstance(raw, str):
+            return
+        text = raw.strip()
+        if not text or text in seen:
+            return
+        seen.add(text)
+        found.append(text)
+
+    if not isinstance(data, dict):
+        return found
+    layers: list[dict[str, Any]] = [data]
+    nested = data.get("agent")
+    if isinstance(nested, dict):
+        layers.append(nested)
+    for layer in layers:
+        for key in _RUN_ID_KEYS:
+            _add(layer.get(key))
+        ident = layer.get("id")
+        if isinstance(ident, str) and ident.strip().startswith("bc-"):
+            _add(ident)
+    return found
+
+
 def _meta_from(data: dict[str, Any]) -> dict[str, Any]:
     """Sidecar identity only — never the run title (`name`)."""
     attrs = extract(data)
@@ -145,18 +184,9 @@ def _meta_from(data: dict[str, Any]) -> dict[str, Any]:
     for key in DIMENSIONS:
         if attrs.get(key):
             out[key] = attrs[key]
-    for key in (
-        "sessionId",
-        "session_id",
-        "conversation_id",
-        "conversationId",
-        "bcId",
-        "bc_id",
-    ):
-        val = data.get(key)
-        if isinstance(val, str) and val.strip():
-            out["session_id"] = val.strip()
-            break
+    ids = _run_id_values(data)
+    if ids:
+        out["session_id"] = ids[0]
     model = data.get("model") or data.get("model_id") or data.get("modelId")
     if model:
         out["model"] = model
@@ -398,6 +428,55 @@ def transcript_roots(
         seen.add(resolved)
         out.append(path)
     return out
+
+
+def named_run_agents(root: Path) -> dict[str, str]:
+    """Map bcId / conversation id → already-named agent from sidecars.
+
+    Prompt-only trees still yield this identity map. No usage rows are invented.
+    """
+    mapping: dict[str, str] = {}
+    if not root.exists():
+        return mapping
+    try:
+        iterator = root.rglob("*")
+    except OSError:
+        return mapping
+    for path in iterator:
+        try:
+            if not path.is_file() or path.name not in _SIDECARS:
+                continue
+            if any(part in _SKIP_PARTS for part in path.parts):
+                continue
+            if path.name in _SKIP_NAMES or path.name.startswith("."):
+                continue
+        except OSError:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, json.JSONDecodeError, UnicodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        agent = extract(data).get("agent")
+        if not agent:
+            continue
+        for ident in _run_id_values(data):
+            mapping.setdefault(ident, agent)
+    return mapping
+
+
+def load_named_run_agents(
+    *,
+    extra: list[Path] | None = None,
+    config: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    """Merge sidecar identity maps from configured + well-known transcript roots."""
+    mapping: dict[str, str] = {}
+    for root in transcript_roots(extra=extra, config=config):
+        for ident, agent in named_run_agents(root).items():
+            mapping.setdefault(ident, agent)
+    return mapping
 
 
 def iter_cloud_agent(root: Path) -> Iterator[tuple[Path, dict[str, Any]]]:
