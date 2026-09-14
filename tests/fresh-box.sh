@@ -263,6 +263,7 @@ if "skipped" not in reprice or "unknown" not in reprice:
     raise SystemExit(f"reprice json missing skipped/unknown: {reprice}")
 
 if status.get("month") != "2026-09":
+    raise SystemExit(f"status month {status.get('month')}")
 if int(status.get("month_entries") or 0) != 3:
     raise SystemExit(f"status month_entries={status.get('month_entries')}")
 if abs(float(status.get("cost_usd") or 0) - 0.020725) > 1e-6:
