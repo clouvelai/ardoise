@@ -6,7 +6,9 @@
 export const COPY = {
   invalidEmail: "Enter a valid email.",
   invalidCode: "That code didn’t work.",
-  invalidAuth: "That sign-in link or code didn’t work.",
+  invalidAuth: "That sign-in link didn’t work.",
+  sentMagicLink: "We sent a magic link to",
+  openMagicLink: "Check your email and open the link.",
   network: "Can’t reach Ardoise right now.",
   notWired: "Coming soon — API not wired.",
   signIn: "Sign in to continue.",

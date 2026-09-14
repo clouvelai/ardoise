@@ -14,12 +14,11 @@ import {
   otpMessage,
   requestEmailOtp,
   sessionFromRedirect,
-  verifyEmailOtp,
 } from "@/lib/saas-otp";
 import { getSession, saveSession } from "@/lib/saas-session";
 import { Mascot } from "./mark";
 
-type Step = "email" | "code" | "done";
+type Step = "email" | "check" | "done";
 
 const fieldClass =
   "w-full rounded-full border border-black/[0.06] bg-mist/70 px-5 py-3.5 text-[15px] text-ink outline-none transition placeholder:text-muted/70 focus:border-grape/40 focus:ring-4 focus:ring-grape/15 disabled:opacity-70";
@@ -40,7 +39,6 @@ export function SignupForm() {
   const nextPath = safeNextPath(searchParams.get("next"));
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,31 +116,8 @@ export function SignupForm() {
     try {
       const result = await requestEmailOtp(email, { next: nextPath });
       setEmail(result.email);
-      setStep("code");
+      setStep("check");
       setStatus(null);
-    } catch (caught) {
-      if (isOtpNotWired(caught)) {
-        setStatus(COPY.notWired);
-        return;
-      }
-      setError(otpMessage(caught));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function onVerify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    try {
-      const session = await verifyEmailOtp(email, code);
-      saveSession(session);
-      if (nextPath) {
-        router.replace(nextPath);
-        return;
-      }
-      router.replace("/app");
     } catch (caught) {
       if (isOtpNotWired(caught)) {
         setStatus(COPY.notWired);
@@ -209,41 +184,17 @@ export function SignupForm() {
           </form>
         ) : null}
 
-        {!accepting && step === "code" ? (
-          <form onSubmit={onVerify} className="space-y-5">
-            <p className="text-[15px] text-muted">
-              Check {email} for a sign-in link or a code.
+        {!accepting && step === "check" ? (
+          <div className="space-y-5">
+            <p className="text-[15px] leading-relaxed text-muted">
+              {COPY.sentMagicLink} {email}. {COPY.openMagicLink}
             </p>
-            <label className="block">
-              <span className="sr-only">One-time code</span>
-              <input
-                type="text"
-                name="code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-                spellCheck={false}
-                required
-                maxLength={8}
-                value={code}
-                onChange={(event) =>
-                  setCode(event.target.value.replace(/\s/g, ""))
-                }
-                placeholder="••••••"
-                disabled={pending}
-                className={`${fieldClass} text-center text-[18px] tracking-[0.35em] placeholder:tracking-[0.35em] placeholder:text-muted/50`}
-              />
-            </label>
-            <button type="submit" disabled={pending} className={primaryClass}>
-              {pending ? "Checking…" : "Verify"}
-            </button>
             <div className="flex items-center justify-center gap-4 text-[13px] font-medium">
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => {
                   setStep("email");
-                  setCode("");
                   setError(null);
                   setStatus(null);
                 }}
@@ -260,7 +211,7 @@ export function SignupForm() {
                 Resend
               </button>
             </div>
-          </form>
+          </div>
         ) : null}
 
         {!accepting && step === "done" ? (
