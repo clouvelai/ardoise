@@ -217,7 +217,7 @@ def _help_text(*argv: str) -> str:
         except SystemExit as exc:
             if exc.code not in (0, None):
                 raise
-    return buf.getvalue() + err.getvalue()
+    return " ".join((buf.getvalue() + err.getvalue()).split())
 
 
 class HappyPathHelpTests(unittest.TestCase):

@@ -127,12 +127,21 @@ def build_parser() -> argparse.ArgumentParser:
     vt = vsub.add_parser(
         "test",
         help="Print T0 capabilities (advanced: probe optional T2/T2a if a key is set)",
+        description=(
+            "Print T0 capabilities. Advanced: probe optional T2/T2a if a "
+            "Team/Enterprise key is set. Missing key stays T0-only."
+        ),
     )
     vt.add_argument("name", help="Vendor name (anthropic, cursor)")
     vt.add_argument("--json", action="store_true")
     vp = vsub.add_parser(
         "pull",
         help="Advanced: pull optional T2/T2a billed events when a Team/Enterprise key is set",
+        description=(
+            "Advanced: pull optional T2/T2a billed events when a "
+            "Team/Enterprise key is set. Individual Cursor plans have no "
+            "Team Admin API. Missing key stays T0-only."
+        ),
     )
     vp.add_argument("name", help="Vendor name (anthropic, cursor)")
     vp.add_argument("--json", action="store_true")
