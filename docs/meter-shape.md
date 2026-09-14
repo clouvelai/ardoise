@@ -1,6 +1,8 @@
 # Meter shape
 
-Product story: [grok-bot.md](grok-bot.md).
+**Team / Enterprise Admin only — not Free.**
+
+Product story (Free): [grok-bot.md](grok-bot.md).
 
 Install and `backfill` never require API keys. They only persist rows that
 already carry a usage object (token counts and/or charged cents). Hooks do
@@ -15,22 +17,34 @@ a prompt-only tree is expected.
 
 Ardoise does **not** invent meters and does **not** estimate-from-prompt.
 
-Until a platform export includes usage objects, **or** optional Cursor
-Admin T2 can join a known run, those trees will not show spend.
+Until a usage-shaped export or hook includes usage objects, those trees
+will not show spend. Admin T2 is not the Free fix for empty chips.
 
-## What actually meters
+## What actually meters (Free)
 
 | Path | When it counts |
 | --- | --- |
 | In-editor Cursor T0 hooks | Hook payload already includes usage. `agent=` is copied only when the hook already named one. |
 | T0 JSONL (Claude / Cursor / usage-shaped cloud-agent) | Transcript line already has tokens. Named `agent` / `skill` / `effort` are copied when present. |
-| Optional Cursor Admin T2 | `CURSOR_ADMIN_API_KEY` is set. Live probe ignores `CURSOR_API_KEY`. `ardoise vendor pull cursor` fetches Admin usage events. |
 
-T2 is never required at install, backfill, or `tests/fresh-box.sh` /
-`tests/dogfood-grok.sh`. It is **advanced / optional (Team/Enterprise)** —
-not a post-install next step. Missing key → T0-only skip, exit 0.
+`tests/fresh-box.sh` and `tests/dogfood-grok.sh` stay on this path.
+No keys.
 
-## How T2 join sets `agent=`
+## Team / Enterprise Admin only — not Free
+
+Cursor Admin T2 is **not** a next step after install. It needs a real
+Team / Enterprise Admin key on a plan that exposes the Team Admin API
+(cursor.com/dashboard → API Keys, `admin:*` when available). Solo /
+personal keys — including `CURSOR_API_KEY` — often get `401 Invalid
+Team API Key` and are not used for live probe. Do not treat Admin
+smoke as working today.
+
+`CURSOR_ADMIN_API_KEY` plus `ardoise vendor pull cursor` can fetch
+Admin usage events. Live probe ignores `CURSOR_API_KEY`. Missing or
+ineligible key → T0-only skip, exit 0. CI and offline tests use
+fixtures/mocks only — no live key.
+
+### How T2 join sets `agent=`
 
 Admin usage events do not name a launching agent. They expose join keys:
 
@@ -48,9 +62,3 @@ via `ardoise.attribution` (never invented):
 Unknown ids stay unattributed. Job titles, folder names, and prompt text
 are never treated as agent names. Project join is unchanged: conversation
 → T0 `owner/repo`, else project `unattributed`.
-
-Admin T2 needs a real Team / Enterprise Admin key (cursor.com/dashboard
-→ API Keys, `admin:*` when available). Solo / personal keys — including
-`CURSOR_API_KEY` — often get `401 Invalid Team API Key` and are not
-used for live probe. Do not treat Admin smoke as working today. CI and
-offline tests use fixtures/mocks only — no live key.

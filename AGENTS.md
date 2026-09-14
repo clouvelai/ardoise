@@ -27,7 +27,7 @@ tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/
 - Dedupe: `message.id` + `requestId` (keep highest `output_tokens`)
 - Project: `git remote` `owner/repo`
 - Attribution: persist `agent` / `skill` / `effort` when a T0 transcript or hook already names them; never invent; missing stays unattributed
-- Meter-shape: prompt-only cloud/box transcripts do not meter (empty ledger is expected). Cursor Admin T2 is **advanced/optional (Team/Enterprise)** — individual plans have no Admin API key. Not required for Grok Bot / Free, and not a post-install next step. When `CURSOR_ADMIN_API_KEY` is set and the user explicitly runs `vendor pull cursor`, T2 joins a named agent only if `cloudAgentId`/`bcId` or `conversationId` is already known. See [docs/meter-shape.md](docs/meter-shape.md). Install/backfill/dogfood never require keys.
+- Meter-shape: prompt-only cloud/box transcripts do not meter (empty ledger is expected). Install/backfill/dogfood never require keys. Team / Enterprise only (not Free): `vendor test cursor` / `vendor pull cursor` — see [docs/meter-shape.md](docs/meter-shape.md). Individual Cursor plans have no Team Admin API key.
 - Never persist prompts or credentials
 - Soft caps and `ardoise estimate` never block the editor
 - Do not add third-party Python deps to `ardoise/`
