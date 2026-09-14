@@ -19,6 +19,14 @@ export default function BillingSuccessPage() {
             Local ledger stays on your machine.
           </p>
           <Install className="mt-10 w-full max-w-3xl" />
+          <p className="mt-8 max-w-xl text-[13px] leading-relaxed text-muted">
+            Install once. After capture hooks or a meter land, every bot’s
+            spend — captain, Craie, Encre, roster — can show on the local
+            ledger. Prompts scrubbed. No keys.
+          </p>
+          <p className="mt-2 text-[12px] text-muted/65">
+            Sync and invoice-grade can wait for Pro.
+          </p>
         </div>
       </section>
     </PageShell>
