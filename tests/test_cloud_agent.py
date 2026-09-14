@@ -20,6 +20,7 @@ from ardoise import attribution, db  # noqa: E402
 from ardoise.adapters.cloud_agent import (  # noqa: E402
     discover_transcript_files,
     iter_transcript_objects,
+    named_run_agents,
     parse_line,
     sidecar_meta,
     transcript_roots,
@@ -102,6 +103,7 @@ class ParseTests(unittest.TestCase):
         path = CLOUD / "craie-run" / "transcript.json"
         inherited = sidecar_meta(path)
         self.assertEqual(inherited.get("agent"), "Craie")
+        self.assertEqual(inherited.get("session_id"), "bc-00000000-0000-0000-0000-000000000001")
         self.assertNotIn("What did Craie spend", json.dumps(inherited))
         objs = list(iter_transcript_objects(path))
         self.assertEqual(len(objs), 1)
@@ -109,6 +111,23 @@ class ParseTests(unittest.TestCase):
         assert entry is not None
         self.assertEqual(entry["agent"], "Craie")
         self.assertEqual(entry["message_id"], "msg_cloud_craie")
+        self.assertEqual(entry["session_id"], "bc-00000000-0000-0000-0000-000000000001")
+
+    def test_named_run_agents_maps_bc_id_never_invents(self) -> None:
+        mapping = named_run_agents(CLOUD)
+        self.assertEqual(mapping.get("bc-00000000-0000-0000-0000-000000000001"), "Craie")
+        self.assertEqual(mapping.get("bc-00000000-0000-0000-0000-000000000042"), "Encre")
+        self.assertNotIn("bc-00000000-0000-0000-0000-000000000099", mapping)
+        self.assertNotIn("What should Encre ship next", mapping.values())
+        self.assertNotIn("Fix the billing success page", mapping.values())
+
+    def test_prompt_only_transcript_does_not_invent_meters(self) -> None:
+        path = CLOUD / "prompt-only-run" / "transcript.json"
+        inherited = sidecar_meta(path)
+        self.assertEqual(inherited.get("agent"), "Encre")
+        objs = list(iter_transcript_objects(path))
+        self.assertEqual(len(objs), 1)
+        self.assertIsNone(parse_line(objs[0], inherited=inherited))
 
     def test_unnamed_sidecar_stays_unattributed(self) -> None:
         path = CLOUD / "unnamed-run" / "transcript.json"
@@ -166,7 +185,13 @@ class IngestAndRosterTests(IsolatedHome):
         self.assertEqual(rows["msg_cloud_craie"]["agent"], "Craie")
         self.assertEqual(rows["msg_box_captain"]["agent"], "captain")
         self.assertIsNone(rows["msg_cloud_anon"]["agent"])
-        for needle in (b"SECRET_CLOUD_PROMPT", b"SECRET_BOX_PROMPT", b"SECRET_SHOULD_NOT_BE_READ"):
+        for needle in (
+            b"SECRET_CLOUD_PROMPT",
+            b"SECRET_BOX_PROMPT",
+            b"SECRET_SHOULD_NOT_BE_READ",
+            b"SECRET_PROMPT_ONLY_PROMPT",
+            b"SECRET_PROMPT_ONLY_BODY",
+        ):
             self.assertNotIn(needle, blob)
 
     def test_configurable_root_env_and_config(self) -> None:

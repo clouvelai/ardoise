@@ -1,0 +1,15 @@
+{
+  "id": "bc-00000000-0000-0000-0000-000000000042",
+  "name": "What should Encre ship next",
+  "status": "FINISHED",
+  "model": "cursor-grok-4.6-high",
+  "agentName": "Encre",
+  "createdAt": "2026-09-13T16:00:00.000Z",
+  "agent": {
+    "id": "bc-00000000-0000-0000-0000-000000000042",
+    "name": "What should Encre ship next",
+    "status": "FINISHED",
+    "env": {"type": "cloud"},
+    "agentName": "Encre"
+  }
+}
