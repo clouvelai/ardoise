@@ -243,7 +243,7 @@ def summarize(
             f"Cursor: {cursor_join} session(s), $0 — Team Admin or usage-shaped events needed for cents"
         )
     if not invoice_grade:
-        notes.append("Estimated (Free). Upgrade to Pro for invoice-grade statements.")
+        notes.append("Estimated (Free). Upgrade to Pro to paste a vendor bill for billed totals.")
 
     return {
         "ok": True,
@@ -299,6 +299,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"| Statement number | {doc.get('number')} |",
         f"| Statement date | {doc.get('statement_date')} |",
         f"| Usage period | {period} |",
+        f"| Truth | {'Billed' if invoice_grade else 'Estimate'} |",
         f"| Total | {_md_money(doc.get('total_usd'), places=places)} |",
         "",
         "| Description | Quantity | Rate | Amount |",
@@ -347,7 +348,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         ]
     lines.append(f"| **Total** |  |  | **{_md_money(doc.get('total_usd'), places=places)}** |")
     if not invoice_grade:
-        lines += ["", "Estimated (Free). Upgrade to Pro for invoice-grade statements."]
+        lines += ["", "Estimated (Free). Upgrade to Pro to paste a vendor bill for billed totals."]
     lines += ["", "## Memo", ""]
     for item in doc.get("memo") or []:
         lines.append(f"- {item}")
