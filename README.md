@@ -48,7 +48,8 @@ Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 ```bash
 ardoise                         # status for this UTC month
 ardoise status --json
-ardoise backfill                # Anthropic T0 JSONL + Cursor logs + hook queue
+ardoise backfill                # Anthropic T0 + Cursor + ~/.ardoise/transcripts
+ardoise status --month 2026-09 --roster Craie
 ardoise capture                 # drain ~/.ardoise/queue
 ardoise capture --stdin         # one hook event (used by plugins)
 ardoise statement 2026-09       # writes MD + HTML + CSV
@@ -75,7 +76,8 @@ Statements land in `~/.ardoise/statements/YYYY-MM.{md,html,csv}`.
 | Source | Adapter | Location |
 |---|---|---|
 | Claude Code session logs | `vendors/anthropic` T0 | `~/.claude/projects/**/*.jsonl` |
-| Cursor transcripts | `vendors/cursor` T0 | `~/.cursor/**/*.jsonl` (usage-shaped) |
+| Cursor transcripts | `vendors/cursor` T0 | `~/.cursor/**/*.jsonl` (usage-shaped; skips `agent-transcripts`) |
+| Grok Bot / cloud-agent | `adapters/cloud_agent` T0 | configurable roots — see below |
 | Claude Enterprise Analytics (optional T2a) | `vendors/anthropic` pull | `GET /v1/organizations/analytics/usage_report` when `ANTHROPIC_ANALYTICS_API_KEY` is set |
 | Cursor Admin API (optional T2) | `vendors/cursor` pull | `POST /teams/filtered-usage-events` when `CURSOR_ADMIN_API_KEY` is set |
 | Pasted invoices | `invoice paste` | ledger `invoices` table (section A) |
@@ -91,10 +93,32 @@ stays T0-only. The key is never written to the ledger.
 
 **Attribution** (agent / skill / effort) is copied from T0 transcript and hook
 JSON when those identifiers are already present (`agentId`, `attributionSkill`,
-`effort`, and a few stable aliases). Missing fields stay unattributed — Ardoise
-never invents them from prompts or defaults. `status` and the statement show a
-quiet breakdown only when at least one row is named. Section A vendor lines stay
-sparse.
+`effort`, `botName`, and a few stable aliases). Missing fields stay unattributed — Ardoise
+never invents them from prompts, run titles, or defaults. `status` and the statement show a
+quiet breakdown only when at least one row is named. Named agents also appear as
+roster chips; `--person` / `--seat` / `--roster` match a seat *or* a named agent.
+Section A vendor lines stay sparse.
+
+In-editor Cursor chat is already T0. Named Grok Bot / cloud-agent exports
+(`agent-data`, `transcript.json` + `index.json`) are not under `~/.cursor/projects`.
+`install.sh` creates `~/.ardoise/transcripts`. Drop a fixture tree there and
+plain `backfill` is enough — no flags, no keys:
+
+```bash
+./install.sh
+mkdir -p ~/.ardoise/transcripts
+cp -R tests/fixtures/dogfood/agent-data ~/.ardoise/transcripts/
+ardoise backfill
+ardoise status --month 2026-09
+ardoise status --month 2026-09 --roster Craie
+# or: tests/dogfood-grok.sh   # must print DOGFOOD-OK
+```
+
+If they already exist, backfill also reads `~/.cursor/cloud-agent-transcripts`,
+`~/.cursor/agent-data`, and `~/agent-data`. Extra roots:
+`ARDOISE_CLOUD_AGENT_ROOT`, `ARDOISE_AGENT_DATA`, `ARDOISE_TRANSCRIPT_PATHS`,
+`--cloud-agent-root`, or `config.json` `transcripts.paths`. Hooks and the
+adapter fail-open. Prompts are scrubbed. No marketplace or credentials.
 
 **Anthropic T2a** lights up when the org primary owner mints an Analytics API
 key at [claude.ai → Organization settings → API](https://claude.ai) (`read:analytics`)
@@ -148,17 +172,19 @@ Hooks may call it later; it writes nothing, needs no network, and always exits 0
 ## Roster filters (multi-seat)
 
 `status` and `statement` accept `--person` / `--seat` / `--roster` to view one
-seat. The filter is **read-only**: it does not write the ledger and unknown
-names exit 0 with an empty view plus a soft note.
+seat **or named agent**. The filter is **read-only**: it does not write the
+ledger and unknown names exit 0 with an empty view plus a soft note.
 
 Roster members come from existing `person` columns on events, snapshots, and
 invoices (the same dimension T1/T2 and `invoice --person` already store).
-Optional `config.json` `roster` is a name list or `{canonical: [aliases]}` map
-so `alice` and `alice@acme.com` resolve to one seat.
+Named `events.agent` values (Craie, Encre, captain, …) are first-class on the
+same flags and show as quiet chips when present. Optional `config.json`
+`roster` is a name list or `{canonical: [aliases]}` map so `alice` and
+`alice@acme.com` resolve to one seat.
 
 Unfiltered statements stay `YYYY-MM.{md,html,csv}`. Filtered files use
-`YYYY-MM--alice.{md,html,csv}` so a seat view does not clobber the org
-statement. HTML adds a quiet seat chip — no roster tables.
+`YYYY-MM--alice.{md,html,csv}` so a seat or agent view does not clobber the org
+statement. HTML adds a quiet seat/agent chip — no roster tables.
 
 ## Privacy
 

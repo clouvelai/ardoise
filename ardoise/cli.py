@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--roster",
         dest="person",
         default=None,
-        help="Filter to one seat/person (view only; does not write the ledger)",
+        help="Filter to one seat/person or named agent (view only; does not write the ledger)",
     )
     st.add_argument(
         "--estimate",
@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--roster",
         dest="person",
         default=None,
-        help="Filter to one seat/person (view only; does not write the ledger)",
+        help="Filter to one seat/person or named agent (view only; does not write the ledger)",
     )
 
     ex = sub.add_parser("export", help="Export ledger JSONL (usage only)")
@@ -78,6 +78,15 @@ def build_parser() -> argparse.ArgumentParser:
     bf = sub.add_parser("backfill", help="Ingest ~/.claude and ~/.cursor logs")
     bf.add_argument("--claude-root", help="Override Claude config root")
     bf.add_argument("--cursor-root", help="Override Cursor config root")
+    bf.add_argument(
+        "--cloud-agent-root",
+        "--transcripts",
+        dest="transcripts",
+        help=(
+            "Extra Grok Bot / cloud-agent transcript dir "
+            "(also ARDOISE_CLOUD_AGENT_ROOT, config transcripts.paths)"
+        ),
+    )
     bf.add_argument(
         "--force",
         action="store_true",
@@ -227,6 +236,7 @@ def main(argv: list[str] | None = None) -> int:
             result = backfill_mod.backfill(
                 claude=Path(args.claude_root).expanduser() if args.claude_root else None,
                 cursor=Path(args.cursor_root).expanduser() if args.cursor_root else None,
+                transcripts=Path(args.transcripts).expanduser() if getattr(args, "transcripts", None) else None,
                 force=bool(args.force),
                 progress=progress,
             )

@@ -2,6 +2,9 @@
 
 View only: filters never write the ledger and never block the CLI.
 Unknown names become an empty view plus a soft note.
+
+Named agents (`events.agent`) are first-class on the same flags: `--person`,
+`--seat`, and `--roster` match a person *or* a named agent. Quiet chips only.
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ import re
 import sqlite3
 from typing import Any
 
-from ardoise import config as config_mod
+from ardoise import attribution, config as config_mod
 
 _UNNAMED = frozenset({"", "default", "*", "(default)", "(none)"})
 _SLUG_SAFE = re.compile(r"[^A-Za-z0-9._@-]+")
@@ -90,6 +93,41 @@ def people_from_ledger(conn: sqlite3.Connection, month: str | None = None) -> li
     return named
 
 
+def agents_from_ledger(conn: sqlite3.Connection, month: str | None = None) -> list[str]:
+    """Distinct named agents for the cycle (or the whole ledger)."""
+    if month:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT agent FROM events
+            WHERE cycle = ? AND agent IS NOT NULL AND TRIM(agent) != ''
+            """,
+            (month,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT agent FROM events
+            WHERE agent IS NOT NULL AND TRIM(agent) != ''
+            """
+        ).fetchall()
+    names = []
+    for row in rows:
+        text = str(row[0] or "").strip()
+        if not text or text == attribution.UNATTRIBUTED:
+            continue
+        names.append(text)
+    return sorted(set(names), key=str.casefold)
+
+
+def collect_agents(
+    conn: sqlite3.Connection | None = None,
+    *,
+    month: str | None = None,
+) -> list[dict[str, Any]]:
+    names = agents_from_ledger(conn, month) if conn is not None else []
+    return [{"agent": name, "kind": "agent", "aliases": []} for name in names]
+
+
 def _group_key(name: str, roster_cfg: dict[str, list[str]]) -> str:
     """Stable fold for a name, preferring the config canonical when aliased."""
     target = fold(name)
@@ -151,6 +189,7 @@ def resolve(
     query: str | None,
     *,
     roster: list[dict[str, Any]] | None = None,
+    agents: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Build a view-only filter. `None` query means no filter."""
     if query is None:
@@ -159,18 +198,44 @@ def resolve(
     keys = {target}
     canonical = display(query)
     matched = False
+    person_matched = False
     for row in roster or []:
         pool = [row.get("person") or "", *(row.get("aliases") or [])]
         folds = {fold(item) for item in pool}
         if target in folds:
             matched = True
+            person_matched = True
             canonical = display(row.get("person") or canonical)
             keys.update(folds)
+    agent_keys: set[str] = set()
+    agent_name: str | None = None
+    for row in agents or []:
+        name = row.get("agent") if isinstance(row, dict) else row
+        text = str(name or "").strip()
+        if not text:
+            continue
+        if fold(text) == target:
+            matched = True
+            agent_name = text
+            agent_keys.add(fold(text))
+    if agent_name and not person_matched:
+        canonical = agent_name
+        kind = "agent"
+        person = ""
+    elif agent_name and person_matched:
+        kind = "both"
+        person = "" if fold(canonical) == "" else canonical
+    else:
+        kind = "person"
+        person = "" if fold(canonical) == "" else canonical
     return {
         "query": str(query),
-        "person": "" if fold(canonical) == "" else canonical,
+        "person": person,
         "canonical": canonical,
         "keys": sorted(keys),
+        "agent": agent_name,
+        "agent_keys": sorted(agent_keys),
+        "kind": kind,
         "matched": matched,
         "view_only": True,
     }
@@ -179,8 +244,16 @@ def resolve(
 def matches(row: dict[str, Any] | None, filt: dict[str, Any] | None) -> bool:
     if not filt:
         return True
-    wanted = {fold(item) for item in (filt.get("keys") or ())}
-    return fold((row or {}).get("person")) in wanted
+    kind = str(filt.get("kind") or "person")
+    person_keys = {fold(item) for item in (filt.get("keys") or ())}
+    agent_keys = {fold(item) for item in (filt.get("agent_keys") or ())}
+    person_hit = fold((row or {}).get("person")) in person_keys
+    agent_hit = fold((row or {}).get("agent")) in agent_keys
+    if kind == "agent":
+        return agent_hit
+    if kind == "both":
+        return person_hit or agent_hit
+    return person_hit
 
 
 def apply_rows(rows: list[dict[str, Any]], filt: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -193,9 +266,10 @@ def note_for(filt: dict[str, Any] | None, *, matched_rows: int) -> str | None:
     if not filt:
         return None
     label = display(filt.get("canonical") or filt.get("query"))
+    role = "agent" if filt.get("kind") == "agent" else "seat"
     if matched_rows == 0:
         return (
-            f"seat filter {label}: no matching rows "
+            f"{role} filter {label}: no matching rows "
             "(view only — ledger unchanged)"
         )
     return None

@@ -67,6 +67,41 @@ class ExtractTests(unittest.TestCase):
         }
         self.assertEqual(attribution.extract(raw), {"agent": None, "skill": None, "effort": None})
 
+    def test_bot_name_and_model_params_effort(self) -> None:
+        found = attribution.extract(
+            {
+                "botName": "captain",
+                "model_params": [{"id": "effort", "value": "high"}],
+            }
+        )
+        self.assertEqual(found["agent"], "captain")
+        self.assertEqual(found["effort"], "high")
+
+    def test_cloud_run_wrapper_does_not_use_job_title(self) -> None:
+        found = attribution.extract(
+            {
+                "agent": {
+                    "id": "bc-00000000-0000-0000-0000-000000000001",
+                    "name": "Fix the billing success page",
+                    "status": "FINISHED",
+                    "env": {"type": "cloud"},
+                }
+            }
+        )
+        self.assertIsNone(found["agent"])
+        named = attribution.extract(
+            {
+                "agent": {
+                    "id": "bc-00000000-0000-0000-0000-000000000001",
+                    "name": "Fix the billing success page",
+                    "status": "FINISHED",
+                    "env": {"type": "cloud"},
+                    "agentName": "Craie",
+                }
+            }
+        )
+        self.assertEqual(named["agent"], "Craie")
+
     def test_rejects_secret_like_values(self) -> None:
         found = attribution.extract({"agent": "sk-ant-oat01-secret", "skill": "ok", "effort": "low"})
         self.assertIsNone(found["agent"])

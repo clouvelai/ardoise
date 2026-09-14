@@ -107,7 +107,8 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
         section_a = reconcile.section_a(conn, month)
         cycles = [item.as_dict() for item in reconcile.reconcile_month(conn, month)]
         members = roster.collect(conn, month=month, config=cfg)
-        filt = roster.resolve(person, roster=members)
+        named_agents = roster.collect_agents(conn, month=month)
+        filt = roster.resolve(person, roster=members, agents=named_agents)
         if filt:
             lines = roster.apply_rows(lines, filt)
             section_a = roster.apply_rows(section_a, filt)
@@ -157,6 +158,7 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
         ],
         "anomalies": anomalies,
         "roster": members,
+        "agents": named_agents,
         "filter": filt,
         "latest_month": latest,
     }
@@ -191,14 +193,19 @@ def render_text(data: dict[str, Any]) -> str:
         f"tokens   in={data['input_tokens']} out={data['output_tokens']} "
         f"cache_read={data['cache_read_tokens']} cache_write={data['cache_creation_tokens']}",
     ]
+    chips = attribution.spend_chips(data)
     if filt:
-        header.append(
-            f"filter   {roster.display(filt.get('canonical') or filt.get('query'))}  "
-            "(view only — ledger unchanged)"
-        )
-    elif len(roster_rows) > 1:
-        names = [roster.display(row.get("person")) for row in roster_rows]
-        header.append("roster   " + ", ".join(names))
+        label = roster.display(filt.get("canonical") or filt.get("query"))
+        extra = ""
+        if filt.get("kind") == "agent" and chips:
+            extra = f"  ${float(chips[0].get('cost_usd') or 0):.4f}"
+        header.append(f"filter   {label}{extra}  (view only — ledger unchanged)")
+    else:
+        if len(roster_rows) > 1:
+            names = [roster.display(row.get("person")) for row in roster_rows]
+            header.append("roster   " + ", ".join(names))
+        if chips:
+            header.append("agents   " + ", ".join(attribution.chip_text(row) for row in chips))
     lines = header + ["", "section A — vendor lines"]
     if not section_a:
         lines.append("  (empty)")

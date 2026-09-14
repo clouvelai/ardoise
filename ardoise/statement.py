@@ -173,18 +173,39 @@ def _filter_label(summary: dict[str, Any]) -> str | None:
     return roster.display(filt.get("canonical") or filt.get("query"))
 
 
+def _filter_kind(summary: dict[str, Any]) -> str:
+    return str((summary.get("filter") or {}).get("kind") or "person")
+
+
+def _agent_spend_chips(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    return attribution.spend_chips(summary)
+
+
 def _md(summary: dict[str, Any]) -> str:
     month = summary["month"]
     section_a = summary.get("section_a") or []
     billed_usd = float(summary.get("billed_usd") or 0)
     estimated = float(summary.get("estimated_usd") or summary.get("cost_usd") or 0)
     seat = _filter_label(summary)
+    kind = _filter_kind(summary)
     lines = [
         f"# Ardoise statement {month}",
         "",
     ]
     if seat:
-        lines += [f"Seat **{seat}** · view only — ledger unchanged.", ""]
+        noun = "Agent" if kind == "agent" else "Seat"
+        spend = ""
+        chips = _agent_spend_chips(summary)
+        if kind == "agent" and chips:
+            spend = f" · ${float(chips[0].get('cost_usd') or 0):.4f}"
+        lines += [f"{noun} **{seat}**{spend} · view only — ledger unchanged.", ""]
+    else:
+        chips = _agent_spend_chips(summary)
+        if chips:
+            bits = " · ".join(
+                f"**{row['agent']}** ${float(row.get('cost_usd') or 0):.4f}" for row in chips
+            )
+            lines += [f"Agents · {bits}", ""]
     lines += [
         _LEGEND,
         "",
@@ -326,11 +347,26 @@ def _html_page(summary: dict[str, Any]) -> str:
     entries = int(summary.get("month_entries") or 0)
     grade = any(row.get("invoice_grade") for row in section_a)
     seat = _filter_label(summary)
-    seat_chip = (
-        f'<p class="seat"><span class="badge seat">{html.escape(seat)}</span> view only</p>'
-        if seat
-        else ""
-    )
+    kind = _filter_kind(summary)
+    if seat:
+        chip_cls = "badge agent" if kind == "agent" else "badge seat"
+        spend = ""
+        chips = _agent_spend_chips(summary)
+        if kind == "agent" and chips:
+            spend = f" ${float(chips[0].get('cost_usd') or 0):.4f}"
+        seat_chip = (
+            f'<p class="seat"><span class="{chip_cls}">{html.escape(seat)}{spend}</span> view only</p>'
+        )
+    else:
+        chips = _agent_spend_chips(summary)
+        if chips:
+            badges = "".join(
+                f'<span class="badge agent">{html.escape(attribution.chip_text(row))}</span>'
+                for row in chips
+            )
+            seat_chip = f'<p class="seat agents">{badges}</p>'
+        else:
+            seat_chip = ""
 
     if section_a:
         if grade:
@@ -482,6 +518,8 @@ h1 {{
 .hero-sub {{ margin: 0.35rem 0 0; color: var(--muted); font-size: 0.92rem; }}
 .seat {{ margin: 0.35rem 0 0; color: var(--muted); font-size: 0.82rem; }}
 .badge.seat {{ background: #f6f4f8; color: #5c5666; border-color: rgba(23, 20, 31, 0.1); }}
+.badge.agent {{ background: #f3eef8; color: #5c5666; border-color: rgba(23, 20, 31, 0.1); }}
+.seat.agents {{ display: flex; flex-wrap: wrap; gap: 0.35rem; }}
 .legend {{
   display: flex;
   flex-wrap: wrap;
@@ -649,6 +687,7 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     seat = _filter_label(summary)
     if seat:
+        role = "agent" if _filter_kind(summary) == "agent" else "seat"
         rows.append(
             {
                 "section": "notes",
@@ -656,7 +695,7 @@ def _csv_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "vendor": "",
                 "person": (summary.get("filter") or {}).get("person") or "",
                 "cycle": summary.get("month"),
-                "source": f"seat filter {seat} (view only)",
+                "source": f"{role} filter {seat} (view only)",
                 "usd_cents": "",
                 "billed_usd": "",
                 "invoice_grade": "",

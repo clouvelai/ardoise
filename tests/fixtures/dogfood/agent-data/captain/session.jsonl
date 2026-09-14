@@ -1,0 +1,1 @@
+{"botName":"captain","model":"cursor-grok-4.6-high","timestamp":"2026-09-13T12:00:00.000Z","conversationId":"conv_captain","message_id":"msg_grok_captain","requestId":"req_grok_captain","tokenUsage":{"inputTokens":200,"outputTokens":40,"cacheReadTokens":10,"cacheWriteTokens":5},"prompt":"SECRET_CAPTAIN_PROMPT"}

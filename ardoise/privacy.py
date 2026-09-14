@@ -87,12 +87,24 @@ def usage_only_event(event: dict[str, Any]) -> dict[str, Any]:
     usage = event.get("usage")
     if not isinstance(usage, dict) and isinstance(message, dict):
         usage = message.get("usage")
+    if not isinstance(usage, dict):
+        usage = event.get("tokenUsage") or event.get("token_usage") or {}
     usage = usage if isinstance(usage, dict) else {}
+
+    def _pick(*keys: str) -> Any:
+        for key in keys:
+            if key in usage and usage.get(key) not in (None, ""):
+                return usage.get(key)
+            if key in event and event.get(key) not in (None, ""):
+                return event.get(key)
+        return 0
 
     model = (
         event.get("model")
         or (message.get("model") if isinstance(message, dict) else None)
         or event.get("model_name")
+        or event.get("model_id")
+        or event.get("modelId")
     )
     message_id = event.get("message_id") or event.get("messageId")
     if not message_id and isinstance(message, dict):
@@ -122,10 +134,23 @@ def usage_only_event(event: dict[str, Any]) -> dict[str, Any]:
         "message_id": message_id,
         "request_id": request_id,
         "usage": {
-            "input_tokens": _int(usage.get("input_tokens")),
-            "output_tokens": _int(usage.get("output_tokens")),
-            "cache_creation_input_tokens": _int(usage.get("cache_creation_input_tokens")),
-            "cache_read_input_tokens": _int(usage.get("cache_read_input_tokens")),
+            "input_tokens": _int(_pick("input_tokens", "inputTokens")),
+            "output_tokens": _int(_pick("output_tokens", "outputTokens")),
+            "cache_creation_input_tokens": _int(
+                _pick(
+                    "cache_creation_input_tokens",
+                    "cacheWriteTokens",
+                    "cache_write_tokens",
+                    "cache_creation_tokens",
+                )
+            ),
+            "cache_read_input_tokens": _int(
+                _pick(
+                    "cache_read_input_tokens",
+                    "cacheReadTokens",
+                    "cache_read_tokens",
+                )
+            ),
             "cache_creation": scrub(usage.get("cache_creation"))
             if isinstance(usage.get("cache_creation"), dict)
             else {},

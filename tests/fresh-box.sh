@@ -511,4 +511,84 @@ if conn.execute("SELECT COUNT(*) FROM invoices").fetchone()[0] != 3:
 print("roster-filter=ok alice=4.00 view_only=1")
 PY
 
+# Grok Bot dogfood: drop fixtures in the default folder, then plain `backfill`.
+mkdir -p "$HOME/.ardoise/transcripts"
+cp -R "$ROOT/tests/fixtures/dogfood/agent-data" "$HOME/.ardoise/transcripts/"
+"$BIN" backfill --json >"$BOX/backfill-grok.json"
+"$BIN" status --month 2026-09 >"$BOX/status-grok.txt"
+"$BIN" status --json --month 2026-09 >"$BOX/status-grok.json"
+"$BIN" status --month 2026-09 --roster Craie >"$BOX/status-craie.txt"
+"$BIN" status --json --month 2026-09 --roster Craie >"$BOX/status-craie.json"
+"$BIN" statement 2026-09 --person Craie --out-dir "$HOME/.ardoise/statements" \
+  >"$BOX/statement-craie.json"
+
+python3 - "$BOX" "$HOME" <<'PY'
+import json, sqlite3, sys
+from pathlib import Path
+
+box = Path(sys.argv[1])
+home = Path(sys.argv[2])
+conn = sqlite3.connect(home / ".ardoise" / "ledger.db")
+conn.row_factory = sqlite3.Row
+craie = conn.execute(
+    "SELECT agent, skill, effort FROM events WHERE message_id = 'msg_grok_craie'"
+).fetchone()
+if craie is None or craie["agent"] != "Craie":
+    raise SystemExit(f"grok fixture missing agent=Craie: {None if craie is None else dict(craie)}")
+encre = conn.execute(
+    "SELECT agent FROM events WHERE message_id = 'msg_grok_encre'"
+).fetchone()
+if encre is None or encre["agent"] != "Encre":
+    raise SystemExit(f"grok fixture missing agent=Encre: {None if encre is None else dict(encre)}")
+captain = conn.execute(
+    "SELECT agent FROM events WHERE message_id = 'msg_grok_captain'"
+).fetchone()
+if captain is None or captain["agent"] != "captain":
+    raise SystemExit(f"grok fixture missing agent=captain: {None if captain is None else dict(captain)}")
+blob = (home / ".ardoise" / "ledger.db").read_bytes()
+for needle in (b"SECRET_GROK_PROMPT", b"SECRET_ENCRE_BODY", b"SECRET_CAPTAIN_PROMPT"):
+    if needle in blob:
+        raise SystemExit(f"ledger stored grok secret {needle!r}")
+
+status = json.loads((box / "status-grok.json").read_text())
+text = (box / "status-grok.txt").read_text()
+names = {row.get("agent") for row in status.get("agents") or []}
+if names != {"Craie", "Encre", "captain"}:
+    raise SystemExit(f"status agents={names}")
+for name in ("Craie", "Encre", "captain"):
+    if f"{name} $" not in text:
+        raise SystemExit(f"status missing spend chip for {name}")
+spend = {
+    row["agent"]: float(row.get("cost_usd") or 0)
+    for row in status.get("by_agent") or []
+    if row.get("agent") and row.get("agent") != "(unattributed)"
+}
+if any(value <= 0 for value in spend.values()) or set(spend) != names:
+    raise SystemExit(f"named-agent spend missing: {spend}")
+filtered = json.loads((box / "status-craie.json").read_text())
+craie_txt = (box / "status-craie.txt").read_text()
+if filtered.get("filter", {}).get("kind") != "agent":
+    raise SystemExit(f"Craie filter kind={filtered.get('filter')}")
+if filtered.get("filter", {}).get("view_only") is not True:
+    raise SystemExit("Craie filter must be view_only")
+if float(filtered.get("cost_usd") or 0) <= 0:
+    raise SystemExit(f"Craie spend {filtered.get('cost_usd')}")
+if "filter   Craie" not in craie_txt or "$" not in craie_txt.split("filter   Craie", 1)[1][:24]:
+    raise SystemExit(f"Craie filter missing spend: {craie_txt}")
+named = {
+    row.get("agent")
+    for row in filtered.get("by_agent") or []
+    if row.get("agent") and row.get("agent") != "(unattributed)"
+}
+if named != {"Craie"}:
+    raise SystemExit(f"Craie view leaked other agents: {named}")
+written = json.loads((box / "statement-craie.json").read_text())
+html = Path(written["html"]).read_text()
+if "badge agent" not in html or "Craie" not in html or "$" not in html.split("badge agent", 1)[1][:80]:
+    raise SystemExit("filtered statement missing quiet agent chip with spend")
+if "roster table" in html.lower():
+    raise SystemExit("agent statement grew a roster table")
+print("grok-bot=ok agent=Craie chips=spend")
+PY
+
 echo "FRESH-BOX-OK"

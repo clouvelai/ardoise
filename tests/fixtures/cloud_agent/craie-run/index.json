@@ -1,0 +1,15 @@
+{
+  "id": "bc-00000000-0000-0000-0000-000000000001",
+  "name": "What did Craie spend this week",
+  "status": "FINISHED",
+  "model": "cursor-grok-4.6-high",
+  "agentName": "Craie",
+  "createdAt": "2026-09-13T09:00:00.000Z",
+  "agent": {
+    "id": "bc-00000000-0000-0000-0000-000000000001",
+    "name": "What did Craie spend this week",
+    "status": "FINISHED",
+    "env": {"type": "cloud"},
+    "agentName": "Craie"
+  }
+}

@@ -1,0 +1,1 @@
+{"type":"assistant","cwd":"/WORKSPACE","timestamp":"2026-09-13T11:00:00.000Z","requestId":"req_grok_encre","agentName":"Encre","attributionSkill":"stripe-docs","thinkingEffort":"medium","content":"SECRET_ENCRE_BODY","message":{"id":"msg_grok_encre","role":"assistant","model":"cursor-grok-4.6-high","usage":{"input_tokens":400,"output_tokens":80}}}

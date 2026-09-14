@@ -5,24 +5,35 @@ Missing fields stay unattributed. Nothing is invented from prompts or defaults.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 UNATTRIBUTED = "(unattributed)"
 DIMENSIONS = ("agent", "skill", "effort")
 MAX_ID_LEN = 200
 
-# Stable keys already emitted by Claude Code / Cursor transcripts and hooks.
+# Stable keys already emitted by Claude Code / Cursor / Grok Bot transcripts.
 # First match wins. Prefer a human name/type over an opaque id when both exist.
 _AGENT_KEYS = (
     "agent",
     "agentName",
     "agent_name",
+    "botName",
+    "bot_name",
+    "bot",
     "agentType",
     "agent_type",
     "subagentType",
     "subagent_type",
     "agentId",
     "agent_id",
+)
+_CLOUD_RUN_HINTS = frozenset(
+    {"status", "env", "repos", "latestRunId", "latest_run_id", "url"}
+)
+_OPAQUE_ID = re.compile(
+    r"^(?:bc-|run-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
 )
 _SKILL_KEYS = (
     "skill",
@@ -50,6 +61,9 @@ _DICT_NAME_KEYS = (
     "agent",
     "agentName",
     "agent_name",
+    "botName",
+    "bot_name",
+    "bot",
     "agentType",
     "agent_type",
     "skill",
@@ -65,11 +79,25 @@ _DICT_NAME_KEYS = (
 _SECRET_SNIPS = ("sk-ant", "bearer ", "api_key", "apikey", "-----begin")
 
 
+def _looks_like_cloud_run(value: dict[str, Any]) -> bool:
+    if _CLOUD_RUN_HINTS & set(value):
+        return True
+    ident = str(value.get("id") or value.get("bcId") or value.get("bc_id") or "")
+    return ident.startswith("bc-") or bool(_OPAQUE_ID.match(ident))
+
+
 def clean_id(value: Any) -> str | None:
     """Return a short identifier or None. Dicts yield name/type/id; never invent."""
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, dict):
+        if _looks_like_cloud_run(value):
+            # Run wrappers expose a job title on `name` — that is not agent identity.
+            for key in ("agentName", "agent_name", "botName", "bot_name", "bot"):
+                found = clean_id(value.get(key))
+                if found:
+                    return found
+            return None
         for key in _DICT_NAME_KEYS:
             found = clean_id(value.get(key))
             if found:
@@ -81,6 +109,8 @@ def clean_id(value: Any) -> str | None:
     if not text or len(text) > MAX_ID_LEN:
         return None
     if any(ch in text for ch in "\n\r\x00"):
+        return None
+    if text.lower().startswith("bc-") or _OPAQUE_ID.match(text):
         return None
     lower = text.lower()
     if any(snip in lower for snip in _SECRET_SNIPS):
@@ -119,7 +149,28 @@ def extract(raw: dict[str, Any] | None) -> dict[str, str | None]:
             out["skill"] = _first(layer, _SKILL_KEYS)
         if out["effort"] is None:
             out["effort"] = _first(layer, _EFFORT_KEYS)
+    if out["effort"] is None:
+        out["effort"] = _effort_from_params(raw)
     return out
+
+
+def _effort_from_params(raw: dict[str, Any]) -> str | None:
+    """Cursor/Grok `model_params: [{id: effort, value: high}]` — already named."""
+    params = raw.get("model_params")
+    if params is None:
+        params = raw.get("modelParams")
+    if not isinstance(params, list):
+        return None
+    for item in params:
+        if not isinstance(item, dict):
+            continue
+        ident = str(item.get("id") or item.get("key") or "").strip().lower()
+        if ident not in {"effort", "effort_level", "effortlevel", "thinking_effort", "thinkingeffort"}:
+            continue
+        found = clean_id(item.get("value") if item.get("value") is not None else item.get("val"))
+        if found:
+            return found
+    return None
 
 
 def bind(row: dict[str, Any] | None) -> dict[str, str | None]:
@@ -150,3 +201,13 @@ def present(groups: list[dict[str, Any]] | None, column: str) -> list[dict[str, 
 def any_present(summary: dict[str, Any] | None) -> bool:
     data = summary or {}
     return any(present(data.get(f"by_{dim}"), dim) for dim in DIMENSIONS)
+
+
+def spend_chips(summary: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Named agent buckets with T0 spend, already sorted highest-first."""
+    return present((summary or {}).get("by_agent"), "agent")
+
+
+def chip_text(row: dict[str, Any]) -> str:
+    name = str(row.get("agent") or "").strip()
+    return f"{name} ${float(row.get('cost_usd') or 0):.4f}"

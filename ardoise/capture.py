@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from ardoise import db, paths, queue
-from ardoise.adapters.anthropic_t0 import iter_jsonl, parse_t0_line
+from ardoise.adapters.anthropic_t0 import parse_t0_line
+from ardoise.adapters.cloud_agent import (
+    iter_transcript_objects,
+    parse_line as parse_cloud_line,
+    sidecar_meta,
+)
 from ardoise.adapters.cursor import parse_cursor_line
 from ardoise.adapters.hook_event import event_to_entry
 from ardoise.project import infer_project
@@ -71,8 +76,9 @@ def ingest_transcript(conn, path: Path) -> dict[str, int]:
         return counts
     if db.source_unchanged(conn, path, bytes_=stat.st_size, mtime=stat.st_mtime):
         return counts
-    for obj in iter_jsonl(path):
-        entry = parse_t0_line(obj) or parse_cursor_line(obj)
+    inherited = sidecar_meta(path)
+    for obj in iter_transcript_objects(path):
+        entry = parse_t0_line(obj) or parse_cursor_line(obj) or parse_cloud_line(obj, inherited=inherited)
         if not entry:
             continue
         kind = _ingest_entry(conn, entry)
