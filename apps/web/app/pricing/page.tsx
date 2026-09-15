@@ -17,7 +17,8 @@ export default function PricingPage() {
             Pricing.
           </h1>
           <p className="mt-6 max-w-lg text-[17px] leading-relaxed text-muted sm:text-[18px]">
-            Free on disk forever. Pro is the companion. Team is the org.
+            Free on disk forever. Pro pastes a vendor bill for Billed truth —
+            not a prettier statement.
           </p>
         </div>
         <div className="mt-14">

@@ -8,8 +8,8 @@ const items = [
     body: "Streaming rows share message.id and requestId. Ardoise keeps the highest output_tokens.",
   },
   {
-    title: "Upgrade in place",
-    body: "Free shows estimates. Pro unlocks invoice-grade statements on the same screen.",
+    title: "Month-close",
+    body: "Print statement. Copy totals into QuickBooks or Stripe. Attach the schedule — keep your invoice in the tool you already use.",
   },
 ];
 

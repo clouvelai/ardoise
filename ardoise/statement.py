@@ -208,6 +208,7 @@ def _md(summary: dict[str, Any]) -> str:
         f"Per-event rows are in `{summary.get('month')}.csv` next to this file.",
         "",
         "Copy totals into your invoice. Print the HTML → Save as PDF for a portable statement.",
+        "Attach the schedule. Keep your invoice in the tool you already use.",
         "",
         "_Generated locally by Ardoise. Prompts and credentials are not stored._",
         "",
@@ -369,6 +370,9 @@ def _html_page(summary: dict[str, Any]) -> str:
     )
     from_html = _party_html(doc.get("from") or {}, cell)
     prepared_html = _party_html(doc.get("prepared_for") or {}, cell)
+    helper = html.escape(
+        "Attach the schedule. Keep your invoice in the tool you already use."
+    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -480,6 +484,29 @@ body {{
   padding: 0;
 }}
 .whisper:hover {{ color: var(--ink); }}
+.chrome-lead {{
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 28rem;
+}}
+.helper {{
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}}
+.copy-btn {{
+  border: 1px solid #e9e1f6;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 650;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+}}
 .top {{
   display: grid;
   grid-template-columns: 1.15fr 0.95fr;
@@ -639,9 +666,12 @@ body {{
 </head>
 <body>
 <div class="chrome print-hide">
-  <span class="badge badge-{badge_kind}">{grade_label}</span>
+  <div class="chrome-lead">
+    <span class="badge badge-{badge_kind}">{grade_label}</span>
+    <p class="helper">{helper}</p>
+  </div>
   <div class="chrome-actions">
-    <button type="button" class="whisper" data-copy-totals="{copy_totals}" onclick="copyTotals(this)">Copy totals into your invoice</button>
+    <button type="button" class="copy-btn" data-copy-totals="{copy_totals}" onclick="copyTotals(this)">Copy totals into your invoice</button>
     <button type="button" class="print-btn" onclick="window.print()">Print statement</button>
   </div>
 </div>

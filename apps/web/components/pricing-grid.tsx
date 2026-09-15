@@ -38,9 +38,9 @@ const tiers: {
     period: "/mo",
     badge: "Most popular",
     items: [
-      "Invoice-grade statements",
-      "Billed totals on the same dashboard",
-      "Paste vendor invoices",
+      "Paste a vendor bill for Billed totals",
+      "Estimate and Billed stay labeled",
+      "Print statement + copy totals",
     ],
     cta: "Get Pro",
     href: "/signup?next=/pricing",

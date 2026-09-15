@@ -71,7 +71,7 @@ export function LedgerView() {
           </h1>
           <p className="mt-1 text-[14px] text-muted">
             Plan: {plan}
-            {status?.invoice_grade ? " · invoice-grade" : " · estimate"}
+            {status?.invoice_grade ? " · Billed" : " · Estimate"}
           </p>
         </div>
         <label className="text-[13px] text-muted">
@@ -102,9 +102,7 @@ export function LedgerView() {
           <article className="rounded-[24px] bg-white px-6 py-5 ring-1 ring-black/[0.04]">
             <p className="text-[12px] text-muted">Billed</p>
             <p className="mt-1 text-[1.8rem] font-semibold tracking-tight">
-              {status.invoice_grade
-                ? money(status.billed_usd, 2)
-                : "Upgrade to Pro"}
+              {status.invoice_grade ? money(status.billed_usd, 2) : "—"}
             </p>
           </article>
           <article className="rounded-[24px] bg-white px-6 py-5 ring-1 ring-black/[0.04]">
@@ -169,12 +167,11 @@ export function LedgerView() {
         </section>
       ) : null}
 
-      {plan === "free" ? (
-        <p className="mt-10 text-[14px] text-muted">
-          <Link href="/pricing" className="font-semibold text-grape">
-            Upgrade to Pro
-          </Link>{" "}
-          for invoice-grade statements.
+      {plan === "free" && status && status.month_entries > 0 && !status.invoice_grade ? (
+        <p className="mt-10 text-[13px] text-muted">
+          <Link href="/pricing" className="text-grape transition hover:text-grape-ink">
+            Paste a vendor bill on Pro to upgrade this Estimate to Billed.
+          </Link>
         </p>
       ) : null}
     </AppShell>
