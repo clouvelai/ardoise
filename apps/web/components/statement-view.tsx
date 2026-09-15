@@ -33,7 +33,7 @@ import {
 } from "@/lib/statement-chrome";
 
 const fieldClass =
-  "min-w-[9.5rem] rounded-full border border-black/[0.06] bg-white px-4 py-2 text-[15px] font-semibold tracking-normal text-ink normal-case outline-none transition placeholder:text-muted/60 focus:border-grape/40 focus:ring-4 focus:ring-grape/15";
+  "w-full rounded-full border border-black/[0.06] bg-white px-4 py-2 text-[15px] font-semibold tracking-normal text-ink normal-case outline-none transition placeholder:text-muted/60 focus:border-grape/40 focus:ring-4 focus:ring-grape/15";
 
 export function PasteVendorTotalForm({
   month,
@@ -83,7 +83,7 @@ export function PasteVendorTotalForm({
       </p>
       <p className="mt-1 text-[13px] text-muted">{STATEMENT_COPY.pasteHook}</p>
       <div className="mt-4 flex flex-wrap items-end gap-3">
-        <label className="flex min-w-[9.5rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
+        <label className="flex w-[10rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
           {STATEMENT_COPY.vendorField}
           <input
             type="text"
@@ -98,7 +98,7 @@ export function PasteVendorTotalForm({
             className={fieldClass}
           />
         </label>
-        <label className="flex min-w-[11.5rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
+        <label className="flex w-[11.5rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
           {STATEMENT_COPY.cycleField}
           <input
             type="month"
@@ -109,7 +109,7 @@ export function PasteVendorTotalForm({
             className={fieldClass}
           />
         </label>
-        <label className="flex min-w-[8rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
+        <label className="flex w-[7.5rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
           {STATEMENT_COPY.usdField}
           <input
             type="text"
@@ -119,7 +119,7 @@ export function PasteVendorTotalForm({
             placeholder="0.00"
             aria-label={STATEMENT_COPY.usdField}
             onChange={(event) => setUsd(event.target.value)}
-            className={`${fieldClass} min-w-[8rem]`}
+            className={fieldClass}
           />
         </label>
         <button
@@ -127,8 +127,8 @@ export function PasteVendorTotalForm({
           disabled={!ready || pending}
           className={
             ready && !pending
-              ? "rounded-full bg-grape px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(124,92,255,0.22)] transition hover:bg-grape-deep"
-              : "cursor-not-allowed rounded-full bg-white/80 px-4 py-2 text-[13px] font-semibold text-grape-ink/75 ring-1 ring-grape/20"
+              ? "shrink-0 rounded-full bg-grape px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(124,92,255,0.22)] transition hover:bg-grape-deep"
+              : "shrink-0 cursor-not-allowed rounded-full bg-white/80 px-4 py-2 text-[13px] font-semibold text-grape-ink/75 ring-1 ring-grape/20"
           }
         >
           {pending ? STATEMENT_COPY.saving : STATEMENT_COPY.saveBilled}
