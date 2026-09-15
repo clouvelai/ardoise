@@ -1,18 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ConnectLaptopSteps } from "@/components/connect-laptop";
 import {
   GradeBadge,
   StatementDocumentView,
 } from "@/components/statement-document";
-import { apiGet, type MeResponse, type StatementResponse } from "@/lib/saas-api";
+import {
+  apiGet,
+  apiPost,
+  type InvoicePasteResponse,
+  type MeResponse,
+  type StatementResponse,
+} from "@/lib/saas-api";
 import { getSession } from "@/lib/saas-session";
 import { sparseMessage } from "@/lib/saas-errors";
 import {
   STATEMENT_COPY,
+  canSubmitVendorTotal,
   copyPayload,
   csvFilename,
   hasPrintableRows,
@@ -21,7 +28,124 @@ import {
   monthLabel,
   shouldNudgePro,
   shouldShowPasteHook,
+  vendorTotalPayload,
+  type VendorTotalDraft,
 } from "@/lib/statement-chrome";
+
+const fieldClass =
+  "min-w-[9.5rem] rounded-full border border-black/[0.06] bg-white px-4 py-2 text-[15px] font-semibold tracking-normal text-ink normal-case outline-none transition placeholder:text-muted/60 focus:border-grape/40 focus:ring-4 focus:ring-grape/15";
+
+export function PasteVendorTotalForm({
+  month,
+  defaultVendor,
+  pending,
+  error,
+  onSubmit,
+}: {
+  month: string;
+  defaultVendor?: string;
+  pending?: boolean;
+  error?: string | null;
+  onSubmit?: (draft: VendorTotalDraft) => void | Promise<void>;
+}) {
+  const [vendor, setVendor] = useState(defaultVendor ?? "");
+  const [cycle, setCycle] = useState(month);
+  const [usd, setUsd] = useState("");
+  const draft = { vendor, cycle, usd };
+  const ready = canSubmitVendorTotal(draft);
+
+  useEffect(() => {
+    setCycle(month);
+  }, [month]);
+
+  useEffect(() => {
+    if (!vendor && defaultVendor) {
+      setVendor(defaultVendor);
+    }
+  }, [defaultVendor, vendor]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!ready || pending) {
+      return;
+    }
+    await onSubmit?.(draft);
+  }
+
+  return (
+    <form
+      className="mt-4 max-w-3xl"
+      data-ardoise-paste-bill
+      onSubmit={handleSubmit}
+    >
+      <p className="text-[13px] font-semibold text-ink">
+        {STATEMENT_COPY.pasteTitle}
+      </p>
+      <p className="mt-1 text-[13px] text-muted">{STATEMENT_COPY.pasteHook}</p>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <label className="flex min-w-[9.5rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
+          {STATEMENT_COPY.vendorField}
+          <input
+            type="text"
+            name="vendor"
+            value={vendor}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="anthropic"
+            list="ardoise-vendor-totals"
+            aria-label={STATEMENT_COPY.vendorField}
+            onChange={(event) => setVendor(event.target.value)}
+            className={fieldClass}
+          />
+        </label>
+        <label className="flex min-w-[11.5rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
+          {STATEMENT_COPY.cycleField}
+          <input
+            type="month"
+            name="cycle"
+            value={cycle}
+            aria-label={STATEMENT_COPY.cycleField}
+            onChange={(event) => setCycle(event.target.value)}
+            className={fieldClass}
+          />
+        </label>
+        <label className="flex min-w-[8rem] flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
+          {STATEMENT_COPY.usdField}
+          <input
+            type="text"
+            name="usd"
+            inputMode="decimal"
+            value={usd}
+            placeholder="0.00"
+            aria-label={STATEMENT_COPY.usdField}
+            onChange={(event) => setUsd(event.target.value)}
+            className={`${fieldClass} min-w-[8rem]`}
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={!ready || pending}
+          className={
+            ready && !pending
+              ? "rounded-full bg-grape px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(124,92,255,0.22)] transition hover:bg-grape-deep"
+              : "cursor-not-allowed rounded-full bg-white/80 px-4 py-2 text-[13px] font-semibold text-grape-ink/75 ring-1 ring-grape/20"
+          }
+        >
+          {pending ? STATEMENT_COPY.saving : STATEMENT_COPY.saveBilled}
+        </button>
+      </div>
+      <datalist id="ardoise-vendor-totals">
+        <option value="anthropic" />
+        <option value="cursor" />
+      </datalist>
+      {error ? (
+        <p role="alert" className="mt-3 text-[13px] text-grape-ink">
+          {error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
 
 export function StatementWorkspace({
   month,
@@ -33,6 +157,9 @@ export function StatementWorkspace({
   onPrint,
   onDownloadCsv,
   canPasteBill,
+  pastePending,
+  pasteError,
+  onPasteVendorTotal,
 }: {
   month: string;
   onMonthChange?: (month: string) => void;
@@ -43,6 +170,9 @@ export function StatementWorkspace({
   onPrint: () => void;
   onDownloadCsv: () => void;
   canPasteBill?: boolean;
+  pastePending?: boolean;
+  pasteError?: string | null;
+  onPasteVendorTotal?: (draft: VendorTotalDraft) => void | Promise<void>;
 }) {
   const billed = isBilledGrade(data);
   const printable = hasPrintableRows(data);
@@ -130,12 +260,13 @@ export function StatementWorkspace({
           </p>
         ) : null}
         {pasteHook ? (
-          <p
-            className="mt-3 text-[13px] text-muted"
-            data-ardoise-paste-bill
-          >
-            {STATEMENT_COPY.pasteHook}
-          </p>
+          <PasteVendorTotalForm
+            month={month}
+            defaultVendor={data?.document?.groups?.[0]?.vendor}
+            pending={pastePending}
+            error={pasteError}
+            onSubmit={onPasteVendorTotal}
+          />
         ) : null}
       </div>
       {error ? (
@@ -188,6 +319,8 @@ export function StatementView() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [canPasteBill, setCanPasteBill] = useState<boolean | undefined>(undefined);
+  const [pastePending, setPastePending] = useState(false);
+  const [pasteError, setPasteError] = useState<string | null>(null);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -213,6 +346,7 @@ export function StatementView() {
           setData(payload);
           setError(null);
           setCopied(false);
+          setPasteError(null);
         }
       } catch (caught) {
         if (!cancelled) {
@@ -224,6 +358,46 @@ export function StatementView() {
       cancelled = true;
     };
   }, [month]);
+
+  async function refreshStatement(nextMonth: string) {
+    const session = getSession();
+    if (!session) {
+      return;
+    }
+    const payload = await apiGet<StatementResponse>(
+      `/v1/usage/statement?month=${encodeURIComponent(nextMonth)}`,
+      session.accessToken,
+    );
+    setData(payload);
+    setError(null);
+    setCopied(false);
+  }
+
+  async function pasteVendorTotal(draft: VendorTotalDraft) {
+    const session = getSession();
+    if (!session) {
+      return;
+    }
+    setPastePending(true);
+    setPasteError(null);
+    try {
+      const body = vendorTotalPayload(draft);
+      await apiPost<InvoicePasteResponse>(
+        "/v1/invoices",
+        session.accessToken,
+        body,
+      );
+      if (body.cycle && body.cycle !== month) {
+        setMonth(body.cycle);
+        return;
+      }
+      await refreshStatement(month);
+    } catch (caught) {
+      setPasteError(sparseMessage(caught));
+    } finally {
+      setPastePending(false);
+    }
+  }
 
   async function copyTotals() {
     if (!data || !hasPrintableRows(data)) {
@@ -275,6 +449,9 @@ export function StatementView() {
         onPrint={() => window.print()}
         onDownloadCsv={downloadCsv}
         canPasteBill={canPasteBill}
+        pastePending={pastePending}
+        pasteError={pasteError}
+        onPasteVendorTotal={pasteVendorTotal}
       />
     </AppShell>
   );

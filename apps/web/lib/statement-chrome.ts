@@ -1,10 +1,11 @@
 /**
  * Hosted statement chrome lock: Estimate·Billed, Print statement,
- * and the copy-totals path. Empty months stay sparse — no invented rows.
- * Pro copy appears only when paste-bill would upgrade Estimate → Billed.
+ * copy-totals, and the Pro paste-vendor-total path. Empty months stay
+ * sparse — no invented rows. Pro copy appears only when paste-bill
+ * would upgrade Estimate → Billed.
  */
 
-import type { StatementResponse } from "./saas-api";
+import type { InvoicePasteRequest, StatementResponse } from "./saas-api";
 
 function money(value: number | undefined, places = 2): string {
   const n = Number(value || 0);
@@ -27,7 +28,22 @@ export const STATEMENT_COPY = {
   proNudge:
     "Paste a vendor bill on Pro to upgrade this Estimate to Billed.",
   pasteHook: "Paste a vendor bill to upgrade this Estimate to Billed.",
+  pasteTitle: "Paste vendor total",
+  saveBilled: "Save billed total",
+  saving: "Saving…",
+  vendorField: "Vendor",
+  cycleField: "Month",
+  usdField: "USD",
+  pasteNeedFields: "Need vendor, month, and USD.",
 } as const;
+
+export type VendorTotalDraft = {
+  vendor: string;
+  cycle: string;
+  usd: string;
+};
+
+const CYCLE_RE = /^(\d{4})-(\d{2})$/;
 
 export type StatementChromeContext = {
   data: StatementResponse | null | undefined;
@@ -85,9 +101,62 @@ export function shouldNudgePro(ctx: StatementChromeContext): boolean {
   return canUpgradeToBilled(ctx.data) && ctx.canPasteBill === false;
 }
 
-/** Quiet paste hook for Pro+ Estimate months (no form until Craie ships it). */
+/** Pro+ Estimate months show the paste-vendor-total form. Free never does. */
 export function shouldShowPasteHook(ctx: StatementChromeContext): boolean {
   return canUpgradeToBilled(ctx.data) && ctx.canPasteBill === true;
+}
+
+export function normalizeCycle(raw: string): string {
+  const text = raw.trim();
+  if (CYCLE_RE.test(text)) {
+    return text;
+  }
+  if (text.length >= 7 && text[4] === "-") {
+    const candidate = text.slice(0, 7);
+    if (CYCLE_RE.test(candidate)) {
+      return candidate;
+    }
+  }
+  return text;
+}
+
+export function parsePastedUsd(raw: string): number {
+  const cleaned = raw.trim().replace(/[$,]/g, "");
+  if (!cleaned) {
+    return Number.NaN;
+  }
+  return Number(cleaned);
+}
+
+/** Body for POST /v1/invoices — vendor, cycle, usd (API also accepts usd_cents). */
+export function vendorTotalPayload(draft: VendorTotalDraft): InvoicePasteRequest {
+  const vendor = draft.vendor.trim();
+  const cycle = normalizeCycle(draft.cycle);
+  const usd = parsePastedUsd(draft.usd);
+  if (!vendor) {
+    throw new Error(STATEMENT_COPY.pasteNeedFields);
+  }
+  if (!CYCLE_RE.test(cycle)) {
+    throw new Error(STATEMENT_COPY.pasteNeedFields);
+  }
+  if (!Number.isFinite(usd)) {
+    throw new Error(STATEMENT_COPY.pasteNeedFields);
+  }
+  return {
+    vendor,
+    cycle,
+    usd,
+    source: "paste",
+  };
+}
+
+export function canSubmitVendorTotal(draft: VendorTotalDraft): boolean {
+  try {
+    vendorTotalPayload(draft);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function monthLabel(month: string): string {
