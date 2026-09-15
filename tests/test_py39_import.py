@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""Python 3.9 import safety — macOS Xcode python3 is 3.9.6.
+"""Python 3.9 import / parse safety — macOS Xcode python3 is 3.9.6.
 
 ``from __future__ import annotations`` postpones function/variable
 annotations but not type-alias *assignments*. A PEP 604 ``dict[str, Any] | None``
 inside ``Transport = Callable[...]`` is evaluated at import and raises:
 
     TypeError: unsupported operand type(s) for |: 'types.GenericAlias' and 'NoneType'
+
+Nested same-quote f-string indexes (pre-PEP 701) are a SyntaxError on 3.9:
+
+    SyntaxError: f-string: unmatched '['
 """
 
 from __future__ import annotations
 
 import ast
+import os
+import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -71,6 +78,30 @@ def _has_future_annotations(path: Path) -> bool:
             continue
         break
     return False
+
+
+# Pre-PEP 701 (3.9–3.11): same quote as the f-string delimiter inside `{...}`
+# is a SyntaxError (`f"{row["k"]}"`). ast.parse on CI's 3.12+ will not catch it.
+_FSTRING_SAME_QUOTE_INDEX = (
+    re.compile(r'(?i)(?:r)?f"(?:[^"\\]|\\.)*\{(?:[^{}"\\]|\\.)*\["', re.S),
+    re.compile(r"(?i)(?:r)?f'(?:[^'\\]|\\.)*\{(?:[^{}'\\]|\\.)*\['", re.S),
+)
+
+
+def _fstring_same_quote_index_hits_text(text: str, label: str) -> list[str]:
+    hits: list[str] = []
+    for pattern in _FSTRING_SAME_QUOTE_INDEX:
+        for match in pattern.finditer(text):
+            lineno = text.count("\n", 0, match.start()) + 1
+            hits.append(f"{label}:{lineno}")
+    return hits
+
+
+def _fstring_same_quote_index_hits(path: Path) -> list[str]:
+    return _fstring_same_quote_index_hits_text(
+        path.read_text(encoding="utf-8"),
+        str(path.relative_to(ROOT)),
+    )
 
 
 def _uses_annotations(path: Path) -> bool:
@@ -143,6 +174,80 @@ class Py39ImportTests(unittest.TestCase):
             "PEP 604 `|` in a runtime assignment crashes Python 3.9 at import "
             "(macOS Xcode python3). Use Optional/Union for type aliases.",
         )
+
+    def test_fstring_heuristic_flags_the_mac_crash_shape(self) -> None:
+        """Lock: the 3.9 SyntaxError at statement.py:338 stays detectable on 3.12."""
+        bad = 'cell = f"{float(r["allocated_billed_usd"]):.2f}"\n'
+        good = 'alloc = r["allocated_billed_usd"]\ncell = f"{float(alloc):.2f}"\n'
+        also_good = "cell = f'{float(r[\"allocated_billed_usd\"]):.2f}'\n"
+        self.assertEqual(
+            _fstring_same_quote_index_hits_text(bad, "crash.py"),
+            ["crash.py:1"],
+        )
+        self.assertEqual(_fstring_same_quote_index_hits_text(good, "ok.py"), [])
+        self.assertEqual(_fstring_same_quote_index_hits_text(also_good, "ok2.py"), [])
+
+    def test_no_nested_same_quote_fstring_indexes(self) -> None:
+        """3.9 rejects same-quote indexes inside f-strings (pre-PEP 701).
+
+        ``f"{row['k']}"`` is fine; matching quotes are a SyntaxError.
+        ast.parse on CI's 3.12+ accepts the bad form, so this is a source scan.
+        """
+        hits: list[str] = []
+        for root in SCAN_ROOTS:
+            if not root.exists():
+                continue
+            paths = [root] if root.is_file() else sorted(root.rglob("*.py"))
+            for path in paths:
+                if path.is_file() and path.suffix == ".py":
+                    hits.extend(_fstring_same_quote_index_hits(path))
+        self.assertEqual(
+            hits,
+            [],
+            "nested same-quote f-string index is a SyntaxError on Python 3.9 "
+            "(macOS Xcode python3). Pull the value out or use the other quote.",
+        )
+
+    def test_statement_html_formats_allocated_billed_usd(self) -> None:
+        """Regression for statement.py:338 — import + render the HTML row."""
+        from ardoise.statement import _html_page, _md
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        os.environ["HOME"] = tmp.name
+        os.environ["ARDOISE_HOME"] = str(Path(tmp.name) / ".ardoise")
+        for key in ("ARDOISE_LEDGER", "ARDOISE_QUEUE", "ARDOISE_STATEMENTS"):
+            os.environ.pop(key, None)
+
+        summary = {
+            "month": "2026-09",
+            "by_agent": [
+                {
+                    "agent": "Explore",
+                    "entries": 3,
+                    "cost_usd": 0.1234,
+                    "allocated_billed_usd": 12.5,
+                }
+            ],
+            "by_skill": [
+                {
+                    "skill": "session-retrospective",
+                    "entries": 1,
+                    "cost_usd": 0.01,
+                    "allocated_billed_usd": None,
+                }
+            ],
+        }
+        html = _html_page(summary)
+        md = _md(summary)
+        self.assertIn("Explore", html)
+        self.assertIn("12.50", html)
+        self.assertIn("Allocated billed", html)
+        attr = html.split('section class="quiet"')[1]
+        self.assertIn("session-retrospective", attr)
+        self.assertRegex(attr, r">—<")
+        self.assertIn("| Explore | 3 | 0.1234 | 12.50 |", md)
+        self.assertIn("| session-retrospective | 1 | 0.0100 | — |", md)
 
     def test_annotated_modules_postpone_hints(self) -> None:
         missing: list[str] = []

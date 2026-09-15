@@ -60,6 +60,13 @@ def _money(value: Any, *, places: int = 2) -> str:
     return f"${number:,.{places}f}"
 
 
+def _allocated_billed_cell(row: dict[str, Any]) -> str:
+    alloc = row.get("allocated_billed_usd")
+    if alloc is None:
+        return "—"
+    return f"{float(alloc):.2f}"
+
+
 def _doc_for(summary: dict[str, Any]) -> dict[str, Any]:
     cfg = config_mod.load()
     return document.build_document(summary, config=cfg)
@@ -176,8 +183,7 @@ def _md(summary: dict[str, Any]) -> str:
                 "|---|---:|---:|---:|",
             ]
             for row in rows[:8]:
-                alloc = row.get("allocated_billed_usd")
-                alloc_s = "—" if alloc is None else f"{float(alloc):.2f}"
+                alloc_s = _allocated_billed_cell(row)
                 lines.append(
                     f"| {row[dim]} | {row['entries']} | {float(row['cost_usd']):.4f} | {alloc_s} |"
                 )
@@ -328,19 +334,18 @@ def _html_page(summary: dict[str, Any]) -> str:
             rows = attribution.present(summary.get(f"by_{dim}"), dim)
             if not rows:
                 continue
-            body = "".join(
-                (
+            parts: list[str] = []
+            for r in rows[:8]:
+                alloc_s = _allocated_billed_cell(r)
+                parts.append(
                     "<tr>"
                     f"<td>{cell(r[dim])}</td>"
                     f'<td class="num">{r["entries"]}</td>'
                     f'<td class="num">{float(r["cost_usd"]):.4f}</td>'
-                    f'<td class="num">'
-                    f'{"—" if r.get("allocated_billed_usd") is None else f"{float(r["allocated_billed_usd"]):.2f}"}'
-                    "</td>"
+                    f'<td class="num">{alloc_s}</td>'
                     "</tr>"
                 )
-                for r in rows[:8]
-            )
+            body = "".join(parts)
             blocks.append(
                 f"<h3>By {titles[dim].lower()}</h3>"
                 '<table class="attr"><thead><tr>'
