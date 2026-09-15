@@ -31,7 +31,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from ardoise import db, paths, prices
 from ardoise.vendors.contract import cycle_of, entry_to_event
@@ -51,7 +51,8 @@ OVERLAP = timedelta(days=1)
 MIN_START = datetime(2026, 1, 1, tzinfo=timezone.utc)
 T0_SOURCES = ("anthropic_t0", "hook", "anthropic")
 
-Transport = Callable[[str, str, dict[str, Any] | None], dict[str, Any]]
+# Assignment is evaluated at import; `|` unions crash Python 3.9 (macOS Xcode).
+Transport = Callable[[str, str, Optional[dict[str, Any]]], dict[str, Any]]
 
 
 def _person() -> str | None:

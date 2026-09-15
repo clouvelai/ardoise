@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import calendar
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from ardoise import attribution, prices, roster
 
-RateFn = Callable[[str | None, str], float | None]
+# Assignment is evaluated at import; `|` unions crash Python 3.9 (macOS Xcode).
+RateFn = Callable[[Optional[str], str], Optional[float]]
 
 
 def _float(value: Any) -> float:
