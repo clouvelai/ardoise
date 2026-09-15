@@ -54,7 +54,8 @@ _EFFORT_KEYS = (
     "effort_id",
 )
 
-_NESTED_OBJECTS = ("attribution", "metadata", "message")
+_NESTED_OBJECTS = ("attribution", "metadata", "message", "profile")
+_PROFILE_NAME_KEYS = ("name", "displayName", "display_name")
 _DICT_NAME_KEYS = (
     "name",
     "type",
@@ -151,6 +152,10 @@ def extract(raw: dict[str, Any] | None) -> dict[str, str | None]:
             out["effort"] = _first(layer, _EFFORT_KEYS)
     if out["effort"] is None:
         out["effort"] = _effort_from_params(raw)
+    if out["agent"] is None:
+        profile = raw.get("profile")
+        if isinstance(profile, dict) and not _looks_like_cloud_run(profile):
+            out["agent"] = _first(profile, _AGENT_KEYS + _PROFILE_NAME_KEYS)
     return out
 
 

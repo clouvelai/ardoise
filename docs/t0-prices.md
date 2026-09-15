@@ -53,13 +53,20 @@ published API list prices, including cache writes.
 
 Slugs such as `cursor-grok-4.6-high` and `cursor-grok-4.6-high-fast`
 normalize to the keys above (`cursor-` prefix stripped; effort/speed
-suffixes peeled).
+suffixes peeled). Display names (`Grok 4.6`), `x-ai/` prefixes, and
+Cursor Admin slugs (`claude-4.5-sonnet`) alias to the same book keys.
+`composer-2.5[fast=true]` is parsed as Composer Fast. `inherit` is a
+placeholder (`unknown` / $0), not a guessed parent model.
+
+GPT-5.6 Sol / Terra / Luna use their published Other Models rates so
+they do not inherit the generic `gpt-5-6` $1.25 / $10 row. Gemini 3.8
+Flash and Claude Fable 5.1 are listed at the published Cursor rates.
 
 ## Still unknown / still not a bill
 
 These rows stay `unknown` (or have no usage row at all):
 
-- Cursor Auto / `model=default` with no `model_id` and no nested real slug
+- Cursor Auto / `model=default` / `inherit` with no `model_id` and no nested real slug
 - Prompt-only cloud / box transcripts (no `usage` — not metered; not turned into zero-token join rows)
 - sessionStart / sessionEnd hook join rows that carry a session id but no model
 - SKUs not in the bundled book and not a prefix of one (priced $0, not Sonnet)

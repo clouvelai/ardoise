@@ -1,0 +1,20 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "text": "SECRET_MESSAGES_ONLY_PROMPT"
+    },
+    {
+      "role": "assistant",
+      "thinking": "SECRET_MESSAGES_ONLY_THINKING",
+      "text": "SECRET_MESSAGES_ONLY_BODY",
+      "started_at_ms": 1789471600445,
+      "completed_at_ms": 1789471601445
+    },
+    {
+      "role": "tool",
+      "tool_name": "Read",
+      "tool_call_id": "call_1"
+    }
+  ]
+}

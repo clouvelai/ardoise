@@ -134,8 +134,8 @@ def usage_only_event(event: dict[str, Any]) -> dict[str, Any]:
         "message_id": message_id,
         "request_id": request_id,
         "usage": {
-            "input_tokens": _int(_pick("input_tokens", "inputTokens")),
-            "output_tokens": _int(_pick("output_tokens", "outputTokens")),
+            "input_tokens": _int(_pick("input_tokens", "inputTokens", "prompt_tokens", "promptTokens")),
+            "output_tokens": _int(_pick("output_tokens", "outputTokens", "completion_tokens", "completionTokens")),
             "cache_creation_input_tokens": _int(
                 _pick(
                     "cache_creation_input_tokens",

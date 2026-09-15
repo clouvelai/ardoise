@@ -29,6 +29,10 @@ fi
 # Default drop folder created by install / ensure_home.
 mkdir -p "$ARDOISE_HOME/transcripts"
 cp -R "$ROOT/tests/fixtures/dogfood/agent-data" "$ARDOISE_HOME/transcripts/"
+# Usage-shaped Cursor agent-transcripts (prompt-only trees still fail-open).
+mkdir -p "$HOME/.cursor/projects/app/agent-transcripts"
+cp "$ROOT/tests/fixtures/dogfood/agent-transcripts/Craie/session.jsonl" \
+  "$HOME/.cursor/projects/app/agent-transcripts/session.jsonl"
 
 # Same one-liner UX: backfill with no extra flags.
 "$LAUNCHER" backfill --json >"$BOX/backfill.json"
@@ -86,12 +90,13 @@ for mid, agent in (
     ("msg_grok_craie", "Craie"),
     ("msg_grok_encre", "Encre"),
     ("msg_grok_captain", "captain"),
+    ("msg_dogfood_tx_craie", "Craie"),
 ):
     row = conn.execute("SELECT agent FROM events WHERE message_id = ?", (mid,)).fetchone()
     if row is None or row["agent"] != agent:
         raise SystemExit(f"{mid} agent={None if row is None else row['agent']} want {agent}")
 blob = (home / ".ardoise" / "ledger.db").read_bytes()
-for needle in (b"SECRET_GROK_PROMPT", b"SECRET_ENCRE_BODY", b"SECRET_CAPTAIN_PROMPT"):
+for needle in (b"SECRET_GROK_PROMPT", b"SECRET_ENCRE_BODY", b"SECRET_CAPTAIN_PROMPT", b"SECRET_DOGFOOD_TX_PROMPT"):
     if needle in blob:
         raise SystemExit(f"ledger stored secret {needle!r}")
 print("dogfood=ok agents=Craie,Encre,captain chips=spend")

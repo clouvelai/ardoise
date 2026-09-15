@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from ardoise import anomaly, attribution, budget, config as config_mod, db, paths, reconcile, roster
+from ardoise import anomaly, attribution, budget, config as config_mod, db, meter_gap, paths, reconcile, roster
 
 
 def _month_bounds(month: str) -> tuple[str, str]:
@@ -133,6 +133,7 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
         )
         latest = _latest_month(conn) if int(total_rows or 0) else None
         backfilled = _capture_ran(conn)
+        scan = meter_gap.load_scan(conn)
 
     estimated = round(sum(float(row.get("estimated_usd") or row.get("cost_usd") or 0) for row in lines), 6)
     billed_usd = round(
@@ -195,9 +196,19 @@ def summarize(month: str | None = None, *, person: str | None = None) -> dict[st
     data["cursor_join_sessions"] = cursor_join
     if cursor_join:
         notes.append(
-            f"Cursor: {cursor_join} session(s), $0 — Team Admin or usage-shaped "
-            "events needed for cents"
+            f"Cursor: {cursor_join} session(s), $0 — usage-shaped events needed for cents"
         )
+    probe = meter_gap.probe_usage_paths(config=cfg)
+    gap = meter_gap.describe(
+        scan=scan,
+        backfilled=backfilled,
+        month_cost=estimated,
+        probe=probe,
+    )
+    data["meter_gap"] = gap
+    gap_note = meter_gap.note_for(gap)
+    if gap_note:
+        notes.append(gap_note)
     data["notes"] = [item for item in notes if item]
     return data
 
@@ -319,7 +330,8 @@ def render_text(data: dict[str, Any]) -> str:
                 [
                     "",
                     "ledger is empty — already backfilled, no usage rows",
-                    "  prompt-only trees stay empty until a usage-shaped export or hook lands",
+                    "  roots scanned, no usage objects — prompt-only trees stay empty",
+                    "  until a usage-shaped export or hook lands (no Admin key)",
                 ]
             )
         else:

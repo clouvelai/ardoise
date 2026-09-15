@@ -17,6 +17,7 @@ function money(value: number | undefined, places = 2): string {
 export const STATEMENT_COPY = {
   print: "Print statement",
   copyTotals: "Copy totals into your invoice",
+  downloadCsv: "Download CSV",
   copied: "Copied",
   estimate: "Estimate",
   billed: "Billed",
@@ -100,6 +101,11 @@ export function monthLabel(month: string): string {
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+export function csvFilename(month: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(month.trim());
+  return match ? `ardoise-${match[1]}-${match[2]}.csv` : "ardoise-statement.csv";
 }
 
 export function copyPayload(

@@ -1,0 +1,1 @@
+{"role":"assistant","agentName":"Craie","model":"cursor-grok-4.6-high","requestId":"req_dogfood_tx_craie","message":{"id":"msg_dogfood_tx_craie","role":"assistant","model":"cursor-grok-4.6-high","usage":{"input_tokens":40,"output_tokens":8}},"prompt":"SECRET_DOGFOOD_TX_PROMPT"}

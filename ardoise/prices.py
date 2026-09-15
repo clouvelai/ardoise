@@ -12,30 +12,58 @@ from ardoise import paths
 from ardoise.model import UNKNOWN, is_placeholder
 
 _DATE_SUFFIX = re.compile(r"-\d{8}$")
+_SPACES = re.compile(r"[\s/]+")
+_MULTI_DASH = re.compile(r"-{2,}")
+_CLAUDE_FLIP = re.compile(
+    r"^claude-(\d+(?:-\d+)?)-(sonnet|opus|haiku|fable)(?:-(.+))?$"
+)
 _PROVIDER_PREFIXES = (
     "anthropic/",
     "cursor/",
     "openai/",
     "google/",
     "xai/",
+    "x-ai/",
     "spacexai/",
     "meta/",
+    "bedrock/",
+    "vertex/",
+    "vertex-ai/",
+    "vertex_ai/",
 )
 _CURSOR_PREFIX = "cursor-"
 _PEEL = frozenset({"fast", "xhigh", "high", "medium", "low", "max", "thinking"})
 _SENTINELS = frozenset({UNKNOWN, "default"})
 
 
+def _flip_claude_slug(name: str) -> str:
+    """Cursor Admin / picker ``claude-4.5-sonnet`` → book ``claude-sonnet-4-5``."""
+    match = _CLAUDE_FLIP.match(name)
+    if not match:
+        return name
+    version, tier, rest = match.group(1), match.group(2), match.group(3)
+    out = f"claude-{tier}-{version}"
+    if rest:
+        out = f"{out}-{rest}"
+    return out
+
+
 def normalize_model(name: str | None) -> str:
     if is_placeholder(name):
         return UNKNOWN
     n = str(name).strip().lower()
+    if "[" in n:
+        n = n.split("[", 1)[0].strip()
     n = n.replace(".", "-")
     for prefix in _PROVIDER_PREFIXES:
         n = n.removeprefix(prefix)
+    n = n.replace("_", "-")
+    n = _SPACES.sub("-", n)
+    n = _MULTI_DASH.sub("-", n).strip("-")
     n = _DATE_SUFFIX.sub("", n)
     if n.startswith(_CURSOR_PREFIX):
         n = n[len(_CURSOR_PREFIX) :]
+    n = _flip_claude_slug(n)
     return n or UNKNOWN
 
 

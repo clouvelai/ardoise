@@ -11,21 +11,36 @@ the same: they meter when the editor already emitted usage.
 ## Prompt-only cloud / box trees
 
 Cursor cloud-agent and Grok Bot box exports are often chat/prompt JSON.
-Those files have **no** `usage` / `tokenUsage` object. Fail-open is
-correct: they are skipped. An empty ledger after `install` → `backfill` on
-a prompt-only tree is expected.
+A 2026-09-15 cloud-agent `transcript.json` on this box was a `messages[]`
+list (`role` / `text` / `thinking` / tool calls) with **zero** `usage` /
+`tokenUsage` / token fields. `events.json` was empty. `index.json` named
+`originalModelName` only — that is a model hint, not a meter. Fail-open
+is correct: those files are skipped. An empty ledger after `install` →
+`backfill` on a prompt-only tree is expected.
 
 Ardoise does **not** invent meters and does **not** estimate-from-prompt.
 
+Local Cursor `agent-transcripts` JSONL and `~/.cursor/chats/**/store.db`
+are scanned when those paths exist. Prompt-only blobs and tables stay
+empty. When Cursor / Grok Bot emit a usage object — JSONL `usage` /
+`tokenUsage`, OpenAI-style `prompt_tokens`, or a `transcript_entries`
+row — the line persists. `agent=` is copied from `agentName` / `botName`
+/ `profile.name` when already present (never from a job title).
+
 Until a usage-shaped export or hook includes usage objects, those trees
 will not show spend. Admin T2 is not the Free fix for empty chips.
+
+Empty backfill and `status` print a soft note when roots were scanned
+and no usage landed. `status --json` exposes the same fact as
+`meter_gap` (`kind=prompt_only`). No Admin key.
 
 ## What actually meters (Free)
 
 | Path | When it counts |
 | --- | --- |
 | In-editor Cursor T0 hooks | Hook payload already includes usage. `agent=` is copied only when the hook already named one. |
-| T0 JSONL (Claude / Cursor / usage-shaped cloud-agent) | Transcript line already has tokens. Named `agent` / `skill` / `effort` are copied when present. |
+| T0 JSONL (Claude / Cursor / `agent-transcripts` / cloud-agent) | Transcript line already has tokens. Named `agent` / `skill` / `effort` are copied when present. |
+| SQLite `store.db` / `index.db` | JSON blobs or `transcript_entries` already carry tokens. Protobuf / prompt blobs are skipped. |
 
 `tests/fresh-box.sh` and `tests/dogfood-grok.sh` stay on this path.
 No keys.

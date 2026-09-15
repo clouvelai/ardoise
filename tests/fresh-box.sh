@@ -586,6 +586,9 @@ PY
 # Grok Bot dogfood: drop fixtures in the default folder, then plain `backfill`.
 mkdir -p "$HOME/.ardoise/transcripts"
 cp -R "$ROOT/tests/fixtures/dogfood/agent-data" "$HOME/.ardoise/transcripts/"
+mkdir -p "$HOME/.cursor/projects/app/agent-transcripts"
+cp "$ROOT/tests/fixtures/dogfood/agent-transcripts/Craie/session.jsonl" \
+  "$HOME/.cursor/projects/app/agent-transcripts/session.jsonl"
 "$BIN" backfill --json >"$BOX/backfill-grok.json"
 "$BIN" status --month 2026-09 >"$BOX/status-grok.txt"
 "$BIN" status --json --month 2026-09 >"$BOX/status-grok.json"
@@ -618,7 +621,7 @@ captain = conn.execute(
 if captain is None or captain["agent"] != "captain":
     raise SystemExit(f"grok fixture missing agent=captain: {None if captain is None else dict(captain)}")
 blob = (home / ".ardoise" / "ledger.db").read_bytes()
-for needle in (b"SECRET_GROK_PROMPT", b"SECRET_ENCRE_BODY", b"SECRET_CAPTAIN_PROMPT"):
+for needle in (b"SECRET_GROK_PROMPT", b"SECRET_ENCRE_BODY", b"SECRET_CAPTAIN_PROMPT", b"SECRET_DOGFOOD_TX_PROMPT"):
     if needle in blob:
         raise SystemExit(f"ledger stored grok secret {needle!r}")
 
