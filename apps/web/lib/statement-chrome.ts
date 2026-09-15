@@ -177,6 +177,11 @@ export function csvFilename(month: string): string {
   return match ? `ardoise-${match[1]}-${match[2]}.csv` : "ardoise-statement.csv";
 }
 
+/** Native `<a download>` href. Avoids blob-URL revoke races and JS click. */
+export function csvDataHref(csv: string): string {
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+}
+
 export function copyPayload(
   data: StatementResponse,
   month: string,

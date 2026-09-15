@@ -7,6 +7,7 @@ import {
   canSubmitVendorTotal,
   canUpgradeToBilled,
   copyPayload,
+  csvDataHref,
   csvFilename,
   hasPrintableRows,
   isBilledGrade,
@@ -144,6 +145,10 @@ describe("statement chrome lock", () => {
     assert.equal(csvFilename("2026-09"), "ardoise-2026-09.csv");
     assert.equal(csvFilename("later"), "ardoise-statement.csv");
     assert.equal(ESTIMATE_STATEMENT_FIXTURE.csv.includes("claude-sonnet-4-6"), true);
+    assert.equal(
+      csvDataHref(ESTIMATE_STATEMENT_FIXTURE.csv),
+      `data:text/csv;charset=utf-8,${encodeURIComponent(ESTIMATE_STATEMENT_FIXTURE.csv)}`,
+    );
   });
 
   it("renders a sleepy-founder month label", () => {
@@ -186,7 +191,9 @@ describe("statement chrome lock", () => {
     assert.equal(view.includes("STATEMENT_COPY.print"), true);
     assert.equal(view.includes("STATEMENT_COPY.copyTotals"), true);
     assert.equal(view.includes("STATEMENT_COPY.downloadCsv"), true);
-    assert.equal(view.includes("onDownloadCsv"), true);
+    assert.equal(view.includes("csvDataHref"), true);
+    assert.equal(view.includes("download={csvFilename(month)}"), true);
+    assert.equal(chrome.includes("csvDataHref"), true);
     assert.equal(view.includes("STATEMENT_COPY.emptyTitle"), true);
     assert.equal(view.includes("STATEMENT_COPY.helper"), true);
     assert.equal(view.includes("shouldNudgePro"), true);
