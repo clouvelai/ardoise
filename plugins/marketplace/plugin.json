@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "ardoise",
+  "version": "0.1.0",
+  "description": "Hosted Ardoise usage status and spend statements via MCP. Usage only; no prompts.",
+  "author": {
+    "name": "clouvelai",
+    "url": "https://github.com/clouvelai"
+  },
+  "homepage": "https://github.com/clouvelai/ardoise",
+  "repository": "https://github.com/clouvelai/ardoise",
+  "license": "MIT",
+  "keywords": ["ledger", "spend", "usage", "mcp", "cursor"]
+}

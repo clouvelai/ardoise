@@ -72,6 +72,28 @@ claude plugin validate ./plugins/claude
 The first checks `marketplace.json` (and each local plugin source). The
 second checks that plugin's `plugin.json` and `hooks/hooks.json`.
 
+### Cursor marketplace plugin (MCP)
+
+Agent Plugin pack for the Cursor **Plugins** tab lives under
+[`plugins/marketplace/`](../plugins/marketplace/) — root `plugin.json`,
+`mcp.json`, and `skills/ardoise-usage/`. Repo catalog:
+[`.cursor-plugin/marketplace.json`](../.cursor-plugin/marketplace.json).
+
+This is **not** the hooks CLI scaffold. The MCP server wraps hosted
+`GET /v1/usage/status` and `GET /v1/usage/statement`. Auth is the env
+var `ARDOISE_API_TOKEN` (`ard_…` from `/app/settings`). The marketplace
+env schema is `.cursor-plugin/plugin.json` → `variables`.
+
+```bash
+export ARDOISE_API_TOKEN=ard_…   # never commit
+python3 plugins/marketplace/mcp/server.py --check
+```
+
+Create Plugin / marketplace submit (later): point Cursor at
+`plugins/marketplace/` or submit `clouvelai/ardoise` (catalog already
+lists that source). Set `ARDOISE_API_TOKEN` under Plugins → Configure.
+See [plugins/marketplace/README.md](../plugins/marketplace/README.md).
+
 ### Cursor local plugin (dogfood)
 
 First-class layout lives under `plugins/cursor/`

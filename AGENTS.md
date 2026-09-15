@@ -20,6 +20,7 @@ bin/ardoise login --token TOKEN   # from hosted /app/settings
 bin/ardoise sync
 tests/fresh-box.sh   # must print FRESH-BOX-OK offline
 tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/captain spend
+python3 plugins/marketplace/mcp/server.py --check  # hosted MCP stub; ARDOISE_API_TOKEN for live calls
 ```
 
 - Ledger: `~/.ardoise/ledger.db`
@@ -34,3 +35,4 @@ tests/dogfood-grok.sh  # install → backfill → status chips with Craie/Encre/
 - T0 prices: bundled `data/prices.fallback.json` (no network). Cursor `default`/`auto` persist as `unknown` ($0), never Sonnet. `ardoise reprice` rewrites existing T0 `cost_usd` from the current book (no re-ingest). See [docs/t0-prices.md](docs/t0-prices.md).
 - Do not add third-party Python deps to `ardoise/`
 - Hosted companion: `apps/api` (FastAPI + its own requirements). **Account first, card later** — OTP signup is free; Stripe Checkout (`mode=subscription`) only for Pro/Team. `ardoise login` / `ardoise sync` upload already-priced export rows. Keep Stripe/JWT secrets server-side. Never add third-party Python deps to `ardoise/`.
+- Cursor marketplace Agent Plugin: `plugins/marketplace/` (`plugin.json` + MCP `status`/`statement` over `https://api-production-ea055.up.railway.app`). Auth env `ARDOISE_API_TOKEN` (`ard_…`). Not the hooks CLI scaffold. No secrets in the pack.

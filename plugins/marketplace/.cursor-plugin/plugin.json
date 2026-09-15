@@ -1,0 +1,31 @@
+{
+  "name": "ardoise",
+  "description": "Hosted Ardoise usage status and spend statements via MCP. Usage only; no prompts.",
+  "version": "0.1.0",
+  "author": {
+    "name": "clouvelai"
+  },
+  "homepage": "https://github.com/clouvelai/ardoise",
+  "repository": "https://github.com/clouvelai/ardoise",
+  "license": "MIT",
+  "keywords": ["ledger", "spend", "usage", "mcp", "cursor"],
+  "skills": "./skills",
+  "mcpServers": "./mcp.json",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "ARDOISE_API_TOKEN": {
+        "type": "string",
+        "title": "Ardoise CLI token",
+        "description": "ard_… token minted at hosted /app/settings. Used as Authorization for /v1/usage/status and /v1/usage/statement. Never commit this value."
+      },
+      "ARDOISE_API_URL": {
+        "type": "string",
+        "title": "Ardoise API origin",
+        "description": "Hosted API origin. Leave unset to use the production default.",
+        "default": "https://api-production-ea055.up.railway.app"
+      }
+    },
+    "required": ["ARDOISE_API_TOKEN"]
+  }
+}

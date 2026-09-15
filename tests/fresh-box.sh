@@ -100,9 +100,36 @@ cursor_plugin = json.loads(
 if cursor_root.get("name") != "ardoise" or cursor_plugin.get("name") != "ardoise":
     raise SystemExit("cursor plugin name mismatch")
 hooks = json.loads((root / "plugins" / "cursor" / "hooks" / "hooks.json").read_text())
-blob = json.dumps(hooks) + json.dumps(cursor_root) + json.dumps(catalog)
+cursor_mkt = json.loads((root / ".cursor-plugin" / "marketplace.json").read_text())
+mkt_plugin = (cursor_mkt.get("plugins") or [None])[0]
+if not mkt_plugin or mkt_plugin.get("source") != "./plugins/marketplace":
+    raise SystemExit(f"cursor marketplace source={mkt_plugin}")
+mkt = root / "plugins" / "marketplace"
+agent = json.loads((mkt / "plugin.json").read_text())
+mcp = json.loads((mkt / "mcp.json").read_text())
+if agent.get("name") != "ardoise" or "hooks" in agent:
+    raise SystemExit(f"marketplace agent plugin={agent}")
+server_cfg = (mcp.get("mcpServers") or {}).get("ardoise") or {}
+if server_cfg.get("type") != "stdio" or "${ARDOISE_API_TOKEN}" not in json.dumps(mcp):
+    raise SystemExit(f"marketplace mcp.json={mcp}")
+server_src = (mkt / "mcp" / "server.py").read_text()
+if "/v1/usage/status" not in server_src or "/v1/usage/statement" not in server_src:
+    raise SystemExit("marketplace MCP missing hosted usage routes")
+if not (mkt / "skills" / "ardoise-usage" / "SKILL.md").is_file():
+    raise SystemExit("missing marketplace skill")
+blob = (
+    json.dumps(hooks)
+    + json.dumps(cursor_root)
+    + json.dumps(catalog)
+    + json.dumps(cursor_mkt)
+    + json.dumps(agent)
+    + json.dumps(mcp)
+)
 if "../shared" in blob or "plugins/shared" in blob:
     raise SystemExit("catalog/plugin still references plugins/shared")
+for needle in ("sk-ant-", "ANTHROPIC_API_KEY", "CURSOR_ADMIN_API_KEY", "access_token"):
+    if needle in blob:
+        raise SystemExit(f"marketplace catalog stored {needle!r}")
 print("catalog=ok")
 PY
 # Isolated Cursor plugin copy (dogfood layout) must not need plugins/shared.

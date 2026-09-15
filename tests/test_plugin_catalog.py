@@ -110,6 +110,28 @@ class CatalogShapeTests(unittest.TestCase):
             self.assertIn(event, root["hooks"])
             self.assertIn(event, _load(hooks)["hooks"])
 
+    def test_cursor_marketplace_points_at_plugins_marketplace(self) -> None:
+        catalog = ROOT / ".cursor-plugin" / "marketplace.json"
+        self.assertTrue(catalog.is_file(), "missing .cursor-plugin/marketplace.json")
+        data = _load(catalog)
+        self.assertEqual(data["name"], "ardoise")
+        plugin = data["plugins"][0]
+        self.assertEqual(plugin["name"], "ardoise")
+        self.assertEqual(plugin["source"], "./plugins/marketplace")
+        source = ROOT / "plugins" / "marketplace"
+        self.assertTrue((source / "plugin.json").is_file())
+        self.assertTrue((source / "mcp.json").is_file())
+        self.assertTrue((source / ".cursor-plugin" / "plugin.json").is_file())
+        self.assertTrue((source / "mcp" / "server.py").is_file())
+        self.assertTrue((source / "skills" / "ardoise-usage" / "SKILL.md").is_file())
+        _assert_no_shared(self, catalog)
+        _assert_no_shared(self, source / "plugin.json")
+        _assert_no_shared(self, source / "mcp.json")
+        _assert_no_shared(self, source / ".cursor-plugin" / "plugin.json")
+        cursor = _load(source / ".cursor-plugin" / "plugin.json")
+        self.assertIn("ARDOISE_API_TOKEN", cursor["variables"]["properties"])
+        self.assertNotIn("hooks", _load(source / "plugin.json"))
+
 
 class IsolatedHome(unittest.TestCase):
     def setUp(self) -> None:

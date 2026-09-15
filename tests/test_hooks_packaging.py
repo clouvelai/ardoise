@@ -85,6 +85,10 @@ class SourceTreeTests(unittest.TestCase):
             ROOT / "plugins" / "cursor" / ".cursor-plugin" / "plugin.json",
             ROOT / ".claude-plugin" / "marketplace.json",
             ROOT / ".cursor-plugin" / "plugin.json",
+            ROOT / ".cursor-plugin" / "marketplace.json",
+            ROOT / "plugins" / "marketplace" / "plugin.json",
+            ROOT / "plugins" / "marketplace" / "mcp.json",
+            ROOT / "plugins" / "marketplace" / ".cursor-plugin" / "plugin.json",
         ]
         for path in paths:
             _assert_no_shared_path(self, path)
@@ -94,6 +98,11 @@ class SourceTreeTests(unittest.TestCase):
         for path in paths:
             if path.suffix == ".sh":
                 self.assertIn("trap 'exit 0' EXIT", path.read_text(encoding="utf-8"))
+        server = (ROOT / "plugins" / "marketplace" / "mcp" / "server.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("../shared", server)
+        self.assertNotIn("from ardoise", server)
 
     def test_embedded_fallback_matches_shared_files(self) -> None:
         self.assertEqual(
