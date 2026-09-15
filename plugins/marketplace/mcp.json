@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "ardoise": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["./mcp/server.py"],
+      "env": {
+        "ARDOISE_API_TOKEN": "${ARDOISE_API_TOKEN}",
+        "ARDOISE_API_URL": "${ARDOISE_API_URL}"
+      }
+    }
+  }
+}

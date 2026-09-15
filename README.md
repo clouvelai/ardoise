@@ -34,8 +34,13 @@ required at runtime) and links `~/.local/bin/ardoise`. Then:
 3. Open Claude Code or Cursor once
 4. Optional: sign up, `ardoise login`, `ardoise sync` for the hosted ledger
 
-Claude marketplace add / Cursor local plugin are additive — see
+Claude marketplace add / Cursor local hooks plugin are additive — see
 [docs/install.md](docs/install.md). They are not the primary path.
+
+Cursor **Marketplace → Plugins** listing is the Agent Plugin pack under
+[`plugins/marketplace/`](plugins/marketplace/) (`plugin.json` + MCP
+`status` / `statement` over the hosted API). That is a different scaffold
+from the hooks CLI capture under `plugins/cursor/`.
 
 Bare `ardoise` prints status. An empty ledger tells you to run `backfill`.
 
@@ -219,6 +224,14 @@ tests/fresh-box.sh
 ```
 
 Must print `FRESH-BOX-OK` with no network.
+
+Hosted MCP stub (marketplace plugin, no network in unit tests):
+
+```bash
+python3 -m unittest tests/test_marketplace_plugin.py
+# local stdio server (needs a real ard_ token to call production):
+# ARDOISE_API_TOKEN=ard_… python3 plugins/marketplace/mcp/server.py --check
+```
 
 ## Landing
 
