@@ -95,6 +95,14 @@ class Py39ImportTests(unittest.TestCase):
 
         self.assertTrue(callable(main))
 
+    def test_launcher_shebang_stays_env_python3(self) -> None:
+        """Mac Homebrew may ship 3.13/3.14; env python3 is still Xcode 3.9.6."""
+        text = (ROOT / "bin" / "ardoise").read_text(encoding="utf-8")
+        first = text.splitlines()[0]
+        self.assertEqual(first, "#!/usr/bin/env python3")
+        self.assertNotIn("homebrew", first.lower())
+        self.assertNotRegex(first, r"python3\.\d+")
+
     def test_t2a_module_imports(self) -> None:
         from ardoise.vendors.anthropic import t2a
         from ardoise.vendors import cursor
