@@ -3,7 +3,6 @@
  * and the copy-totals whisper. Empty months stay sparse — no invented rows.
  */
 
-import type { StatementDocument } from "../components/statement-document";
 import type { StatementResponse } from "./saas-api";
 
 function money(value: number | undefined, places = 2): string {
@@ -69,16 +68,4 @@ export function copyPayload(
   const billed = isBilledGrade(data);
   const total = money(data.document?.total_usd, billed ? 2 : 4);
   return `Statement ${month} · ${billed ? STATEMENT_COPY.billed : STATEMENT_COPY.estimate} · Total ${total}`;
-}
-
-export function emptyDocument(month: string): StatementDocument {
-  return {
-    title: "Statement",
-    number: month,
-    invoice_grade: false,
-    total_usd: 0,
-    groups: [],
-    entries: 0,
-    month,
-  };
 }
