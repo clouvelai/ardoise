@@ -30,8 +30,9 @@ row — the line persists. `agent=` is copied from `agentName` / `botName`
 Until a usage-shaped export or hook includes usage objects, those trees
 will not show spend. Admin T2 is not the Free fix for empty chips.
 
-Empty backfill prints a drop-folder tip:
-`~/.ardoise/transcripts` (no Admin key).
+Empty backfill and `status` print a soft note when roots were scanned
+and no usage landed. `status --json` exposes the same fact as
+`meter_gap` (`kind=prompt_only`). No Admin key.
 
 ## What actually meters (Free)
 

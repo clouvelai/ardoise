@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from ardoise import config as config_mod, db, paths
+from ardoise import config as config_mod, db, meter_gap, paths
 from ardoise.adapters.cloud_agent import (
     discover_transcript_files,
     iter_transcript_objects,
@@ -160,6 +160,7 @@ def backfill(
 
         db.set_sync_state(conn, vendor="anthropic", kind="capture", ok=True)
         db.set_sync_state(conn, vendor="cursor", kind="capture", ok=True)
+        totals["meter_gap"] = meter_gap.persist_scan(conn, totals)
 
     return totals
 
@@ -180,8 +181,8 @@ def empty_ledger_tip(totals: dict[str, Any], *, prior_capture: bool | None = Non
         return "already backfilled, no usage rows"
     if files:
         return (
-            "no usage rows in scanned logs (prompt-only trees stay empty; "
-            "drop usage-shaped JSON in ~/.ardoise/transcripts)"
+            "roots scanned, no usage objects — prompt-only trees stay empty "
+            "until a usage-shaped export or hook lands"
         )
     return "no local logs found to ingest"
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   canUpgradeToBilled,
   copyPayload,
+  csvFilename,
   hasPrintableRows,
   isBilledGrade,
   isEmptyStatement,
@@ -97,6 +98,12 @@ describe("statement chrome lock", () => {
     );
   });
 
+  it("names the hosted CSV from the statement month", () => {
+    assert.equal(csvFilename("2026-09"), "ardoise-2026-09.csv");
+    assert.equal(csvFilename("later"), "ardoise-statement.csv");
+    assert.equal(ESTIMATE_STATEMENT_FIXTURE.csv.includes("claude-sonnet-4-6"), true);
+  });
+
   it("renders a sleepy-founder month label", () => {
     assert.equal(monthLabel("2026-09"), "September 2026");
     assert.equal(monthLabel("2026-01"), "January 2026");
@@ -114,6 +121,7 @@ describe("statement chrome lock", () => {
     const required = [
       STATEMENT_COPY.print,
       STATEMENT_COPY.copyTotals,
+      STATEMENT_COPY.downloadCsv,
       STATEMENT_COPY.estimate,
       STATEMENT_COPY.helper,
       STATEMENT_COPY.proNudge,
@@ -131,6 +139,8 @@ describe("statement chrome lock", () => {
     }
     assert.equal(view.includes("STATEMENT_COPY.print"), true);
     assert.equal(view.includes("STATEMENT_COPY.copyTotals"), true);
+    assert.equal(view.includes("STATEMENT_COPY.downloadCsv"), true);
+    assert.equal(view.includes("onDownloadCsv"), true);
     assert.equal(view.includes("STATEMENT_COPY.emptyTitle"), true);
     assert.equal(view.includes("STATEMENT_COPY.helper"), true);
     assert.equal(view.includes("shouldNudgePro"), true);

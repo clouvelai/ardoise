@@ -14,6 +14,7 @@ import { sparseMessage } from "@/lib/saas-errors";
 import {
   STATEMENT_COPY,
   copyPayload,
+  csvFilename,
   hasPrintableRows,
   isBilledGrade,
   isEmptyStatement,
@@ -30,6 +31,7 @@ export function StatementWorkspace({
   copied,
   onCopy,
   onPrint,
+  onDownloadCsv,
   canPasteBill,
 }: {
   month: string;
@@ -39,6 +41,7 @@ export function StatementWorkspace({
   copied: boolean;
   onCopy: () => void;
   onPrint: () => void;
+  onDownloadCsv: () => void;
   canPasteBill?: boolean;
 }) {
   const billed = isBilledGrade(data);
@@ -89,6 +92,19 @@ export function StatementWorkspace({
               }
             >
               {copied ? STATEMENT_COPY.copied : STATEMENT_COPY.copyTotals}
+            </button>
+            <button
+              type="button"
+              onClick={onDownloadCsv}
+              disabled={!printable}
+              title={printable ? undefined : STATEMENT_COPY.printDisabledHint}
+              className={
+                printable
+                  ? "rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-ink ring-1 ring-black/[0.08] transition hover:bg-mist"
+                  : "cursor-not-allowed rounded-full bg-white/70 px-4 py-2 text-[13px] font-semibold text-muted ring-1 ring-black/[0.04]"
+              }
+            >
+              {STATEMENT_COPY.downloadCsv}
             </button>
             <button
               type="button"
@@ -231,6 +247,22 @@ export function StatementView() {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
+  function downloadCsv() {
+    if (!data || !hasPrintableRows(data) || !data.csv) {
+      return;
+    }
+    const blob = new Blob([data.csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = csvFilename(month);
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <AppShell>
       <StatementWorkspace
@@ -241,6 +273,7 @@ export function StatementView() {
         copied={copied}
         onCopy={copyTotals}
         onPrint={() => window.print()}
+        onDownloadCsv={downloadCsv}
         canPasteBill={canPasteBill}
       />
     </AppShell>

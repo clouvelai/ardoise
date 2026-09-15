@@ -100,8 +100,8 @@ class BackfillSkipTests(IsolatedHome):
         )
         self.assertEqual(
             backfill_mod.empty_ledger_tip({"inserted": 0, "updated": 0, "files": 2, "skipped_files": 0}),
-            "no usage rows in scanned logs (prompt-only trees stay empty; "
-            "drop usage-shaped JSON in ~/.ardoise/transcripts)",
+            "roots scanned, no usage objects — prompt-only trees stay empty "
+            "until a usage-shaped export or hook lands",
         )
         self.assertEqual(
             backfill_mod.empty_ledger_tip({"inserted": 0, "updated": 0, "files": 0, "skipped_files": 0}),
@@ -123,6 +123,7 @@ class BackfillSkipTests(IsolatedHome):
         data = summarize()
         self.assertTrue(data.get("backfilled"))
         self.assertEqual(data.get("entries"), 0)
+        self.assertEqual((data.get("meter_gap") or {}).get("kind"), "no_logs")
         text = render_status(data)
         self.assertIn("already backfilled, no usage rows", text)
         self.assertNotIn("ingest local Claude Code", text)
