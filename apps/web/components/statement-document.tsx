@@ -54,6 +54,7 @@ export type StatementDocument = {
   memo?: string[];
   notes?: string[];
   month?: string;
+  entries?: number;
 };
 
 export function money(value: number | undefined, places = 2): string {
