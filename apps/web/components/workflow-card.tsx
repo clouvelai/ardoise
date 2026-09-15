@@ -95,7 +95,7 @@ export function WorkflowCard({
     <div
       className={
         className ??
-        "relative mx-auto mt-16 w-full max-w-[440px] lg:mt-8"
+        "relative z-0 mx-auto mt-16 w-full max-w-[440px] lg:mt-32"
       }
     >
       <div

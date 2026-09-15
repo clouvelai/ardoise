@@ -3,7 +3,7 @@ import { SlateMark } from "./mark";
 
 export function Header() {
   return (
-    <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:px-8">
+    <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:px-8">
       <Link href="/" className="flex items-center gap-2.5 text-ink">
         <SlateMark className="h-7 w-7" />
         <span className="text-[17px] font-semibold tracking-tight">
