@@ -6,6 +6,105 @@ import { Install } from "@/components/install";
 import { apiGet, apiPost, type CliTokenResponse, type MeResponse } from "@/lib/saas-api";
 import { getSession } from "@/lib/saas-session";
 import { sparseMessage } from "@/lib/saas-errors";
+import {
+  SETTINGS_COPY,
+  copyText,
+  loginCommand,
+} from "@/lib/settings-mint";
+
+type Copied = "token" | "login" | null;
+
+export function SettingsMintedToken({ token }: { token: string }) {
+  const [copied, setCopied] = useState<Copied>(null);
+  const command = loginCommand(token);
+
+  async function copy(kind: Exclude<Copied, null>, text: string) {
+    await copyText(text);
+    setCopied(kind);
+    window.setTimeout(() => setCopied(null), 1600);
+  }
+
+  return (
+    <div className="mt-5">
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-mist px-4 py-3 text-[12px]">
+        {token}
+      </pre>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => copy("token", token)}
+          className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-ink ring-1 ring-black/[0.08] transition hover:bg-mist"
+        >
+          {copied === "token" ? SETTINGS_COPY.copied : SETTINGS_COPY.copyToken}
+        </button>
+        <button
+          type="button"
+          onClick={() => copy("login", command)}
+          aria-label={`Copy ${command}`}
+          className="rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-ink ring-1 ring-black/[0.08] transition hover:bg-mist"
+        >
+          {copied === "login" ? SETTINGS_COPY.copied : SETTINGS_COPY.copyLogin}
+        </button>
+      </div>
+      <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-lavender/70 px-4 py-3 text-[12px] text-ink/80">
+        {command}
+      </pre>
+      <p className="mt-2 text-[13px] text-muted">
+        then <code className="text-[13px] text-ink/80">ardoise sync</code>
+      </p>
+    </div>
+  );
+}
+
+export function SettingsWorkspace({
+  plan,
+  token,
+  error,
+  pending,
+  onMint,
+}: {
+  plan: string;
+  token: string | null;
+  error?: string | null;
+  pending: boolean;
+  onMint: () => void;
+}) {
+  return (
+    <>
+      <p className="text-[11px] font-semibold tracking-[0.22em] text-muted/80 uppercase">
+        Settings
+      </p>
+      <h1 className="mt-2 text-[2.1rem] font-bold tracking-[-0.04em] text-ink">
+        Connect the CLI
+      </h1>
+      <p className="mt-2 text-[15px] text-muted">
+        Plan: {plan}. Token is shown once. It is never stored in the ledger.
+      </p>
+
+      <section className="mt-8 rounded-[28px] bg-white px-7 py-8 ring-1 ring-black/[0.04]">
+        <h2 className="text-[1.2rem] font-semibold">CLI token</h2>
+        <p className="mt-2 text-[14px] text-muted">
+          After install: <code>ardoise login --token …</code> then{" "}
+          <code>ardoise sync</code>.
+        </p>
+        <button
+          type="button"
+          onClick={onMint}
+          disabled={pending}
+          className="mt-5 rounded-full bg-grape px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-70"
+        >
+          {pending ? "Creating…" : "Create CLI token"}
+        </button>
+        {token ? <SettingsMintedToken token={token} /> : null}
+        {error ? (
+          <p role="alert" className="mt-4 text-[13px] text-grape-ink">
+            {error}
+          </p>
+        ) : null}
+      </section>
+    </>
+  );
+}
 
 export function SettingsView() {
   const [plan, setPlan] = useState("free");
@@ -45,42 +144,13 @@ export function SettingsView() {
 
   return (
     <AppShell>
-      <p className="text-[11px] font-semibold tracking-[0.22em] text-muted/80 uppercase">
-        Settings
-      </p>
-      <h1 className="mt-2 text-[2.1rem] font-bold tracking-[-0.04em] text-ink">
-        Connect the CLI
-      </h1>
-      <p className="mt-2 text-[15px] text-muted">
-        Plan: {plan}. Token is shown once. It is never stored in the ledger.
-      </p>
-
-      <section className="mt-8 rounded-[28px] bg-white px-7 py-8 ring-1 ring-black/[0.04]">
-        <h2 className="text-[1.2rem] font-semibold">CLI token</h2>
-        <p className="mt-2 text-[14px] text-muted">
-          After install: <code>ardoise login --token …</code> then{" "}
-          <code>ardoise sync</code>.
-        </p>
-        <button
-          type="button"
-          onClick={mintToken}
-          disabled={pending}
-          className="mt-5 rounded-full bg-grape px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-70"
-        >
-          {pending ? "Creating…" : "Create CLI token"}
-        </button>
-        {token ? (
-          <pre className="mt-4 overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-mist px-4 py-3 text-[12px]">
-            {token}
-          </pre>
-        ) : null}
-        {error ? (
-          <p role="alert" className="mt-4 text-[13px] text-grape-ink">
-            {error}
-          </p>
-        ) : null}
-      </section>
-
+      <SettingsWorkspace
+        plan={plan}
+        token={token}
+        error={error}
+        pending={pending}
+        onMint={mintToken}
+      />
       <Install className="mt-10 w-full max-w-3xl" />
     </AppShell>
   );
