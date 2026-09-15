@@ -160,3 +160,8 @@ export function safeNextPath(value: string | null | undefined): string | null {
   }
   return null;
 }
+
+/** Unauthenticated app routes bounce here so magic-link login can return. */
+export function signupHref(next: string | null | undefined): string {
+  return `/signup?next=${safeNextPath(next) ?? "/app"}`;
+}

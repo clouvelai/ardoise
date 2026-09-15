@@ -9,6 +9,7 @@ import {
   sessionFromAccessTokenLocal,
   stripAuthRedirect,
 } from "@/lib/saas-callback";
+import { signupHref } from "@/lib/saas-errors";
 import { clearSession, getSession, saveSession } from "@/lib/saas-session";
 
 const links = [
@@ -51,7 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       }
       const session = getSession();
       if (!session) {
-        router.replace("/signup?next=/app");
+        router.replace(signupHref(pathname));
         return;
       }
       setEmail(session.email);
@@ -63,7 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       cancelled = true;
       window.removeEventListener("hashchange", consume);
     };
-  }, [router]);
+  }, [pathname, router]);
 
   if (!email) {
     return (
