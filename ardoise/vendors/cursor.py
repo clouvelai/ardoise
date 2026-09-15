@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Optional
 
 from ardoise import db, paths, prices
 from ardoise.adapters.hook_event import event_to_entry
@@ -59,7 +59,8 @@ _AUTH_REJECTED = "cursor: not a Team Admin key — T0 unchanged"
 _MISSING_CRED = "cursor: Admin T2 skipped (Team/Enterprise only; Free is T0)"
 _ALIAS_REJECTED = "cursor: CURSOR_API_KEY is not a Team Admin key — T0 unchanged"
 
-Transport = Callable[[str, str, dict[str, Any] | None], dict[str, Any]]
+# Assignment is evaluated at import; `|` unions crash Python 3.9 (macOS Xcode).
+Transport = Callable[[str, str, Optional[dict[str, Any]]], dict[str, Any]]
 
 
 def _person() -> str | None:

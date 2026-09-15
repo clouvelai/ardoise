@@ -1,5 +1,7 @@
 """Compatibility adapters. Implementation lives in ardoise.vendors."""
 
+from __future__ import annotations
+
 from ardoise.adapters.hook_event import event_to_entry
 
 __all__ = ["iter_anthropic_t0", "iter_cursor", "iter_cloud_agent", "event_to_entry"]
