@@ -3,7 +3,7 @@ import { WorkflowCard } from "./workflow-card";
 
 export function Hero() {
   return (
-    <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center px-6 pb-10 pt-4 sm:px-8 lg:pt-2">
+    <section className="relative z-0 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center overflow-visible px-6 pb-10 pt-4 sm:px-8 lg:pt-8">
       <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:gap-16">
         <div className="max-w-xl">
           <h1 className="text-[2.75rem] font-bold leading-[1.05] tracking-[-0.045em] text-ink sm:text-[3.6rem] lg:text-[4.15rem]">
