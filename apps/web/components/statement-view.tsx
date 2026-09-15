@@ -79,7 +79,7 @@ export function StatementWorkspace({
             className={
               printable
                 ? "rounded-full bg-grape px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(124,92,255,0.22)] transition hover:bg-grape-deep"
-                : "cursor-not-allowed rounded-full bg-lavender px-4 py-2 text-[13px] font-semibold text-grape-ink/70 ring-1 ring-grape/15"
+                : "cursor-not-allowed rounded-full bg-white/80 px-4 py-2 text-[13px] font-semibold text-grape-ink/75 ring-1 ring-grape/20"
             }
           >
             {STATEMENT_COPY.print}
@@ -94,15 +94,15 @@ export function StatementWorkspace({
       {empty && !error ? (
         <section
           aria-labelledby="statement-empty-title"
-          className="relative mt-10 overflow-hidden rounded-[28px] bg-lavender px-8 py-12 ring-1 ring-grape/15"
+          className="relative mt-10 overflow-hidden rounded-[28px] bg-[linear-gradient(160deg,#f7f1fc_0%,#efe6fb_52%,#e6daf8_100%)] px-8 py-12 shadow-[0_18px_50px_rgba(124,92,255,0.08)] ring-1 ring-grape/20"
         >
           <div
             aria-hidden
-            className="pointer-events-none absolute -top-20 -right-16 h-56 w-56 rounded-full bg-grape/12 blur-2xl"
+            className="pointer-events-none absolute -top-24 -right-10 h-64 w-64 rounded-full bg-grape/20 blur-3xl"
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute -bottom-24 left-8 h-48 w-48 rounded-full bg-white/55 blur-2xl"
+            className="pointer-events-none absolute -bottom-28 left-4 h-56 w-56 rounded-full bg-[#d8c8f4]/70 blur-3xl"
           />
           <div className="relative max-w-lg">
             <h2

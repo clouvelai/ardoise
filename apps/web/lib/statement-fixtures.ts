@@ -1,5 +1,4 @@
 import type { StatementResponse, UsageStatus } from "./saas-api";
-import { emptyDocument } from "./statement-chrome.ts";
 
 const MONTH = "2026-09";
 
@@ -28,7 +27,13 @@ export const EMPTY_STATEMENT_FIXTURE: StatementResponse = {
   csv: "vendor,model,cost_usd\n",
   summary: emptySummary,
   document: {
-    ...emptyDocument(MONTH),
+    title: "Statement",
+    number: MONTH,
+    invoice_grade: false,
+    total_usd: 0,
+    groups: [],
+    entries: 0,
+    month: MONTH,
     statement_date: "Sep 15, 2026",
     period: { label: "Sep 1, 2026 – Sep 30, 2026" },
     from: { name: "Ardoise" },
