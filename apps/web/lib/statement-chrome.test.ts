@@ -142,8 +142,8 @@ describe("statement chrome lock", () => {
   });
 
   it("names the hosted CSV from the statement month", () => {
-    assert.equal(csvFilename("2026-09"), "ardoise-2026-09.csv");
-    assert.equal(csvFilename("later"), "ardoise-statement.csv");
+    assert.equal(csvFilename("2026-09"), "2026-09.csv");
+    assert.equal(csvFilename("later"), "statement.csv");
     assert.equal(ESTIMATE_STATEMENT_FIXTURE.csv.includes("claude-sonnet-4-6"), true);
     assert.equal(
       csvDataHref(ESTIMATE_STATEMENT_FIXTURE.csv),

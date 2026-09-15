@@ -174,7 +174,7 @@ export function monthLabel(month: string): string {
 
 export function csvFilename(month: string): string {
   const match = /^(\d{4})-(\d{2})$/.exec(month.trim());
-  return match ? `ardoise-${match[1]}-${match[2]}.csv` : "ardoise-statement.csv";
+  return match ? `${match[1]}-${match[2]}.csv` : "statement.csv";
 }
 
 /** Native `<a download>` href. Avoids blob-URL revoke races and JS click. */
