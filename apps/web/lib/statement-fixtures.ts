@@ -1,5 +1,5 @@
 import type { StatementResponse, UsageStatus } from "./saas-api";
-import { emptyDocument } from "./statement-chrome.ts";
+import { emptyDocument } from "./statement-chrome";
 
 const MONTH = "2026-09";
 
