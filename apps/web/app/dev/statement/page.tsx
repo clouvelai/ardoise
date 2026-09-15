@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { SlateMark } from "@/components/mark";
 import { StatementWorkspace } from "@/components/statement-view";
-import { csvFilename, triggerCsvDownload } from "@/lib/statement-chrome";
 import {
   BILLED_STATEMENT_FIXTURE,
   EMPTY_STATEMENT_FIXTURE,
@@ -64,12 +63,6 @@ function StatementPreviewInner() {
             window.setTimeout(() => setCopied(false), 1600);
           }}
           onPrint={() => window.print()}
-          onDownloadCsv={() => {
-            if (!fixture.csv) {
-              return;
-            }
-            triggerCsvDownload(fixture.csv, csvFilename(month));
-          }}
           onPasteVendorTotal={() => {
             setPasted(true);
           }}

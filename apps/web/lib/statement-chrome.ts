@@ -177,24 +177,9 @@ export function csvFilename(month: string): string {
   return match ? `ardoise-${match[1]}-${match[2]}.csv` : "ardoise-statement.csv";
 }
 
-/** Blob download. Delay revoke — Chrome drops the file if the URL dies in the same tick. */
-export function triggerCsvDownload(csv: string, filename: string): void {
-  if (typeof document === "undefined" || !csv) {
-    return;
-  }
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener";
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  window.setTimeout(() => {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, 2000);
+/** Native `<a download>` href. Avoids blob-URL revoke races and JS click. */
+export function csvDataHref(csv: string): string {
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
 }
 
 export function copyPayload(
