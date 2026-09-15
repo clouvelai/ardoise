@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ConnectLaptopSteps } from "@/components/connect-laptop";
@@ -7,7 +8,7 @@ import {
   GradeBadge,
   StatementDocumentView,
 } from "@/components/statement-document";
-import { apiGet, type StatementResponse } from "@/lib/saas-api";
+import { apiGet, type MeResponse, type StatementResponse } from "@/lib/saas-api";
 import { getSession } from "@/lib/saas-session";
 import { sparseMessage } from "@/lib/saas-errors";
 import {
@@ -16,6 +17,9 @@ import {
   hasPrintableRows,
   isBilledGrade,
   isEmptyStatement,
+  monthLabel,
+  shouldNudgePro,
+  shouldShowPasteHook,
 } from "@/lib/statement-chrome";
 
 export function StatementWorkspace({
@@ -26,6 +30,7 @@ export function StatementWorkspace({
   copied,
   onCopy,
   onPrint,
+  canPasteBill,
 }: {
   month: string;
   onMonthChange?: (month: string) => void;
@@ -34,57 +39,88 @@ export function StatementWorkspace({
   copied: boolean;
   onCopy: () => void;
   onPrint: () => void;
+  canPasteBill?: boolean;
 }) {
   const billed = isBilledGrade(data);
   const printable = hasPrintableRows(data);
   const empty = isEmptyStatement(data);
+  const chrome = { data, canPasteBill };
+  const nudgePro = shouldNudgePro(chrome);
+  const pasteHook = shouldShowPasteHook(chrome);
 
   return (
     <>
-      <div className="print-hide flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.22em] text-muted/80 uppercase">
-            Statement
-          </p>
-          <h1 className="mt-2 text-[2.1rem] font-bold tracking-[-0.04em] text-ink">
-            {month}
-          </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <GradeBadge billed={billed} />
-            <button
-              type="button"
-              onClick={onCopy}
-              disabled={!data}
-              className="text-[13px] text-muted transition hover:text-ink disabled:cursor-default disabled:hover:text-muted"
-            >
-              {copied ? STATEMENT_COPY.copied : STATEMENT_COPY.copyTotals}
-            </button>
+      <div className="print-hide">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div className="min-w-0 max-w-xl">
+            <p className="text-[11px] font-semibold tracking-[0.22em] text-muted/80 uppercase">
+              Statement
+            </p>
+            <h1 className="mt-2 text-[2.1rem] font-bold tracking-[-0.04em] text-ink">
+              {monthLabel(month)}
+            </h1>
+            <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted">
+              {STATEMENT_COPY.helper}
+            </p>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="text-[13px] text-muted">
+          <label className="flex flex-col gap-1.5 text-[11px] font-semibold tracking-[0.18em] text-muted/80 uppercase">
             Month
             <input
               type="month"
               value={month}
+              aria-label="Statement month"
               onChange={(event) => onMonthChange?.(event.target.value)}
-              className="ml-2 rounded-full border border-black/[0.06] bg-white px-3 py-1.5 text-[14px] text-ink"
+              className="min-w-[11.5rem] rounded-full border border-black/[0.06] bg-white px-4 py-2 text-[15px] font-semibold tracking-normal text-ink normal-case"
             />
           </label>
-          <button
-            type="button"
-            onClick={onPrint}
-            disabled={!printable}
-            title={printable ? undefined : STATEMENT_COPY.printDisabledHint}
-            className={
-              printable
-                ? "rounded-full bg-grape px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(124,92,255,0.22)] transition hover:bg-grape-deep"
-                : "cursor-not-allowed rounded-full bg-white/80 px-4 py-2 text-[13px] font-semibold text-grape-ink/75 ring-1 ring-grape/20"
-            }
-          >
-            {STATEMENT_COPY.print}
-          </button>
         </div>
+
+        <div className="mt-7 flex flex-wrap items-center gap-3">
+          <GradeBadge billed={billed} />
+          <div className="flex flex-wrap items-center gap-3 sm:ml-auto">
+            <button
+              type="button"
+              onClick={onCopy}
+              disabled={!printable}
+              className={
+                printable
+                  ? "rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-ink ring-1 ring-black/[0.08] transition hover:bg-mist"
+                  : "cursor-not-allowed rounded-full bg-white/70 px-4 py-2 text-[13px] font-semibold text-muted ring-1 ring-black/[0.04]"
+              }
+            >
+              {copied ? STATEMENT_COPY.copied : STATEMENT_COPY.copyTotals}
+            </button>
+            <button
+              type="button"
+              onClick={onPrint}
+              disabled={!printable}
+              title={printable ? undefined : STATEMENT_COPY.printDisabledHint}
+              className={
+                printable
+                  ? "rounded-full bg-grape px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(124,92,255,0.22)] transition hover:bg-grape-deep"
+                  : "cursor-not-allowed rounded-full bg-white/80 px-4 py-2 text-[13px] font-semibold text-grape-ink/75 ring-1 ring-grape/20"
+              }
+            >
+              {STATEMENT_COPY.print}
+            </button>
+          </div>
+        </div>
+
+        {nudgePro ? (
+          <p className="mt-3 text-[13px] text-muted">
+            <Link href="/pricing" className="text-grape transition hover:text-grape-ink">
+              {STATEMENT_COPY.proNudge}
+            </Link>
+          </p>
+        ) : null}
+        {pasteHook ? (
+          <p
+            className="mt-3 text-[13px] text-muted"
+            data-ardoise-paste-bill
+          >
+            {STATEMENT_COPY.pasteHook}
+          </p>
+        ) : null}
       </div>
       {error ? (
         <p role="alert" className="mt-8 text-[15px] text-grape-ink">
@@ -135,6 +171,7 @@ export function StatementView() {
   const [data, setData] = useState<StatementResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [canPasteBill, setCanPasteBill] = useState<boolean | undefined>(undefined);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -148,11 +185,15 @@ export function StatementView() {
     let cancelled = false;
     (async () => {
       try {
-        const payload = await apiGet<StatementResponse>(
-          `/v1/usage/statement?month=${encodeURIComponent(month)}`,
-          session.accessToken,
-        );
+        const [me, payload] = await Promise.all([
+          apiGet<MeResponse>("/v1/me", session.accessToken),
+          apiGet<StatementResponse>(
+            `/v1/usage/statement?month=${encodeURIComponent(month)}`,
+            session.accessToken,
+          ),
+        ]);
         if (!cancelled) {
+          setCanPasteBill(Boolean(me.account.invoice_grade));
           setData(payload);
           setError(null);
           setCopied(false);
@@ -169,7 +210,7 @@ export function StatementView() {
   }, [month]);
 
   async function copyTotals() {
-    if (!data) {
+    if (!data || !hasPrintableRows(data)) {
       return;
     }
     const text = copyPayload(data, month);
@@ -200,6 +241,7 @@ export function StatementView() {
         copied={copied}
         onCopy={copyTotals}
         onPrint={() => window.print()}
+        canPasteBill={canPasteBill}
       />
     </AppShell>
   );

@@ -2,20 +2,33 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { SlateMark } from "@/components/mark";
 import { StatementWorkspace } from "@/components/statement-view";
 import {
+  BILLED_STATEMENT_FIXTURE,
   EMPTY_STATEMENT_FIXTURE,
   ESTIMATE_STATEMENT_FIXTURE,
 } from "@/lib/statement-fixtures";
 
+function fixtureFor(state: string) {
+  if (state === "billed") {
+    return BILLED_STATEMENT_FIXTURE;
+  }
+  if (state === "estimate") {
+    return ESTIMATE_STATEMENT_FIXTURE;
+  }
+  return EMPTY_STATEMENT_FIXTURE;
+}
+
 function StatementPreviewInner() {
   const params = useSearchParams();
-  const state = params.get("state") === "estimate" ? "estimate" : "empty";
-  const fixture =
-    state === "estimate" ? ESTIMATE_STATEMENT_FIXTURE : EMPTY_STATEMENT_FIXTURE;
+  const state = params.get("state") || "empty";
+  const fixture = useMemo(() => fixtureFor(state), [state]);
   const [copied, setCopied] = useState(false);
+  const [month, setMonth] = useState(fixture.month);
+  const canPasteBill =
+    params.get("plan") === "pro" || state === "billed" ? true : false;
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -32,9 +45,11 @@ function StatementPreviewInner() {
       </header>
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 pb-16 sm:px-8">
         <StatementWorkspace
-          month={fixture.month}
+          month={month}
+          onMonthChange={setMonth}
           data={fixture}
           copied={copied}
+          canPasteBill={canPasteBill}
           onCopy={() => {
             setCopied(true);
             window.setTimeout(() => setCopied(false), 1600);
