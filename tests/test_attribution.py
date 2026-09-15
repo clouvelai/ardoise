@@ -67,6 +67,22 @@ class ExtractTests(unittest.TestCase):
         }
         self.assertEqual(attribution.extract(raw), {"agent": None, "skill": None, "effort": None})
 
+    def test_profile_name_is_agent_when_not_a_run_title(self) -> None:
+        found = attribution.extract({"profile": {"name": "Craie"}})
+        self.assertEqual(found["agent"], "Craie")
+        title = attribution.extract(
+            {
+                "id": "bc-00000000-0000-0000-0000-000000000001",
+                "status": "FINISHED",
+                "profile": {
+                    "id": "bc-00000000-0000-0000-0000-000000000001",
+                    "name": "Fix the billing success page",
+                    "status": "FINISHED",
+                },
+            }
+        )
+        self.assertIsNone(title["agent"])
+
     def test_bot_name_and_model_params_effort(self) -> None:
         found = attribution.extract(
             {

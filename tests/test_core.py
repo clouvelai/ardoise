@@ -25,7 +25,10 @@ class PriceTests(unittest.TestCase):
         self.assertEqual(normalize_model("claude-haiku-4-5-20251001"), "claude-haiku-4-5")
         self.assertEqual(normalize_model("composer-2.5"), "composer-2-5")
         self.assertEqual(normalize_model("cursor-grok-4.6-high"), "grok-4-6-high")
+        self.assertEqual(normalize_model("Grok 4.6"), "grok-4-6")
+        self.assertEqual(normalize_model("claude-4.5-sonnet"), "claude-sonnet-4-5")
         self.assertEqual(normalize_model("default"), "unknown")
+        self.assertEqual(normalize_model("inherit"), "unknown")
         self.assertEqual(normalize_model(None), "unknown")
 
     def test_sonnet_46_stream_final(self) -> None:

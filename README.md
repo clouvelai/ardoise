@@ -94,7 +94,7 @@ is Enterprise-only. Free stays T0.
 | Source | Adapter | Location |
 |---|---|---|
 | Claude Code session logs | `vendors/anthropic` T0 | `~/.claude/projects/**/*.jsonl` |
-| Cursor transcripts | `vendors/cursor` T0 | `~/.cursor/**/*.jsonl` (usage-shaped; skips `agent-transcripts`) |
+| Cursor transcripts | `vendors/cursor` T0 | `~/.cursor/**/*.jsonl` (usage-shaped; prompt-only `agent-transcripts` stay empty) |
 | Grok Bot / cloud-agent | `adapters/cloud_agent` T0 | configurable roots — see below |
 
 Streaming duplicates share `message.id` + `requestId`. Ardoise keeps the row
@@ -129,9 +129,12 @@ ardoise status --month 2026-09 --roster Craie
 ```
 
 If they already exist, backfill also reads `~/.cursor/cloud-agent-transcripts`,
-`~/.cursor/agent-data`, and `~/agent-data`. Extra roots:
+`~/.cursor/agent-data`, `~/.cursor/chats` (`store.db` / `meta.json` when
+usage-shaped), `/workspace/cloud-agent-transcripts`,
+`/tmp/cursor/cloud-agent-transcripts`, and `~/agent-data`. Extra roots:
 `ARDOISE_CLOUD_AGENT_ROOT`, `ARDOISE_AGENT_DATA`, `ARDOISE_TRANSCRIPT_PATHS`,
-`--cloud-agent-root`, or `config.json` `transcripts.paths`. Hooks and the
+`ARDOISE_SCAN_BOX_ROOTS`, `--cloud-agent-root`, or `config.json`
+`transcripts.paths`. Hooks and the
 adapter fail-open. Prompts are scrubbed. No marketplace or credentials.
 
 Usage-shaped fixtures (like `tests/fixtures/dogfood/agent-data`) produce

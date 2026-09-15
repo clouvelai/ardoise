@@ -251,18 +251,18 @@ class HappyPathHelpTests(unittest.TestCase):
 
 
 class CursorDiscoverTests(unittest.TestCase):
-    def test_skips_agent_transcripts(self) -> None:
+    def test_discovers_agent_transcripts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             keep = root / "projects" / "app" / "chat.jsonl"
-            skip = root / "projects" / "app" / "agent-transcripts" / "x.jsonl"
+            extra = root / "projects" / "app" / "agent-transcripts" / "x.jsonl"
             keep.parent.mkdir(parents=True)
-            skip.parent.mkdir(parents=True)
+            extra.parent.mkdir(parents=True)
             keep.write_text("{}\n", encoding="utf-8")
-            skip.write_text("{}\n", encoding="utf-8")
+            extra.write_text("{}\n", encoding="utf-8")
             found = {p.resolve() for p in discover_cursor_files(root)}
             self.assertIn(keep.resolve(), found)
-            self.assertNotIn(skip.resolve(), found)
+            self.assertIn(extra.resolve(), found)
 
 
 if __name__ == "__main__":

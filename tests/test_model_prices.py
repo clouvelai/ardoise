@@ -72,8 +72,20 @@ class ExtractTests(unittest.TestCase):
 
     def test_unknown_when_only_placeholder(self) -> None:
         self.assertIsNone(extract_model({"model": "default"}))
+        self.assertIsNone(extract_model({"model": "inherit"}))
         self.assertEqual(persist_model({"model": "default"}), UNKNOWN)
+        self.assertEqual(persist_model({"model": "inherit"}), UNKNOWN)
         self.assertEqual(persist_model({}), UNKNOWN)
+
+    def test_original_model_name_and_brackets(self) -> None:
+        self.assertEqual(
+            extract_model({"originalModelName": "cursor-grok-4.6-high-fast"}),
+            "cursor-grok-4.6-high-fast",
+        )
+        self.assertEqual(
+            extract_model({"model": "composer-2.5[fast=true]"}),
+            "composer-2.5-fast",
+        )
 
 
 class IsolatedHome(unittest.TestCase):
@@ -235,6 +247,37 @@ class PriceLookupTests(unittest.TestCase):
         self.assertTrue(looked["unknown"])
         self.assertEqual(looked["rates"]["input"], 0.0)
         self.assertEqual(normalize_model("default"), UNKNOWN)
+
+    def test_aliases_and_published_other_models(self) -> None:
+        sonnet = lookup("claude-4.5-sonnet")
+        self.assertFalse(sonnet["unknown"])
+        self.assertEqual(sonnet["key"], "claude-sonnet-4-5")
+        self.assertEqual(sonnet["rates"]["input"], 3.0)
+
+        thinking = lookup("claude-4-sonnet-thinking")
+        self.assertEqual(thinking["key"], "claude-sonnet-4")
+        self.assertEqual(thinking["rates"]["output"], 15.0)
+
+        display = lookup("Grok 4.6")
+        self.assertEqual(display["key"], "grok-4-6")
+        xai = lookup("x-ai/grok-4.6")
+        self.assertEqual(xai["key"], "grok-4-6")
+
+        sol = lookup("gpt-5.6-sol-high")
+        self.assertEqual(sol["key"], "gpt-5-6-sol")
+        self.assertEqual(sol["rates"]["input"], 4.0)
+        self.assertEqual(sol["rates"]["output"], 20.0)
+        sol_fast = lookup("gpt-5.6-sol-high-fast")
+        self.assertEqual(sol_fast["key"], "gpt-5-6-sol-fast")
+        self.assertEqual(sol_fast["rates"]["input"], 8.0)
+
+        gemini = lookup("gemini-3.8-flash-high")
+        self.assertEqual(gemini["key"], "gemini-3-8-flash")
+        self.assertEqual(gemini["rates"]["input"], 0.75)
+
+        inherit = lookup("inherit")
+        self.assertTrue(inherit["unknown"])
+        self.assertEqual(inherit["rates"]["input"], 0.0)
 
     def test_estimate_exposes_rate_key(self) -> None:
         data = price_ask(model="cursor-grok-4.6-high", input_tokens=1000, output_tokens=400, with_gate=False)

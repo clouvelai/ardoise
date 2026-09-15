@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 UNKNOWN = "unknown"
@@ -14,9 +15,12 @@ PLACEHOLDERS = frozenset(
         "none",
         "null",
         "undefined",
+        "inherit",
+        "inherited",
         "(none)",
         "(default)",
         "(unknown)",
+        "(inherit)",
     }
 )
 
@@ -28,6 +32,10 @@ _DIRECT_KEYS = (
     "modelName",
     "selected_model",
     "selectedModel",
+    "originalModelName",
+    "original_model_name",
+    "lastUsedModel",
+    "last_used_model",
 )
 _NESTED_OBJECTS = (
     "message",
@@ -36,13 +44,34 @@ _NESTED_OBJECTS = (
     "request",
     "metadata",
     "usage",
+    "profile",
 )
+_BRACKET = re.compile(r"^(.+?)\s*\[([^\]]*)\]\s*$")
+_FAST_TRUE = frozenset({"true", "1", "yes", "fast"})
 
 
 def is_placeholder(name: Any) -> bool:
     if name is None:
         return True
     return str(name).strip().lower() in PLACEHOLDERS
+
+
+def _bracket_options(text: str) -> tuple[str, bool]:
+    """Strip Cursor ``slug[fast=true]`` options. Fast is already named, not invented."""
+    match = _BRACKET.match(text.strip())
+    if not match:
+        return text.strip(), False
+    slug = match.group(1).strip()
+    fast = False
+    for part in match.group(2).split(","):
+        if "=" not in part:
+            continue
+        key, raw = part.split("=", 1)
+        ident = key.strip().lower()
+        val = raw.strip().lower()
+        if ident in {"fast", "speed"} and val in _FAST_TRUE:
+            fast = True
+    return slug, fast
 
 
 def _clean(value: Any) -> str | None:
@@ -55,9 +84,14 @@ def _clean(value: Any) -> str | None:
                 return found
         return None
     text = str(value).strip()
-    if not text or text.lower() in PLACEHOLDERS:
+    if not text:
         return None
-    return text
+    slug, fast = _bracket_options(text)
+    if not slug or slug.lower() in PLACEHOLDERS:
+        return None
+    if fast and "fast" not in slug.lower():
+        return f"{slug}-fast"
+    return slug
 
 
 def _candidates(*layers: Any) -> list[str]:

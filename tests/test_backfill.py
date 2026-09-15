@@ -100,7 +100,8 @@ class BackfillSkipTests(IsolatedHome):
         )
         self.assertEqual(
             backfill_mod.empty_ledger_tip({"inserted": 0, "updated": 0, "files": 2, "skipped_files": 0}),
-            "no usage rows in scanned logs (prompt-only trees stay empty)",
+            "no usage rows in scanned logs (prompt-only trees stay empty; "
+            "drop usage-shaped JSON in ~/.ardoise/transcripts)",
         )
         self.assertEqual(
             backfill_mod.empty_ledger_tip({"inserted": 0, "updated": 0, "files": 0, "skipped_files": 0}),

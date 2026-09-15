@@ -1,0 +1,2 @@
+{"role":"assistant","agentName":"Craie","model":"cursor-grok-4.6-high","requestId":"req_agent_tx_craie","message":{"id":"msg_agent_tx_craie","role":"assistant","model":"cursor-grok-4.6-high","usage":{"input_tokens":80,"output_tokens":12}},"prompt":"SECRET_AGENT_TX_PROMPT"}
+{"role":"assistant","message":{"content":"SECRET_AGENT_TX_PROMPT_ONLY"}}

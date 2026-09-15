@@ -129,6 +129,113 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(len(objs), 1)
         self.assertIsNone(parse_line(objs[0], inherited=inherited))
 
+    def test_messages_only_cloud_export_does_not_invent_meters(self) -> None:
+        path = CLOUD / "messages-only" / "transcript.json"
+        inherited = sidecar_meta(path)
+        self.assertEqual(inherited.get("model"), "cursor-grok-4.6-high-fast")
+        self.assertIsNone(inherited.get("agent"))
+        objs = list(iter_transcript_objects(path))
+        self.assertEqual(len(objs), 3)
+        self.assertTrue(all(parse_line(obj, inherited=inherited) is None for obj in objs))
+
+    def test_openai_style_tokens_and_profile_name(self) -> None:
+        entry = parse_line(
+            {
+                "profile": {"name": "Craie"},
+                "model": "cursor-grok-4.6-high",
+                "requestId": "req_prompt_tokens",
+                "message": {"id": "msg_prompt_tokens"},
+                "usage": {"prompt_tokens": 33, "completion_tokens": 7},
+            }
+        )
+        assert entry is not None
+        self.assertEqual(entry["agent"], "Craie")
+        self.assertEqual(entry["input_tokens"], 33)
+        self.assertEqual(entry["output_tokens"], 7)
+
+    def test_store_db_transcript_entries_and_json_blob(self) -> None:
+        import sqlite3
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        db_path = Path(tmp.name) / "store.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE transcript_entries (id TEXT, payload TEXT, prompt TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE blobs (id TEXT, data BLOB)"
+        )
+        conn.execute(
+            "CREATE TABLE meta (key TEXT, value TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO transcript_entries VALUES (?, ?, ?)",
+            (
+                "row1",
+                json.dumps(
+                    {
+                        "agentName": "Encre",
+                        "model": "cursor-grok-4.6-high",
+                        "requestId": "req_store_encre",
+                        "message": {
+                            "id": "msg_store_encre",
+                            "usage": {"input_tokens": 21, "output_tokens": 4},
+                        },
+                    }
+                ),
+                "SECRET_STORE_PROMPT",
+            ),
+        )
+        conn.execute(
+            "INSERT INTO blobs VALUES (?, ?)",
+            (
+                "blob1",
+                json.dumps(
+                    {
+                        "botName": "captain",
+                        "model": "cursor-grok-4.6-high",
+                        "requestId": "req_store_captain",
+                        "message": {
+                            "id": "msg_store_captain",
+                            "usage": {"input_tokens": 9, "output_tokens": 2},
+                        },
+                    }
+                ).encode("utf-8"),
+            ),
+        )
+        conn.execute(
+            "INSERT INTO blobs VALUES (?, ?)",
+            ("proto", b"\x0a\x0bnot-json-protobuf"),
+        )
+        conn.execute(
+            "INSERT INTO meta VALUES (?, ?)",
+            (
+                "0",
+                json.dumps(
+                    {
+                        "lastUsedModel": "cursor-grok-4.6-high",
+                        "agentName": "Encre",
+                        "name": "Fix the billing success page",
+                    }
+                ),
+            ),
+        )
+        conn.commit()
+        conn.close()
+        inherited = sidecar_meta(db_path)
+        self.assertEqual(inherited.get("agent"), "Encre")
+        self.assertEqual(inherited.get("model"), "cursor-grok-4.6-high")
+        self.assertNotEqual(inherited.get("agent"), "Fix the billing success page")
+        objs = list(iter_transcript_objects(db_path))
+        parsed = [parse_line(obj, inherited=inherited) for obj in objs]
+        live = [row for row in parsed if row]
+        ids = {row["message_id"] for row in live}
+        self.assertEqual(ids, {"msg_store_encre", "msg_store_captain"})
+        by_id = {row["message_id"]: row for row in live}
+        self.assertEqual(by_id["msg_store_encre"]["agent"], "Encre")
+        self.assertEqual(by_id["msg_store_captain"]["agent"], "captain")
+
     def test_unnamed_sidecar_stays_unattributed(self) -> None:
         path = CLOUD / "unnamed-run" / "transcript.json"
         inherited = sidecar_meta(path)
@@ -252,17 +359,33 @@ class IngestAndRosterTests(IsolatedHome):
             self.assertIn(f"{name} $", text)
         self.assertGreater(float(summarize("2026-09", person="Craie")["cost_usd"]), 0)
 
-    def test_cursor_discover_still_skips_agent_transcripts(self) -> None:
+    def test_cursor_discover_reads_usage_shaped_agent_transcripts(self) -> None:
         root = Path(self.tmp.name) / ".cursor"
         keep = root / "projects" / "app" / "chat.jsonl"
-        skip = root / "projects" / "app" / "agent-transcripts" / "x.jsonl"
+        usage = root / "projects" / "app" / "agent-transcripts" / "x.jsonl"
         keep.parent.mkdir(parents=True)
-        skip.parent.mkdir(parents=True)
+        usage.parent.mkdir(parents=True)
         keep.write_text("{}\n", encoding="utf-8")
-        skip.write_text("{}\n", encoding="utf-8")
+        usage.write_text(
+            (CLOUD / "agent-transcripts" / "usage.jsonl").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
         found = {p.resolve() for p in discover_cursor_files(root)}
         self.assertIn(keep.resolve(), found)
-        self.assertNotIn(skip.resolve(), found)
+        self.assertIn(usage.resolve(), found)
+        empty_claude = Path(self.tmp.name) / "empty-claude"
+        empty_claude.mkdir()
+        result = backfill(claude=empty_claude, cursor=root)
+        self.assertGreaterEqual(result["inserted"], 1)
+        with db.session() as conn:
+            row = conn.execute(
+                "SELECT agent, input_tokens FROM events WHERE message_id = 'msg_agent_tx_craie'"
+            ).fetchone()
+            blob = Path(os.environ["ARDOISE_HOME"], "ledger.db").read_bytes()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["agent"], "Craie")
+        self.assertEqual(int(row["input_tokens"]), 80)
+        self.assertNotIn(b"SECRET_AGENT_TX_PROMPT", blob)
 
     def test_status_statement_chips_and_agent_filter(self) -> None:
         empty_claude = Path(self.tmp.name) / "empty-claude"

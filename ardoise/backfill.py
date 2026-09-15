@@ -179,7 +179,10 @@ def empty_ledger_tip(totals: dict[str, Any], *, prior_capture: bool | None = Non
     if skipped_files or prior_capture:
         return "already backfilled, no usage rows"
     if files:
-        return "no usage rows in scanned logs (prompt-only trees stay empty)"
+        return (
+            "no usage rows in scanned logs (prompt-only trees stay empty; "
+            "drop usage-shaped JSON in ~/.ardoise/transcripts)"
+        )
     return "no local logs found to ingest"
 
 

@@ -1,10 +1,11 @@
 """Grok Bot / Cursor cloud-agent transcripts → scrubbed T0 events.
 
-Local Cursor T0 already reads usage-shaped `~/.cursor/**/*.jsonl` and skips
-`agent-transcripts` (those files are usually prompt-only). Named Grok Bot /
-cloud-agent runs live outside that tree (`agent-data`, exported
-`transcript.json` + `index.json`). This adapter reads configurable roots and
-reuses `ardoise.attribution` — it never invents agent/skill/effort.
+Local Cursor T0 reads usage-shaped `~/.cursor/**/*.jsonl`, including
+`agent-transcripts` when a line already has a usage object. Named Grok Bot /
+cloud-agent runs also live under `agent-data`, exported `transcript.json` +
+`index.json`, and (when present) SQLite `store.db` / `index.db`. This adapter
+reads configurable roots and reuses `ardoise.attribution` — it never invents
+agent/skill/effort or estimates-from-prompt.
 
 Fail-open: unreadable or unknown shapes are skipped. Prompts are scrubbed
 before upsert. Stdlib only. No credentials.
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -48,13 +50,32 @@ _LIST_KEYS = (
     "usageEvents",
     "usage_events",
     "transcript",
+    "transcript_entries",
+    "entries",
 )
 _SKIP_NAMES = frozenset(
     {".env", "credentials.json", "secrets.json", "credentials", "secrets"}
 )
 _SKIP_PARTS = frozenset({".git", "node_modules", "__pycache__"})
 _SIDECARS = ("index.json", "run.json", "agent.json", "meta.json")
+_STORE_NAMES = frozenset({"store.db", "index.db"})
+_STORE_TABLES = frozenset(
+    {
+        "transcript_entries",
+        "usage_events",
+        "usageEvents",
+        "usage",
+        "events",
+        "run_events",
+        "blobs",
+    }
+)
+_MAX_BLOB = 2_000_000
 _ENV_ROOTS = ("ARDOISE_CLOUD_AGENT_ROOT", "ARDOISE_AGENT_DATA")
+_BOX_ROOTS = (
+    Path("/workspace/cloud-agent-transcripts"),
+    Path("/tmp/cursor/cloud-agent-transcripts"),
+)
 _RUN_ID_KEYS = (
     "sessionId",
     "session_id",
@@ -94,8 +115,12 @@ def _has_direct_usage(obj: dict[str, Any]) -> bool:
     for key in (
         "input_tokens",
         "inputTokens",
+        "prompt_tokens",
+        "promptTokens",
         "output_tokens",
         "outputTokens",
+        "completion_tokens",
+        "completionTokens",
         "cache_read_tokens",
         "cacheReadTokens",
     ):
@@ -133,8 +158,8 @@ def _normalized_usage(obj: dict[str, Any]) -> dict[str, int]:
         return 0
 
     return {
-        "input_tokens": _pick("input_tokens", "inputTokens"),
-        "output_tokens": _pick("output_tokens", "outputTokens"),
+        "input_tokens": _pick("input_tokens", "inputTokens", "prompt_tokens", "promptTokens"),
+        "output_tokens": _pick("output_tokens", "outputTokens", "completion_tokens", "completionTokens"),
         "cache_creation_input_tokens": _pick(
             "cache_creation_input_tokens",
             "cacheWriteTokens",
@@ -205,19 +230,176 @@ def sidecar_meta(path: Path) -> dict[str, Any]:
     parent = path.parent
     for name in _SIDECARS:
         cand = parent / name
-        if cand.resolve() == path.resolve() or not cand.is_file():
+        try:
+            if cand.resolve() == path.resolve() or not cand.is_file():
+                continue
+        except OSError:
             continue
         try:
             data = json.loads(cand.read_text(encoding="utf-8", errors="replace"))
         except (OSError, json.JSONDecodeError, UnicodeError):
             continue
         if isinstance(data, dict):
-            return _meta_from(data)
+            found = _meta_from(data)
+            if found:
+                return found
+    if path.name.lower() in _STORE_NAMES:
+        found = _meta_from_store(path)
+        if found:
+            return found
     return {}
 
 
+def _maybe_json(raw: Any) -> Any:
+    if isinstance(raw, bytes):
+        if not raw or raw[:1] not in (b"{", b"["):
+            return None
+        if len(raw) > _MAX_BLOB:
+            return None
+        try:
+            return json.loads(raw.decode("utf-8", errors="replace"))
+        except (UnicodeError, json.JSONDecodeError):
+            return None
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text or text[:1] not in "{[":
+            return None
+        if text[:2].lower() == "0x":
+            try:
+                decoded = bytes.fromhex(text[2:])
+            except ValueError:
+                decoded = None
+            if decoded is not None:
+                return _maybe_json(decoded)
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _flatten_obj(obj: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    for key in _LIST_KEYS:
+        seq = obj.get(key)
+        if isinstance(seq, list) and seq:
+            for item in seq:
+                if isinstance(item, dict):
+                    yield item
+            return
+    yield obj
+
+
+def _iter_store_blobs(conn: sqlite3.Connection) -> Iterator[dict[str, Any]]:
+    try:
+        cols = [str(row[1]) for row in conn.execute("PRAGMA table_info(blobs)")]
+    except sqlite3.Error:
+        return
+    data_col = "data" if "data" in cols else (cols[1] if len(cols) > 1 else None)
+    if not data_col:
+        return
+    try:
+        rows = conn.execute(f"SELECT {data_col} FROM blobs")
+    except sqlite3.Error:
+        return
+    for row in rows:
+        parsed = _maybe_json(row[0])
+        if isinstance(parsed, dict):
+            yield from _flatten_obj(parsed)
+        elif isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, dict):
+                    yield from _flatten_obj(item)
+
+
+def _iter_store_table(conn: sqlite3.Connection, table: str) -> Iterator[dict[str, Any]]:
+    if table not in _STORE_TABLES or table == "blobs":
+        return
+    try:
+        cols = [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})")]
+        rows = conn.execute(f"SELECT * FROM {table}")
+    except sqlite3.Error:
+        return
+    for row in rows:
+        obj = {cols[i]: row[i] for i in range(min(len(cols), len(row)))}
+        for key, val in list(obj.items()):
+            parsed = _maybe_json(val)
+            if parsed is not None:
+                obj[key] = parsed
+        if _has_direct_usage(obj):
+            yield obj
+            continue
+        for val in obj.values():
+            if isinstance(val, dict):
+                if _has_direct_usage(val):
+                    yield val
+                else:
+                    yield from (item for item in _flatten_obj(val) if _has_direct_usage(item))
+            elif isinstance(val, list):
+                for item in val:
+                    if isinstance(item, dict) and _has_direct_usage(item):
+                        yield item
+
+
+def _meta_from_store(path: Path) -> dict[str, Any]:
+    try:
+        uri = path.resolve().as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True)
+    except (OSError, sqlite3.Error):
+        return {}
+    try:
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute("SELECT key, value FROM meta").fetchall()
+        except sqlite3.Error:
+            return {}
+        for row in rows:
+            parsed = _maybe_json(row["value"] if "value" in row.keys() else row[1])
+            if not isinstance(parsed, dict):
+                continue
+            found = _meta_from(parsed)
+            if found.get("agent") or found.get("model") or found.get("session_id"):
+                return found
+        return {}
+    except sqlite3.Error:
+        return {}
+    finally:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+
+
+def iter_store_objects(path: Path) -> Iterator[dict[str, Any]]:
+    """Yield usage-shaped dicts from a Cursor / Grok Bot SQLite store. Fail-open."""
+    try:
+        uri = path.resolve().as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True)
+    except (OSError, sqlite3.Error):
+        return
+    try:
+        tables = [
+            str(row[0])
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        ]
+        for table in tables:
+            if table == "blobs":
+                yield from _iter_store_blobs(conn)
+            elif table in _STORE_TABLES:
+                yield from _iter_store_table(conn, table)
+    except sqlite3.Error:
+        return
+    finally:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+
+
 def iter_transcript_objects(path: Path) -> Iterator[dict[str, Any]]:
-    """Yield dicts from JSONL, a JSON array, or a JSON object with a list key."""
+    """Yield dicts from JSONL, a JSON array, a JSON object with a list key, or store.db."""
+    if path.name.lower() in _STORE_NAMES:
+        yield from iter_store_objects(path)
+        return
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -294,6 +476,8 @@ def parse_line(obj: dict[str, Any] | None, *, inherited: dict[str, Any] | None =
         if looks_like_run_meta(obj) and not _has_direct_usage(obj):
             return None
         merged = dict(inherited or {})
+        for key in DIMENSIONS:
+            merged.pop(key, None)
         merged.update(obj)
         entry = parse_t0_line(merged) or parse_cursor_line(merged)
         if not entry:
@@ -351,7 +535,9 @@ def discover_transcript_files(root: Path) -> list[Path]:
             continue
         suffix = path.suffix.lower()
         name = path.name.lower()
-        if suffix == ".jsonl":
+        if name in _STORE_NAMES:
+            files.append(path)
+        elif suffix == ".jsonl":
             files.append(path)
         elif suffix == ".json" and (
             name in _FILE_NAMES or "transcript" in name or name.endswith("usage.json")
@@ -376,12 +562,27 @@ def default_drop_roots() -> list[Path]:
     from ardoise import paths as paths_mod
 
     home = paths_mod.home()
-    return [
+    found = [
         home / ".cursor" / "cloud-agent-transcripts",
         home / ".cursor" / "agent-data",
+        home / ".cursor" / "chats",
         paths_mod.transcripts_dir(),
         home / "agent-data",
     ]
+    if _include_box_roots():
+        found.extend(_BOX_ROOTS)
+    return found
+
+
+def _include_box_roots() -> bool:
+    """Scan /workspace and /tmp/cursor exports on real pods, not isolated test HOMEs."""
+    from ardoise import paths as paths_mod
+
+    flag = os.environ.get("ARDOISE_SCAN_BOX_ROOTS")
+    if flag is not None and str(flag).strip() != "":
+        return str(flag).strip().lower() not in {"0", "false", "no"}
+    home = str(paths_mod.home())
+    return home.startswith(("/home/", "/Users/")) or home in {"/root", "/home"}
 
 
 def transcript_roots(
@@ -449,13 +650,22 @@ def named_run_agents(root: Path) -> dict[str, str]:
         return mapping
     for path in iterator:
         try:
-            if not path.is_file() or path.name not in _SIDECARS:
+            if not path.is_file() or (
+                path.name not in _SIDECARS and path.name.lower() not in _STORE_NAMES
+            ):
                 continue
             if any(part in _SKIP_PARTS for part in path.parts):
                 continue
             if path.name in _SKIP_NAMES or path.name.startswith("."):
                 continue
         except OSError:
+            continue
+        if path.name.lower() in _STORE_NAMES:
+            meta = _meta_from_store(path)
+            agent = meta.get("agent")
+            ident = meta.get("session_id")
+            if agent and ident:
+                mapping.setdefault(str(ident), str(agent))
             continue
         try:
             data = json.loads(path.read_text(encoding="utf-8", errors="replace"))

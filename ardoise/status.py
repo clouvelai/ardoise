@@ -320,6 +320,7 @@ def render_text(data: dict[str, Any]) -> str:
                     "",
                     "ledger is empty — already backfilled, no usage rows",
                     "  prompt-only trees stay empty until a usage-shaped export or hook lands",
+                    "  drop usage-shaped JSON/JSONL in ~/.ardoise/transcripts — no Admin key",
                 ]
             )
         else:
