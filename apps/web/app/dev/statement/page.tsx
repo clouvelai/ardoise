@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { SlateMark } from "@/components/mark";
 import { StatementWorkspace } from "@/components/statement-view";
-import { csvFilename } from "@/lib/statement-chrome";
+import { csvFilename, triggerCsvDownload } from "@/lib/statement-chrome";
 import {
   BILLED_STATEMENT_FIXTURE,
   EMPTY_STATEMENT_FIXTURE,
@@ -68,16 +68,7 @@ function StatementPreviewInner() {
             if (!fixture.csv) {
               return;
             }
-            const blob = new Blob([fixture.csv], { type: "text/csv;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = csvFilename(month);
-            link.rel = "noopener";
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
+            triggerCsvDownload(fixture.csv, csvFilename(month));
           }}
           onPasteVendorTotal={() => {
             setPasted(true);

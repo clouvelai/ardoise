@@ -187,6 +187,9 @@ describe("statement chrome lock", () => {
     assert.equal(view.includes("STATEMENT_COPY.copyTotals"), true);
     assert.equal(view.includes("STATEMENT_COPY.downloadCsv"), true);
     assert.equal(view.includes("onDownloadCsv"), true);
+    assert.equal(view.includes("triggerCsvDownload"), true);
+    assert.equal(chrome.includes("triggerCsvDownload"), true);
+    assert.equal(chrome.includes("setTimeout"), true);
     assert.equal(view.includes("STATEMENT_COPY.emptyTitle"), true);
     assert.equal(view.includes("STATEMENT_COPY.helper"), true);
     assert.equal(view.includes("shouldNudgePro"), true);

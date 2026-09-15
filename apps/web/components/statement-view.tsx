@@ -22,6 +22,7 @@ import {
   canSubmitVendorTotal,
   copyPayload,
   csvFilename,
+  triggerCsvDownload,
   hasPrintableRows,
   isBilledGrade,
   isEmptyStatement,
@@ -425,16 +426,7 @@ export function StatementView() {
     if (!data || !hasPrintableRows(data) || !data.csv) {
       return;
     }
-    const blob = new Blob([data.csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = csvFilename(month);
-    link.rel = "noopener";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    triggerCsvDownload(data.csv, csvFilename(month));
   }
 
   return (
