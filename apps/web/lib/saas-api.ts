@@ -130,3 +130,19 @@ export type CliTokenResponse = {
   token: string;
   id: string;
 };
+
+/** POST /v1/invoices — matches InvoicePasteBody on the hosted API. */
+export type InvoicePasteRequest = {
+  vendor: string;
+  cycle: string;
+  usd_cents?: number | null;
+  usd?: number | null;
+  person?: string;
+  notes?: string | null;
+  source?: string;
+};
+
+export type InvoicePasteResponse = {
+  ok: boolean;
+  upserted: number;
+};

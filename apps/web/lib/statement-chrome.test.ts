@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  canSubmitVendorTotal,
   canUpgradeToBilled,
   copyPayload,
   csvFilename,
@@ -13,6 +14,7 @@ import {
   monthLabel,
   shouldNudgePro,
   shouldShowPasteHook,
+  vendorTotalPayload,
   STATEMENT_COPY,
 } from "./statement-chrome.ts";
 import {
@@ -81,6 +83,46 @@ describe("statement chrome lock", () => {
       shouldShowPasteHook({ data: BILLED_STATEMENT_FIXTURE, canPasteBill: true }),
       false,
     );
+    assert.equal(
+      shouldShowPasteHook({ data: ESTIMATE_STATEMENT_FIXTURE }),
+      false,
+    );
+    assert.equal(
+      shouldShowPasteHook({ data: EMPTY_STATEMENT_FIXTURE, canPasteBill: true }),
+      false,
+    );
+  });
+
+  it("maps the mini-form to POST /v1/invoices vendor + cycle + usd", () => {
+    assert.deepEqual(
+      vendorTotalPayload({
+        vendor: " anthropic ",
+        cycle: "2026-09-15",
+        usd: "$21.05",
+      }),
+      {
+        vendor: "anthropic",
+        cycle: "2026-09",
+        usd: 21.05,
+        source: "paste",
+      },
+    );
+    assert.equal(
+      canSubmitVendorTotal({ vendor: "cursor", cycle: "2026-09", usd: "4" }),
+      true,
+    );
+    assert.equal(
+      canSubmitVendorTotal({ vendor: "", cycle: "2026-09", usd: "4" }),
+      false,
+    );
+    assert.equal(
+      canSubmitVendorTotal({ vendor: "cursor", cycle: "later", usd: "4" }),
+      false,
+    );
+    assert.equal(
+      canSubmitVendorTotal({ vendor: "cursor", cycle: "2026-09", usd: "" }),
+      false,
+    );
   });
 
   it("copies totals without inventing rows or billed copy", () => {
@@ -116,6 +158,7 @@ describe("statement chrome lock", () => {
       "components/statement-document.tsx",
       "lib/statement-chrome.ts",
       "lib/statement-fixtures.ts",
+      "app/dev/statement/page.tsx",
     ];
     const forbidden = ["Invoice client", "Amount due"];
     const required = [
@@ -125,6 +168,9 @@ describe("statement chrome lock", () => {
       STATEMENT_COPY.estimate,
       STATEMENT_COPY.helper,
       STATEMENT_COPY.proNudge,
+      STATEMENT_COPY.pasteTitle,
+      STATEMENT_COPY.saveBilled,
+      STATEMENT_COPY.pasteHook,
     ];
     for (const rel of files) {
       const src = readFileSync(join(webRoot, rel), "utf8");
@@ -144,7 +190,15 @@ describe("statement chrome lock", () => {
     assert.equal(view.includes("STATEMENT_COPY.emptyTitle"), true);
     assert.equal(view.includes("STATEMENT_COPY.helper"), true);
     assert.equal(view.includes("shouldNudgePro"), true);
+    assert.equal(view.includes("shouldShowPasteHook"), true);
     assert.equal(view.includes("data-ardoise-paste-bill"), true);
+    assert.equal(view.includes("STATEMENT_COPY.pasteTitle"), true);
+    assert.equal(view.includes("STATEMENT_COPY.saveBilled"), true);
+    assert.equal(view.includes("PasteVendorTotalForm"), true);
+    assert.equal(view.includes("/v1/invoices"), true);
+    assert.equal(view.includes("vendorTotalPayload"), true);
     assert.equal(view.includes("ConnectLaptopSteps"), true);
+    assert.equal(view.includes("Invoice client"), false);
+    assert.equal(view.includes("Amount due"), false);
   });
 });

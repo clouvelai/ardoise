@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { SlateMark } from "@/components/mark";
 import { StatementWorkspace } from "@/components/statement-view";
 import { csvFilename } from "@/lib/statement-chrome";
@@ -25,11 +25,19 @@ function fixtureFor(state: string) {
 function StatementPreviewInner() {
   const params = useSearchParams();
   const state = params.get("state") || "empty";
-  const fixture = useMemo(() => fixtureFor(state), [state]);
+  const [pasted, setPasted] = useState(false);
+  const fixture = useMemo(
+    () => (pasted ? BILLED_STATEMENT_FIXTURE : fixtureFor(state)),
+    [pasted, state],
+  );
   const [copied, setCopied] = useState(false);
   const [month, setMonth] = useState(fixture.month);
   const canPasteBill =
-    params.get("plan") === "pro" || state === "billed" ? true : false;
+    params.get("plan") === "pro" || state === "billed" || pasted ? true : false;
+
+  useEffect(() => {
+    setPasted(false);
+  }, [state]);
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -70,6 +78,9 @@ function StatementPreviewInner() {
             link.click();
             link.remove();
             URL.revokeObjectURL(url);
+          }}
+          onPasteVendorTotal={() => {
+            setPasted(true);
           }}
         />
       </main>
